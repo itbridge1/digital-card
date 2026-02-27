@@ -1,0 +1,18 @@
+{
+  "name": "nfc-reader",
+  "version": "1.0.0",
+  "description": "NFC tag reader script for ACR1311U-N2",
+  "main": "reader.js",
+  "scripts": {
+    "start": "node reader.js",
+    "test": "node test-reader.js"
+  },
+  "keywords": ["nfc", "acr1311u", "pcsc"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "nfc-pcsc": "^0.8.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  }
+}
