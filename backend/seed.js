@@ -15,129 +15,108 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nfc-pl
 // Sample Data
 const sampleTenants = [
   {
-    tenantId: 'SCHOOL_01',
-    name: 'Lincoln High School',
+    tenantId: 'SCH001',
+    name: 'Everest Secondary School',
     type: 'SCHOOL',
-    contactEmail: 'admin@lincoln.edu',
+    contactEmail: 'info@everestschool.edu.np',
     isActive: true
   },
   {
-    tenantId: 'HOSPITAL_01',
-    name: 'City Medical Center',
+    tenantId: 'HSP001',
+    name: 'Kathmandu City Hospital',
     type: 'HOSPITAL',
-    contactEmail: 'admin@citymedical.com',
+    contactEmail: 'contact@kchospital.com',
     isActive: true
   },
   {
-    tenantId: 'BUSINESS_01',
-    name: 'TechCorp Inc.',
+    tenantId: 'BUS001',
+    name: 'Shrestha Trading Pvt Ltd',
     type: 'BUSINESS',
-    contactEmail: 'admin@techcorp.com',
+    contactEmail: 'admin@shresthatrading.com',
+    isActive: false
+  },
+  {
+    tenantId: 'SCH002',
+    name: 'Himalayan Public School',
+    type: 'SCHOOL',
+    contactEmail: 'office@hps.edu.np',
+    isActive: true
+  },
+  {
+    tenantId: 'HSP002',
+    name: 'Birat Medical Center',
+    type: 'HOSPITAL',
+    contactEmail: 'support@biratmedical.com',
     isActive: true
   }
 ];
 
 const sampleCards = [
-  // School Cards
   {
-    tenantId: 'SCHOOL_01',
-    tagId: 'STUDENT001',
-    businessUrl: 'https://lincoln.edu/student/john-doe',
+    tenantId: 'SCH001',
+    tagId: 'NFC10001',
+    businessUrl: 'https://everestschool.edu.np/student-profile',
     tapCount: 5,
+    lastTapped: new Date('2026-03-01T10:00:00.000Z'),
     metadata: {
-      name: 'John Doe',
-      title: 'Student',
-      email: 'john@lincoln.edu',
-      phone: '+1234567890',
-      studentId: '2024001',
-      grade: '12',
+      name: 'Aarav Shrestha',
+      studentId: 'STU2026001',
+      grade: '10',
       section: 'A',
-      guardianName: 'Jane Doe',
-      guardianPhone: '+1234567891'
-    }
+      guardianName: 'Ramesh Shrestha',
+      guardianPhone: '9800000001'
+    },
+    isActive: true
   },
   {
-    tenantId: 'SCHOOL_01',
-    tagId: 'TEACHER001',
-    businessUrl: 'https://lincoln.edu/faculty/prof-smith',
+    tenantId: 'HSP001',
+    tagId: 'NFC20001',
+    businessUrl: 'https://kchospital.com/doctor-profile',
     tapCount: 12,
+    lastTapped: new Date('2026-03-01T12:30:00.000Z'),
     metadata: {
-      name: 'Prof. Robert Smith',
-      title: 'Mathematics Teacher',
-      email: 'robert.smith@lincoln.edu',
-      phone: '+1234567892',
-      studentId: 'STAFF2020',
-      section: 'Mathematics Department'
-    }
-  },
-  
-  // Hospital Cards
-  {
-    tenantId: 'HOSPITAL_01',
-    tagId: 'DOC001',
-    businessUrl: 'https://citymedical.com/staff/dr-sarah-smith',
-    tapCount: 23,
-    metadata: {
-      name: 'Dr. Sarah Smith',
-      title: 'Cardiologist',
-      email: 'sarah.smith@citymedical.com',
-      phone: '+1234567893',
-      employeeId: 'DOC2024001',
+      name: 'Dr. Priya Sharma',
+      employeeId: 'DOC102',
       department: 'Cardiology',
-      specialization: 'Interventional Cardiology',
-      licenseNumber: 'MD123456',
-      emergencyContact: '+1234567894'
-    }
+      specialization: 'Heart Specialist',
+      licenseNumber: 'LIC789456',
+      emergencyContact: '9811111111',
+      email: 'priya.sharma@kchospital.com',
+      phone: '9800000002'
+    },
+    isActive: true
   },
   {
-    tenantId: 'HOSPITAL_01',
-    tagId: 'NURSE001',
-    businessUrl: 'https://citymedical.com/staff/nurse-johnson',
-    tapCount: 18,
+    tenantId: 'BUS001',
+    tagId: 'NFC30001',
+    businessUrl: 'https://shresthatrading.com/profile',
+    tapCount: 3,
+    lastTapped: new Date('2026-02-28T08:45:00.000Z'),
     metadata: {
-      name: 'Emily Johnson',
-      title: 'Registered Nurse',
-      email: 'emily.johnson@citymedical.com',
-      phone: '+1234567895',
-      employeeId: 'NUR2024001',
-      department: 'Emergency',
-      licenseNumber: 'RN789012',
-      emergencyContact: '+1234567896'
-    }
-  },
-  
-  // Business Cards
-  {
-    tenantId: 'BUSINESS_01',
-    tagId: 'BUS001',
-    businessUrl: 'https://linkedin.com/in/mike-johnson',
-    tapCount: 45,
-    metadata: {
-      name: 'Mike Johnson',
-      title: 'Software Engineer',
-      email: 'mike@techcorp.com',
-      phone: '+1234567897',
-      company: 'TechCorp Inc.',
-      position: 'Senior Developer',
-      linkedIn: 'https://linkedin.com/in/mike-johnson',
-      website: 'https://mikejohnson.dev'
-    }
+      name: 'Rajan Shrestha',
+      company: 'Shrestha Trading Pvt Ltd',
+      position: 'Managing Director',
+      linkedIn: 'https://linkedin.com/in/rajan-shrestha',
+      website: 'https://shresthatrading.com',
+      email: 'rajan@shresthatrading.com',
+      phone: '9800000003'
+    },
+    isActive: true
   },
   {
-    tenantId: 'BUSINESS_01',
-    tagId: 'BUS002',
-    businessUrl: 'https://linkedin.com/in/lisa-brown',
-    tapCount: 32,
+    tenantId: 'SCH002',
+    tagId: 'NFC10002',
+    businessUrl: 'https://hps.edu.np/student-profile',
+    tapCount: 0,
     metadata: {
-      name: 'Lisa Brown',
-      title: 'Product Manager',
-      email: 'lisa@techcorp.com',
-      phone: '+1234567898',
-      company: 'TechCorp Inc.',
-      position: 'Senior Product Manager',
-      linkedIn: 'https://linkedin.com/in/lisa-brown',
-      website: 'https://lisabrown.io'
-    }
+      name: 'Sita Karki',
+      studentId: 'STU2026002',
+      grade: '9',
+      section: 'B',
+      guardianName: 'Maya Karki',
+      guardianPhone: '9800000004'
+    },
+    isActive: true
   }
 ];
 
@@ -177,14 +156,16 @@ async function seedDatabase() {
     console.log('═══════════════════════════════════════════════');
     console.log();
     console.log('Sample Tenants:');
-    console.log('  1. SCHOOL_01    - Lincoln High School');
-    console.log('  2. HOSPITAL_01  - City Medical Center');
-    console.log('  3. BUSINESS_01  - TechCorp Inc.');
+    console.log('  1. SCH001 - Everest Secondary School');
+    console.log('  2. HSP001 - Kathmandu City Hospital');
+    console.log('  3. BUS001 - Shrestha Trading Pvt Ltd (Inactive)');
+    console.log('  4. SCH002 - Himalayan Public School');
+    console.log('  5. HSP002 - Birat Medical Center');
     console.log();
     console.log('Test the redirects:');
-    console.log('  http://localhost:5000/t/STUDENT001');
-    console.log('  http://localhost:5000/t/DOC001');
-    console.log('  http://localhost:5000/t/BUS001');
+    console.log('  http://localhost:5000/t/NFC10001');
+    console.log('  http://localhost:5000/t/NFC20001');
+    console.log('  http://localhost:5000/t/NFC30001');
     console.log();
     console.log('Login to dashboard with any tenant ID above');
     console.log('═══════════════════════════════════════════════');

@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { cardAPI } from '../services/api';
 
-export default function CardList({ onEdit, refreshTrigger }) {
+export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchCards();
-  }, [refreshTrigger]);
+    if (tenantId) {
+      fetchCards();
+    }
+  }, [tenantId, refreshTrigger]);
 
   const fetchCards = async () => {
     try {
       setLoading(true);
-      const response = await cardAPI.getAll();
+      const response = await cardAPI.getAll(tenantId);
       setCards(response.data.data);
       setError('');
     } catch (err) {
@@ -27,7 +29,7 @@ export default function CardList({ onEdit, refreshTrigger }) {
     if (!confirm('Are you sure you want to deactivate this card?')) return;
 
     try {
-      await cardAPI.delete(tagId);
+      await cardAPI.delete(tagId, tenantId);
       fetchCards();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete card');

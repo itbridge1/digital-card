@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { cardAPI } from '../services/api';
 
-export default function CardForm({ onSuccess, onCancel, card = null, tenantType }) {
+export default function CardForm({ onSuccess, onCancel, card = null, tenantId, tenantType }) {
   const [formData, setFormData] = useState({
     tagId: card?.tagId || '',
     businessUrl: card?.businessUrl || '',
@@ -77,14 +77,14 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantType 
         await cardAPI.update(card.tagId, {
           businessUrl: formData.businessUrl,
           metadata
-        });
+        }, tenantId);
       } else {
         // Create new card
         await cardAPI.create({
           tagId: formData.tagId,
           businessUrl: formData.businessUrl,
           metadata
-        });
+        }, tenantId);
       }
 
       onSuccess();

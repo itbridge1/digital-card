@@ -18,7 +18,6 @@ function App() {
 
   useEffect(() => {
     if (selectedTenant) {
-      localStorage.setItem('tenantId', selectedTenant.tenantId);
       fetchStats();
     }
   }, [selectedTenant, refreshTrigger]);
@@ -28,12 +27,8 @@ function App() {
       const response = await tenantAPI.getAll();
       setTenants(response.data.data);
       
-      // Auto-select first tenant or load from localStorage
-      const savedTenantId = localStorage.getItem('tenantId');
-      if (savedTenantId) {
-        const tenant = response.data.data.find(t => t.tenantId === savedTenantId);
-        if (tenant) setSelectedTenant(tenant);
-      } else if (response.data.data.length > 0) {
+      // Auto-select first tenant
+      if (response.data.data.length > 0) {
         setSelectedTenant(response.data.data[0]);
       }
     } catch (error) {
@@ -43,7 +38,7 @@ function App() {
 
   const fetchStats = async () => {
     try {
-      const response = await cardAPI.getAll();
+      const response = await cardAPI.getAll(selectedTenant.tenantId);
       const cards = response.data.data;
       setStats({
         total: cards.length,
@@ -58,6 +53,7 @@ function App() {
   const handleTenantChange = (e) => {
     const tenant = tenants.find(t => t.tenantId === e.target.value);
     setSelectedTenant(tenant);
+    setRefreshTrigger(prev => prev + 1); // Trigger cards refresh
   };
 
   const handleFormSuccess = () => {
@@ -130,6 +126,7 @@ function App() {
               </div>
 
               <CardList 
+                tenantId={selectedTenant.tenantId}
                 onEdit={handleEdit} 
                 refreshTrigger={refreshTrigger}
               />
@@ -150,6 +147,7 @@ function App() {
             </div>
             <CardForm
               card={editingCard}
+              tenantId={selectedTenant.tenantId}
               tenantType={selectedTenant?.type}
               onSuccess={handleFormSuccess}
               onCancel={() => setShowForm(false)}

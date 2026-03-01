@@ -10,34 +10,37 @@ const api = axios.create({
   }
 });
 
-// Add tenant ID to all requests
-api.interceptors.request.use((config) => {
-  const tenantId = localStorage.getItem('tenantId');
-  if (tenantId) {
-    config.headers['x-tenant-id'] = tenantId;
-  }
-  return config;
-});
-
 // API methods
 export const cardAPI = {
   // Get all cards for tenant
-  getAll: () => api.get('/cards'),
+  getAll: (tenantId) => api.get('/cards', {
+    headers: { 'x-tenant-id': tenantId }
+  }),
   
   // Get single card by tag ID
-  getById: (tagId) => api.get(`/cards/${tagId}`),
+  getById: (tagId, tenantId) => api.get(`/cards/${tagId}`, {
+    headers: { 'x-tenant-id': tenantId }
+  }),
   
   // Register new card
-  create: (cardData) => api.post('/cards', cardData),
+  create: (cardData, tenantId) => api.post('/cards', cardData, {
+    headers: { 'x-tenant-id': tenantId }
+  }),
   
   // Update card
-  update: (tagId, cardData) => api.put(`/cards/${tagId}`, cardData),
+  update: (tagId, cardData, tenantId) => api.put(`/cards/${tagId}`, cardData, {
+    headers: { 'x-tenant-id': tenantId }
+  }),
   
   // Delete card
-  delete: (tagId) => api.delete(`/cards/${tagId}`),
+  delete: (tagId, tenantId) => api.delete(`/cards/${tagId}`, {
+    headers: { 'x-tenant-id': tenantId }
+  }),
   
   // Get analytics
-  getAnalytics: (tagId) => api.get(`/cards/${tagId}/analytics`)
+  getAnalytics: (tagId, tenantId) => api.get(`/cards/${tagId}/analytics`, {
+    headers: { 'x-tenant-id': tenantId }
+  })
 };
 
 export const tenantAPI = {
