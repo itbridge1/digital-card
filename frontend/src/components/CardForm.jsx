@@ -96,12 +96,12 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
   };
 
   return (
-    <form className="form" onSubmit={handleSubmit}>
-      {error && <div className="message message-error">{error}</div>}
+    <form className="grid gap-6" onSubmit={handleSubmit}>
+      {error && <div className="p-4 mb-4 bg-red-100 text-red-800 border border-red-200 rounded-md">{error}</div>}
 
-      <div className="form-row">
-        <div className="form-group">
-          <label>Tag ID (NFC UID) *</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Tag ID (NFC UID) *</label>
           <input
             type="text"
             name="tagId"
@@ -110,11 +110,12 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
             required
             disabled={!!card}
             placeholder="e.g., A1B2C3D4"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 disabled:bg-gray-100"
           />
         </div>
 
-        <div className="form-group">
-          <label>Business URL *</label>
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Business URL *</label>
           <input
             type="url"
             name="businessUrl"
@@ -122,55 +123,60 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
             onChange={handleChange}
             required
             placeholder="https://example.com/profile"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
           />
         </div>
       </div>
 
-      <h3>Common Information</h3>
-      <div className="form-row">
-        <div className="form-group">
-          <label>Full Name</label>
+      <h3 className="text-lg font-semibold text-gray-800 mt-4">Common Information</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Full Name</label>
           <input
             type="text"
             name="name"
             value={formData.name}
             onChange={handleChange}
             placeholder="John Doe"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
           />
         </div>
 
-        <div className="form-group">
-          <label>Title/Role</label>
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Title/Role</label>
           <input
             type="text"
             name="title"
             value={formData.title}
             onChange={handleChange}
             placeholder="e.g., Doctor, Teacher, Manager"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
           />
         </div>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label>Email</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Email</label>
           <input
             type="email"
             name="email"
             value={formData.email}
             onChange={handleChange}
             placeholder="email@example.com"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
           />
         </div>
 
-        <div className="form-group">
-          <label>Phone</label>
+        <div className="flex flex-col gap-2">
+          <label className="font-medium text-gray-800">Phone</label>
           <input
             type="tel"
             name="phone"
             value={formData.phone}
             onChange={handleChange}
             placeholder="+1234567890"
+            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
           />
         </div>
       </div>
@@ -178,53 +184,58 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
       {/* School-specific fields */}
       {tenantType === 'SCHOOL' && (
         <>
-          <h3>School Information</h3>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Student/Staff ID</label>
+          <h3 className="text-lg font-semibold text-gray-800 mt-4">School Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Student/Staff ID</label>
               <input
                 type="text"
                 name="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Grade/Class</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Grade/Class</label>
               <input
                 type="text"
                 name="grade"
                 value={formData.grade}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Section</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Section</label>
               <input
                 type="text"
                 name="section"
                 value={formData.section}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Guardian Name</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Guardian Name</label>
               <input
                 type="text"
                 name="guardianName"
                 value={formData.guardianName}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Guardian Phone</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Guardian Phone</label>
               <input
                 type="tel"
                 name="guardianPhone"
                 value={formData.guardianPhone}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
@@ -234,55 +245,60 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
       {/* Hospital-specific fields */}
       {tenantType === 'HOSPITAL' && (
         <>
-          <h3>Hospital Information</h3>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Employee ID</label>
+          <h3 className="text-lg font-semibold text-gray-800 mt-4">Hospital Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Employee ID</label>
               <input
                 type="text"
                 name="employeeId"
                 value={formData.employeeId}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Department</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Department</label>
               <input
                 type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
                 placeholder="e.g., Cardiology"
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Specialization</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Specialization</label>
               <input
                 type="text"
                 name="specialization"
                 value={formData.specialization}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>License Number</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">License Number</label>
               <input
                 type="text"
                 name="licenseNumber"
                 value={formData.licenseNumber}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
-          <div className="form-group">
-            <label>Emergency Contact</label>
+          <div className="flex flex-col gap-2">
+            <label className="font-medium text-gray-800">Emergency Contact</label>
             <input
               type="text"
               name="emergencyContact"
               value={formData.emergencyContact}
               onChange={handleChange}
+              className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
             />
           </div>
         </>
@@ -291,57 +307,61 @@ export default function CardForm({ onSuccess, onCancel, card = null, tenantId, t
       {/* Business-specific fields */}
       {tenantType === 'BUSINESS' && (
         <>
-          <h3>Business Information</h3>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Company</label>
+          <h3 className="text-lg font-semibold text-gray-800 mt-4">Business Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Company</label>
               <input
                 type="text"
                 name="company"
                 value={formData.company}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Position</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Position</label>
               <input
                 type="text"
                 name="position"
                 value={formData.position}
                 onChange={handleChange}
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>LinkedIn URL</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">LinkedIn URL</label>
               <input
                 type="url"
                 name="linkedIn"
                 value={formData.linkedIn}
                 onChange={handleChange}
                 placeholder="https://linkedin.com/in/username"
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
-            <div className="form-group">
-              <label>Website</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-medium text-gray-800">Website</label>
               <input
                 type="url"
                 name="website"
                 value={formData.website}
                 onChange={handleChange}
                 placeholder="https://example.com"
+                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
         </>
       )}
 
-      <div className="form-actions">
-        <button type="submit" className="btn btn-primary" disabled={loading}>
+      <div className="flex gap-4 mt-4">
+        <button type="submit" className="px-6 py-3 bg-linear-to-r from-purple-600 to-purple-800 text-white rounded-md font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
           {loading ? 'Saving...' : card ? 'Update Card' : 'Register Card'}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        <button type="button" className="px-6 py-3 bg-gray-100 text-gray-800 rounded-md font-medium hover:bg-gray-200" onClick={onCancel}>
           Cancel
         </button>
       </div>

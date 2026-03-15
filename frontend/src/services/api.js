@@ -18,7 +18,7 @@ export const cardAPI = {
   }),
   
   // Get single card by tag ID
-  getById: (tagId, tenantId) => api.get(`/cards/${tagId}`, {
+  getById: (tagId, tenantId) => api.get(`/cards/${encodeURIComponent(tagId)}`, {
     headers: { 'x-tenant-id': tenantId }
   }),
   
@@ -28,17 +28,17 @@ export const cardAPI = {
   }),
   
   // Update card
-  update: (tagId, cardData, tenantId) => api.put(`/cards/${tagId}`, cardData, {
+  update: (tagId, cardData, tenantId) => api.put(`/cards/${encodeURIComponent(tagId)}`, cardData, {
     headers: { 'x-tenant-id': tenantId }
   }),
   
   // Delete card
-  delete: (tagId, tenantId) => api.delete(`/cards/${tagId}`, {
+  delete: (tagId, tenantId) => api.delete(`/cards/${encodeURIComponent(tagId)}`, {
     headers: { 'x-tenant-id': tenantId }
   }),
   
   // Get analytics
-  getAnalytics: (tagId, tenantId) => api.get(`/cards/${tagId}/analytics`, {
+  getAnalytics: (tagId, tenantId) => api.get(`/cards/${encodeURIComponent(tagId)}/analytics`, {
     headers: { 'x-tenant-id': tenantId }
   })
 };
