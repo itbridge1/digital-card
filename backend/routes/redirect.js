@@ -11,11 +11,12 @@ const Card = require('../models/Card');
  */
 router.get('/:tagId', async (req, res) => {
   try {
-    const { tagId } = req.params;
+    // Decode the tagId from URL
+    const tagId = decodeURIComponent(req.params.tagId).toUpperCase();
 
     // Find the card by tag ID
     const card = await Card.findOne({ 
-      tagId: tagId.toUpperCase(),
+      tagId: tagId,
       isActive: true 
     });
 

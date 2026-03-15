@@ -35,10 +35,25 @@ router.get('/', async (req, res) => {
  */
 router.get('/:tagId', async (req, res) => {
   try {
+    // Decode the tagId from URL (Express should do this, but being explicit)
+    const tagId = decodeURIComponent(req.params.tagId).toUpperCase();
+    
+    console.log('=== GET Card Debug ===');
+    console.log('Raw param:', req.params.tagId);
+    console.log('Looking for tagId:', tagId);
+    console.log('With tenantId:', req.tenantId);
+    
+    // First, check if card exists at all (without tenant filter)
+    const anyCard = await Card.findOne({ tagId: tagId });
+    console.log('Card exists (any tenant):', anyCard ? `Yes (tenantId: ${anyCard.tenantId})` : 'No');
+    
     const card = await Card.findOne({
       ...applyTenantFilter(req),
-      tagId: req.params.tagId.toUpperCase()
+      tagId: tagId
     });
+    
+    console.log('Card found with tenant filter:', card ? 'Yes' : 'No');
+    console.log('======================');
 
     if (!card) {
       return res.status(404).json({
@@ -67,6 +82,11 @@ router.get('/:tagId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { tagId, businessUrl, metadata } = req.body;
+    
+    console.log('=== CREATE Card Debug ===');
+    console.log('Creating card with tagId:', tagId?.toUpperCase());
+    console.log('Using tenantId:', req.tenantId);
+    console.log('=========================');
 
     if (!tagId || !businessUrl) {
       return res.status(400).json({
@@ -117,10 +137,11 @@ router.post('/', async (req, res) => {
 router.put('/:tagId', async (req, res) => {
   try {
     const { businessUrl, metadata, isActive } = req.body;
+    const tagId = decodeURIComponent(req.params.tagId).toUpperCase();
 
     const card = await Card.findOne({
       ...applyTenantFilter(req),
-      tagId: req.params.tagId.toUpperCase()
+      tagId: tagId
     });
 
     if (!card) {
@@ -157,9 +178,10 @@ router.put('/:tagId', async (req, res) => {
  */
 router.delete('/:tagId', async (req, res) => {
   try {
+    const tagId = decodeURIComponent(req.params.tagId).toUpperCase();
     const card = await Card.findOne({
       ...applyTenantFilter(req),
-      tagId: req.params.tagId.toUpperCase()
+      tagId: tagId
     });
 
     if (!card) {
