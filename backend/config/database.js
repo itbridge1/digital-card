@@ -1,5 +1,15 @@
 const { Sequelize } = require('sequelize');
 
+const truthyEnvValues = new Set(['1', 'true', 'yes', 'on']);
+
+const parseBooleanEnv = (value, defaultValue = false) => {
+  if (typeof value === 'undefined') {
+    return defaultValue;
+  }
+
+  return truthyEnvValues.has(String(value).trim().toLowerCase());
+};
+
 // Initialize Sequelize with MySQL
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'nfc_platform',
@@ -23,10 +33,16 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('MySQL Connected:', sequelize.config.host);
-    
-    // Sync all models
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
+
+    const shouldSyncOnStart = parseBooleanEnv(
+      process.env.DB_SYNC_ON_START,
+      process.env.NODE_ENV !== 'production'
+    );
+    const shouldAlterSchema = parseBooleanEnv(process.env.DB_SYNC_ALTER, false);
+
+    if (shouldSyncOnStart) {
+      const syncOptions = shouldAlterSchema ? { alter: true } : {};
+      await sequelize.sync(syncOptions);
       console.log('Database synced successfully');
     }
   } catch (error) {

@@ -2,13 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-const { connectDB } = require('./config/database');
+const { connectDB, sequelize } = require('./config/database');
 
 // Initialize Express app
 const app = express();
-
-// Connect to MySQL
-connectDB();
 
 // Middleware
 app.use(cors());
@@ -70,8 +67,20 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`
+
+const startServer = async () => {
+  let databaseConnected = false;
+
+  try {
+    await connectDB();
+    databaseConnected = true;
+
+    await new Promise((resolve, reject) => {
+      const server = app.listen(PORT, resolve);
+      server.once('error', reject);
+    });
+
+    console.log(`
     ╔═══════════════════════════════════════════════╗
     ║  NFC Platform API Server Running              ║
     ║  Port: ${PORT}                                    ║
@@ -79,6 +88,21 @@ app.listen(PORT, () => {
     ║  Database: MySQL                               ║
     ╚═══════════════════════════════════════════════╝
   `);
-});
+  } catch (error) {
+    if (databaseConnected) {
+      await sequelize.close().catch(() => null);
+    }
+
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the existing backend process or change PORT in backend/.env.`);
+    } else {
+      console.error('Failed to start server:', error);
+    }
+
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = app;
