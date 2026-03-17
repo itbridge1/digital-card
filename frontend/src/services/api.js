@@ -10,44 +10,68 @@ const api = axios.create({
   }
 });
 
-// API methods
-export const cardAPI = {
-  // Get all cards for tenant
-  getAll: (tenantId) => api.get('/cards', {
-    headers: { 'x-tenant-id': tenantId }
-  }),
+// Add JWT token to all requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Handle 401 errors (unauthorized)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear auth data and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Auth API methods
+export const authAPI = {
+  // Login
+  login: (email, password) => api.post('/auth/login', { email, password }),
   
-  // Get single card by tag ID
-  getById: (tagId, tenantId) => api.get(`/cards/${encodeURIComponent(tagId)}`, {
-    headers: { 'x-tenant-id': tenantId }
-  }),
+  // Register
+  register: (userData) => api.post('/auth/register', userData),
   
-  // Register new card
-  create: (cardData, tenantId) => api.post('/cards', cardData, {
-    headers: { 'x-tenant-id': tenantId }
-  }),
-  
-  // Update card
-  update: (tagId, cardData, tenantId) => api.put(`/cards/${encodeURIComponent(tagId)}`, cardData, {
-    headers: { 'x-tenant-id': tenantId }
-  }),
-  
-  // Delete card
-  delete: (tagId, tenantId) => api.delete(`/cards/${encodeURIComponent(tagId)}`, {
-    headers: { 'x-tenant-id': tenantId }
-  }),
-  
-  // Get analytics
-  getAnalytics: (tagId, tenantId) => api.get(`/cards/${encodeURIComponent(tagId)}/analytics`, {
-    headers: { 'x-tenant-id': tenantId }
-  })
+  // Get current user
+  me: () => api.get('/auth/me')
 };
 
+// Card API methods
+export const cardAPI = {
+  // Get all cards for authenticated user's tenant
+  getAll: () => api.get('/cards'),
+  
+  // Get single card by tag ID
+  getById: (tagId) => api.get(`/cards/${encodeURIComponent(tagId)}`),
+  
+  // Register new card
+  create: (cardData) => api.post('/cards', cardData),
+  
+  // Update card
+  update: (tagId, cardData) => api.put(`/cards/${encodeURIComponent(tagId)}`, cardData),
+  
+  // Delete card
+  delete: (tagId) => api.delete(`/cards/${encodeURIComponent(tagId)}`),
+  
+  // Get analytics
+  getAnalytics: (tagId) => api.get(`/cards/${encodeURIComponent(tagId)}/analytics`)
+};
+
+// Tenant API methods
 export const tenantAPI = {
-  // Get all tenants
+  // Get all tenants (public)
   getAll: () => api.get('/tenants'),
   
-  // Create new tenant
+  // Create new tenant (admin only)
   create: (tenantData) => api.post('/tenants', tenantData)
 };
 

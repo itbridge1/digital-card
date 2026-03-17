@@ -1,14 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const Tenant = require('../models/Tenant');
+const { Tenant } = require('../models');
+const { protect, authorize } = require('../middleware/auth');
 
 /**
  * GET /api/tenants
- * List all tenants (admin only - no auth in this basic version)
+ * List all active tenants
+ * Public route (needed for registration)
  */
 router.get('/', async (req, res) => {
   try {
-    const tenants = await Tenant.find({ isActive: true });
+    const tenants = await Tenant.findAll({ 
+      where: { isActive: true },
+      attributes: ['id', 'tenantId', 'name', 'type', 'contactEmail']
+    });
+    
     res.json({
       success: true,
       count: tenants.length,
@@ -26,8 +32,9 @@ router.get('/', async (req, res) => {
 /**
  * POST /api/tenants
  * Create a new tenant
+ * Protected route - admin only
  */
-router.post('/', async (req, res) => {
+router.post('/', protect, authorize('admin'), async (req, res) => {
   try {
     const { tenantId, name, type, contactEmail } = req.body;
 
@@ -35,6 +42,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'tenantId, name, type, and contactEmail are required'
+      });
+    }
+
+    // Check if tenant already exists
+    const existingTenant = await Tenant.findOne({
+      where: { tenantId: tenantId.toUpperCase() }
+    });
+
+    if (existingTenant) {
+      return res.status(409).json({
+        success: false,
+        error: 'Tenant ID already exists'
       });
     }
 
@@ -51,12 +70,6 @@ router.post('/', async (req, res) => {
       data: tenant
     });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        error: 'Tenant ID already exists'
-      });
-    }
     console.error('Error creating tenant:', error);
     res.status(500).json({
       success: false,

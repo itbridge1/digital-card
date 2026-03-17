@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Card = require('../models/Card');
+const { Card } = require('../models');
 
 /**
  * Global Redirector Endpoint
@@ -11,13 +11,14 @@ const Card = require('../models/Card');
  */
 router.get('/:tagId', async (req, res) => {
   try {
-    // Decode the tagId from URL
-    const tagId = decodeURIComponent(req.params.tagId).toUpperCase();
+    const tagId = req.params.tagId.toUpperCase();
 
     // Find the card by tag ID
     const card = await Card.findOne({ 
-      tagId: tagId,
-      isActive: true 
+      where: {
+        tagId: tagId,
+        isActive: true
+      }
     });
 
     if (!card) {

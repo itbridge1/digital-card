@@ -1,87 +1,77 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-// Polymorphic Card schema with flexible metadata
-const cardSchema = new mongoose.Schema({
-  // Multi-tenant identifier
+const Card = sequelize.define('Card', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   tenantId: {
-    type: String,
-    required: true,
-    index: true
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    references: {
+      model: 'Tenants',
+      key: 'tenantId'
+    }
   },
-  
-  // Unique tag identifier (NFC UID)
   tagId: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING(100),
+    allowNull: false,
     unique: true,
-    uppercase: true
+    get() {
+      return this.getDataValue('tagId').toUpperCase();
+    },
+    set(value) {
+      this.setDataValue('tagId', value.toUpperCase());
+    }
   },
-  
-  // Business/redirect URL
   businessUrl: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(500),
+    allowNull: false
   },
-  
-  // Tap analytics
   tapCount: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  
   lastTapped: {
-    type: Date
+    type: DataTypes.DATE,
+    allowNull: true
   },
-  
-  // Polymorphic metadata - store different data based on tenant type
+  // Polymorphic metadata stored as JSON
   metadata: {
-    // Common fields
-    name: String,
-    title: String,
-    email: String,
-    phone: String,
-    
-    // School-specific fields
-    studentId: String,
-    grade: String,
-    section: String,
-    guardianName: String,
-    guardianPhone: String,
-    
-    // Hospital-specific fields
-    employeeId: String,
-    department: String,
-    specialization: String,
-    licenseNumber: String,
-    emergencyContact: String,
-    
-    // Business-specific fields
-    company: String,
-    position: String,
-    linkedIn: String,
-    website: String,
-    
-    // Any additional custom fields
-    custom: mongoose.Schema.Types.Mixed
+    type: DataTypes.JSON,
+    defaultValue: {},
+    get() {
+      const rawValue = this.getDataValue('metadata');
+      return rawValue || {};
+    }
   },
-  
-  // Status
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
 }, {
-  timestamps: true
+  tableName: 'cards',
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['tenantId']
+    },
+    {
+      fields: ['tagId']
+    },
+    {
+      fields: ['tenantId', 'tagId']
+    }
+  ]
 });
 
-// Compound index for efficient tenant queries
-cardSchema.index({ tenantId: 1, tagId: 1 });
-
-// Method to increment tap count
-cardSchema.methods.recordTap = async function() {
+// Instance method to increment tap count
+Card.prototype.recordTap = async function() {
   this.tapCount += 1;
   this.lastTapped = new Date();
-  return this.save();
+  return await this.save();
 };
 
-module.exports = mongoose.model('Card', cardSchema);
+module.exports = Card;

@@ -6,7 +6,7 @@
  */
 
 require('dotenv').config();
-const { sequelize, User, Tenant, Card } = require('./models');
+const{ sequelize, User, Tenant, Card } = require('./models');
 
 // Sample Data
 const sampleTenants = [

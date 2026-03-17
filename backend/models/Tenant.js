@@ -1,31 +1,45 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const tenantSchema = new mongoose.Schema({
+const Tenant = sequelize.define('Tenant', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   tenantId: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING(50),
+    allowNull: false,
     unique: true,
-    uppercase: true
+    get() {
+      return this.getDataValue('tenantId').toUpperCase();
+    },
+    set(value) {
+      this.setDataValue('tenantId', value.toUpperCase());
+    }
   },
   name: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   type: {
-    type: String,
-    enum: ['SCHOOL', 'HOSPITAL', 'BUSINESS'],
-    required: true
+    type: DataTypes.ENUM('SCHOOL', 'HOSPITAL', 'BUSINESS'),
+    allowNull: false
   },
   contactEmail: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    validate: {
+      isEmail: true
+    }
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
 }, {
+  tableName: 'tenants',
   timestamps: true
 });
 
-module.exports = mongoose.model('Tenant', tenantSchema);
+module.exports = Tenant;
