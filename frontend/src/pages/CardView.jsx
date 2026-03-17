@@ -305,7 +305,7 @@ function CardView() {
             {card.businessUrl && (
               <div className="mt-10">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-linear-to-br from-pink-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg">
                     <FaLink className="text-white text-2xl" />
                   </div>
                   <h2 className="text-3xl font-bold text-gray-900">
