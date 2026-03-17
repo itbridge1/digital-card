@@ -30,11 +30,11 @@ function AdminLayout() {
       icon: <UserOutlined />,
       label: <NavLink to="/admin/users">Users</NavLink>,
     },
-    // {
-    //   key: "/admin/products",
-    //   icon: <ShoppingOutlined />,
-    //   label: <NavLink to="/admin/products">Products</NavLink>,
-    // },
+    {
+      key: "/admin/products",
+      icon: <ShoppingOutlined />,
+      label: <NavLink to="/admin/products">Products</NavLink>,
+    },
   ];
 
   return (

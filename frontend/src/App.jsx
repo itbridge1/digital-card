@@ -4,6 +4,7 @@ import CardView from "./pages/CardView";
 import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Users from "./pages/admin/Users";
+import ErrorPage from "./pages/ErrorPage";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="users" element={<Users />} />
       </Route>
+      <Route path="*" element={<ErrorPage />} />
     </Routes>
   );
 }
