@@ -227,10 +227,20 @@ async function seedDatabase() {
 
   } catch (error) {
     console.error('Error seeding database:', error);
+    process.exitCode = 1;
   } finally {
     await sequelize.close();
     console.log('\nDatabase connection closed.');
-    process.exit(0);
+    console.log('Press any key to exit...');
+    
+    // Wait for user input before exiting (fixes terminal issue on Windows)
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.once('data', () => {
+        process.exit();
+      });
+    }
   }
 }
 

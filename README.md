@@ -1,6 +1,6 @@
 # Multi-Tenant NFC Business Card Platform
 
-A complete NFC business card platform built with Node.js, Express, MongoDB, and React. Supports multiple tenants (Schools, Hospitals, Businesses) with a polymorphic data structure and hardware integration for the ACR1311U-N2 NFC reader.
+A complete NFC business card platform built with Node.js, Express, MySQL, and React. Supports multiple tenants (Schools, Hospitals, Businesses) with a polymorphic data structure and hardware integration for the ACR1311U-N2 NFC reader.
 
 ## 🏗️ Architecture
 
@@ -14,7 +14,7 @@ A complete NFC business card platform built with Node.js, Express, MongoDB, and 
 
 ### Tech Stack
 
-- **Backend**: Node.js, Express, MongoDB (Mongoose)
+- **Backend**: Node.js, Express, MySQL (Sequelize)
 - **Frontend**: React, Vite
 - **Hardware**: ACR1311U-N2 NFC Reader, nfc-pcsc library
 
@@ -24,7 +24,7 @@ A complete NFC business card platform built with Node.js, Express, MongoDB, and 
 NFC/
 ├── backend/           # Express API server
 │   ├── config/        # Database configuration
-│   ├── models/        # Mongoose schemas
+│   ├── models/        # Sequelize models
 │   ├── routes/        # API routes
 │   ├── middleware/    # Tenant isolation middleware
 │   └── server.js      # Main server file
@@ -46,22 +46,21 @@ NFC/
 ### Prerequisites
 
 - Node.js (v16 or higher)
-- MongoDB (running locally or remote)
+- MySQL (running locally or remote)
 - ACR1311U-N2 NFC Reader (optional, for hardware integration)
 - **Windows Only**: Visual Studio Build Tools (for NFC reader native modules)
 
 ### 1. Database Setup
 
-Install and start MongoDB:
+Install and start MySQL:
 
 ```bash
-# Windows (using Chocolatey)
-choco install mongodb
+# Windows - Easiest approach: Install XAMPP
+# Download from: https://www.apachefriends.org/
+# Start MySQL from XAMPP Control Panel
 
-# Or download from: https://www.mongodb.com/try/download/community
-
-# Start MongoDB service
-net start MongoDB
+# Or install MySQL Community Server
+# Download from: https://dev.mysql.com/downloads/mysql/
 ```
 
 ### 2. Backend Setup
@@ -313,7 +312,10 @@ npm install --production
 
 # Set environment variables
 PORT=5000
-MONGODB_URI=mongodb://your-mongo-uri
+DB_NAME=nfc_platform
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_HOST=your_db_host
 NODE_ENV=production
 BASE_URL=https://your-domain.com
 ```
@@ -350,10 +352,10 @@ curl -X POST http://localhost:5000/api/tenants \
 
 ## 🐛 Troubleshooting
 
-### MongoDB Connection Issues
-- Ensure MongoDB is running: `net start MongoDB`
-- Check connection string in `.env`
-- Verify MongoDB port (default: 27017)
+### MySQL Connection Issues
+- Ensure MySQL is running (XAMPP Control Panel or service)
+- Check connection settings in `.env`
+- Verify MySQL port (default: 3306)
 
 ### NFC Reader Not Detected
 - Check USB connection
@@ -391,7 +393,7 @@ npm install
 ## 📚 Additional Resources
 
 - [Express Documentation](https://expressjs.com/)
-- [Mongoose Documentation](https://mongoosejs.com/)
+- [Sequelize Documentation](https://sequelize.org/)
 - [React Documentation](https://react.dev/)
 - [nfc-pcsc Library](https://github.com/pokusew/nfc-pcsc)
 - [ACR1311U-N2 Datasheet](https://www.acs.com.hk/en/products/566/acr1311u-n2-usbtooth-nfc-reader/)

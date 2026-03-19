@@ -4,7 +4,7 @@
 
 A complete, production-ready multi-tenant NFC business card platform with:
 
-### 1. **Backend API** (Node.js + Express + MongoDB)
+### 1. **Backend API** (Node.js + Express + MySQL)
 - ✅ Multi-tenant architecture with tenant isolation middleware
 - ✅ Polymorphic Card schema supporting Schools, Hospitals, and Businesses
 - ✅ Global redirector endpoint (`GET /t/:tagId`)
@@ -45,7 +45,7 @@ c:\Users\Legion\NFC\
 │
 ├── backend/                    # Express API Server
 │   ├── config/
-│   │   └── database.js        # MongoDB connection
+│   │   └── database.js        # MySQL connection (Sequelize)
 │   ├── middleware/
 │   │   └── tenantIsolation.js # Tenant filtering middleware
 │   ├── models/
@@ -137,8 +137,8 @@ copy .env.example .env
 cd ../nfc-reader
 copy .env.example .env
 
-# 3. Start MongoDB
-net start MongoDB
+# 3. Start MySQL
+# Make sure MySQL is running (XAMPP, WAMP, or standalone MySQL service)
 
 # 4. Seed database with sample data
 cd ../backend
@@ -279,7 +279,7 @@ GET /api/cards/:tagId/analytics
 ## 🚀 Deployment Checklist
 
 ### Backend
-- [ ] Set production MongoDB URI
+- [ ] Set production MySQL credentials
 - [ ] Configure BASE_URL to your domain
 - [ ] Set NODE_ENV=production
 - [ ] Enable HTTPS
@@ -301,13 +301,18 @@ GET /api/cards/:tagId/analytics
 
 ## 🐛 Troubleshooting
 
-### MongoDB Connection Failed
+### MySQL Connection Failed
 ```powershell
-# Check if MongoDB is running
-net start MongoDB
+# Check if MySQL is running
+# For XAMPP: Start from control panel
+# For standalone: net start MySQL80 (or your MySQL service name)
 
-# Verify connection string in .env
-MONGODB_URI=mongodb://localhost:27017/nfc-platform
+# Verify connection settings in .env
+DB_NAME=nfc_platform
+DB_USER=root
+DB_PASSWORD=
+DB_HOST=localhost
+DB_PORT=3306
 ```
 
 ### NFC Reader Not Detected

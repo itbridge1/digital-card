@@ -55,7 +55,7 @@ const tenantIsolation = async (req, res, next) => {
 };
 
 /**
- * Apply tenant filter to Mongoose queries
+ * Apply tenant filter to Sequelize queries
  * This ensures all DB queries are automatically scoped to the tenant
  */
 const applyTenantFilter = (req) => {

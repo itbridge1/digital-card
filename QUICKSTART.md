@@ -32,14 +32,15 @@ cd nfc-reader
 copy .env.example .env
 ```
 
-### 3. Start MongoDB
+### 3. Start MySQL
 
 ```powershell
-# If not installed, install MongoDB
-# Download from: https://www.mongodb.com/try/download/community
+# If not installed, install MySQL
+# Option 1: XAMPP (recommended for Windows) - https://www.apachefriends.org/
+# Option 2: MySQL Community Server - https://dev.mysql.com/downloads/mysql/
 
-# Start MongoDB service
-net start MongoDB
+# For XAMPP: Start MySQL from the XAMPP Control Panel
+# For standalone MySQL: Ensure the MySQL service is running
 ```
 
 ### 4. Start the Application
@@ -133,13 +134,13 @@ This will redirect to the business URL and increment the tap count!
 
 ## Common Issues
 
-**MongoDB not starting?**
+**MySQL not starting?**
 ```powershell
-# Check if MongoDB is installed
-mongo --version
+# Check if MySQL is installed
+mysql --version
 
-# Start the service manually
-net start MongoDB
+# For XAMPP: Use the XAMPP Control Panel
+# For standalone: Check service status in services.msc
 ```
 
 **Port already in use?**
