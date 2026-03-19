@@ -1,5 +1,56 @@
 @import "tailwindcss";
 
+:root {
+  --app-color-primary: #1d4ed8;
+  --app-color-secondary: #0ea5a5;
+  --app-color-background: #f3f6fb;
+  --app-color-surface: #ffffff;
+  --app-color-text: #1f2937;
+  --app-color-primary-rgb: 29, 78, 216;
+  --app-color-secondary-rgb: 14, 165, 165;
+}
+
+body {
+  background: var(--app-color-background);
+  color: var(--app-color-text);
+}
+
+.app-theme-page-bg {
+  background: var(--app-color-background) !important;
+}
+
+.app-theme-surface {
+  background: var(--app-color-surface) !important;
+}
+
+.app-theme-header-solid {
+  background: var(--app-color-primary) !important;
+}
+
+.app-theme-link {
+  color: var(--app-color-primary) !important;
+  transition: color 0.2s ease;
+}
+
+.app-theme-link:hover {
+  color: var(--app-color-secondary) !important;
+}
+
+.app-theme-spinner {
+  border: 4px solid var(--app-color-primary);
+  border-top-color: transparent;
+}
+
+.app-theme-soft-primary {
+  background: rgba(var(--app-color-primary-rgb), 0.12);
+  color: var(--app-color-primary);
+}
+
+.app-theme-soft-secondary {
+  background: rgba(var(--app-color-secondary-rgb), 0.12);
+  color: var(--app-color-secondary);
+}
+
 /* Custom Animations for CardView */
 @keyframes float {
   0%, 100% {

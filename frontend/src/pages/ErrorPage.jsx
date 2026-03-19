@@ -6,8 +6,8 @@ function ErrorPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="h-screen w-full flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-10 rounded-xl shadow-md h-screen w-full">
+    <div className="app-theme-page-bg h-screen w-full flex items-center justify-center">
+      <div className="app-theme-surface p-10 rounded-xl shadow-md h-screen w-full">
         <Result
           status="404"
           title="404"

@@ -1,370 +1,291 @@
-import { useState } from 'react';
-import { cardAPI } from '../services/api';
+import { Form, Input, Button, Row, Col, Typography, message } from "antd";
+import { cardAPI } from "../services/api";
 
-export default function CardForm({ onSuccess, onCancel, card = null, tenantId, tenantType }) {
-  const [formData, setFormData] = useState({
-    tagId: card?.tagId || '',
-    businessUrl: card?.businessUrl || '',
-    // Common metadata
-    name: card?.metadata?.name || '',
-    title: card?.metadata?.title || '',
-    email: card?.metadata?.email || '',
-    phone: card?.metadata?.phone || '',
-    // School-specific
-    studentId: card?.metadata?.studentId || '',
-    grade: card?.metadata?.grade || '',
-    section: card?.metadata?.section || '',
-    guardianName: card?.metadata?.guardianName || '',
-    guardianPhone: card?.metadata?.guardianPhone || '',
-    // Hospital-specific
-    employeeId: card?.metadata?.employeeId || '',
-    department: card?.metadata?.department || '',
-    specialization: card?.metadata?.specialization || '',
-    licenseNumber: card?.metadata?.licenseNumber || '',
-    emergencyContact: card?.metadata?.emergencyContact || '',
-    // Business-specific
-    company: card?.metadata?.company || '',
-    position: card?.metadata?.position || '',
-    linkedIn: card?.metadata?.linkedIn || '',
-    website: card?.metadata?.website || ''
-  });
+const { Title } = Typography;
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default function CardForm({
+  onSuccess,
+  onCancel,
+  card = null,
+  tenantId,
+  tenantType,
+}) {
+  const [form] = Form.useForm();
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
+  const onFinish = async (values) => {
     try {
       const metadata = {
-        name: formData.name,
-        title: formData.title,
-        email: formData.email,
-        phone: formData.phone
+        name: values.name,
+        title: values.title,
+        email: values.email,
+        phone: values.phone,
       };
 
-      // Add type-specific fields based on tenant type
-      if (tenantType === 'SCHOOL') {
-        metadata.studentId = formData.studentId;
-        metadata.grade = formData.grade;
-        metadata.section = formData.section;
-        metadata.guardianName = formData.guardianName;
-        metadata.guardianPhone = formData.guardianPhone;
-      } else if (tenantType === 'HOSPITAL') {
-        metadata.employeeId = formData.employeeId;
-        metadata.department = formData.department;
-        metadata.specialization = formData.specialization;
-        metadata.licenseNumber = formData.licenseNumber;
-        metadata.emergencyContact = formData.emergencyContact;
-      } else if (tenantType === 'BUSINESS') {
-        metadata.company = formData.company;
-        metadata.position = formData.position;
-        metadata.linkedIn = formData.linkedIn;
-        metadata.website = formData.website;
+      // Dynamic fields
+      if (tenantType === "SCHOOL") {
+        Object.assign(metadata, {
+          studentId: values.studentId,
+          grade: values.grade,
+          section: values.section,
+          guardianName: values.guardianName,
+          guardianPhone: values.guardianPhone,
+        });
+      }
+
+      if (tenantType === "HOSPITAL") {
+        Object.assign(metadata, {
+          employeeId: values.employeeId,
+          department: values.department,
+          specialization: values.specialization,
+          licenseNumber: values.licenseNumber,
+          emergencyContact: values.emergencyContact,
+        });
+      }
+
+      if (tenantType === "BUSINESS") {
+        Object.assign(metadata, {
+          company: values.company,
+          position: values.position,
+          linkedIn: values.linkedIn,
+          website: values.website,
+        });
       }
 
       if (card) {
-        // Update existing card
-        await cardAPI.update(card.tagId, {
-          businessUrl: formData.businessUrl,
-          metadata
-        }, tenantId);
+        await cardAPI.update(
+          card.tagId,
+          {
+            businessUrl: values.businessUrl,
+            metadata,
+          },
+          tenantId,
+        );
+        message.success("Card updated successfully");
       } else {
-        // Create new card
-        await cardAPI.create({
-          tagId: formData.tagId,
-          businessUrl: formData.businessUrl,
-          metadata
-        }, tenantId);
+        await cardAPI.create(
+          {
+            tagId: values.tagId,
+            businessUrl: values.businessUrl,
+            metadata,
+          },
+          tenantId,
+        );
+        message.success("Card created successfully");
       }
 
       onSuccess();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save card');
-    } finally {
-      setLoading(false);
+      message.error(err.response?.data?.error || "Failed to save card");
     }
   };
 
   return (
-    <form className="grid gap-6" onSubmit={handleSubmit}>
-      {error && <div className="p-4 mb-4 bg-red-100 text-red-800 border border-red-200 rounded-md">{error}</div>}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Tag ID (NFC UID) *</label>
-          <input
-            type="text"
+    <Form
+      form={form}
+      layout="vertical"
+      onFinish={onFinish}
+      initialValues={{
+        tagId: card?.tagId,
+        businessUrl: card?.businessUrl,
+        ...card?.metadata,
+      }}
+      className="p-4"
+    >
+      {/* Top Fields */}
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={12}>
+          <Form.Item
+            label="Tag ID"
             name="tagId"
-            value={formData.tagId}
-            onChange={handleChange}
-            required
-            disabled={!!card}
-            placeholder="e.g., A1B2C3D4"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 disabled:bg-gray-100"
-          />
-        </div>
+            rules={[{ required: true, message: "Tag ID is required" }]}
+          >
+            <Input disabled={!!card} placeholder="A1B2C3D4" />
+          </Form.Item>
+        </Col>
 
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Business URL *</label>
-          <input
-            type="url"
+        <Col xs={24} md={12}>
+          <Form.Item
+            label="Business URL"
             name="businessUrl"
-            value={formData.businessUrl}
-            onChange={handleChange}
-            required
-            placeholder="https://example.com/profile"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
-      </div>
+            rules={[{ required: true, message: "URL is required" }]}
+          >
+            <Input placeholder="https://example.com" />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      <h3 className="text-lg font-semibold text-gray-800 mt-4">Common Information</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Full Name</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="John Doe"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
+      {/* Common Info */}
+      <Title level={5} className="mt-4 text-sm sm:text-base">
+        Common Information
+      </Title>
 
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Title/Role</label>
-          <input
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            placeholder="e.g., Doctor, Teacher, Manager"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
-      </div>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={12}>
+          <Form.Item name="name" label="Full Name">
+            <Input placeholder="John Doe" />
+          </Form.Item>
+        </Col>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Email</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="email@example.com"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
+        <Col xs={24} md={12}>
+          <Form.Item name="title" label="Title">
+            <Input placeholder="Doctor / Teacher" />
+          </Form.Item>
+        </Col>
+      </Row>
 
-        <div className="flex flex-col gap-2">
-          <label className="font-medium text-gray-800">Phone</label>
-          <input
-            type="tel"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            placeholder="+1234567890"
-            className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
-      </div>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={12}>
+          <Form.Item name="email" label="Email">
+            <Input />
+          </Form.Item>
+        </Col>
 
-      {/* School-specific fields */}
-      {tenantType === 'SCHOOL' && (
+        <Col xs={24} md={12}>
+          <Form.Item name="phone" label="Phone">
+            <Input />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      {/* SCHOOL */}
+      {tenantType === "SCHOOL" && (
         <>
-          <h3 className="text-lg font-semibold text-gray-800 mt-4">School Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Student/Staff ID</label>
-              <input
-                type="text"
-                name="studentId"
-                value={formData.studentId}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Grade/Class</label>
-              <input
-                type="text"
-                name="grade"
-                value={formData.grade}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Section</label>
-              <input
-                type="text"
-                name="section"
-                value={formData.section}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Guardian Name</label>
-              <input
-                type="text"
-                name="guardianName"
-                value={formData.guardianName}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Guardian Phone</label>
-              <input
-                type="tel"
-                name="guardianPhone"
-                value={formData.guardianPhone}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
+          <Title level={5} className="text-sm sm:text-base">School Information</Title>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={8}>
+              <Form.Item name="studentId" label="Student ID">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item name="grade" label="Grade">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item name="section" label="Section">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="guardianName" label="Guardian Name">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="guardianPhone" label="Guardian Phone">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
         </>
       )}
 
-      {/* Hospital-specific fields */}
-      {tenantType === 'HOSPITAL' && (
+      {/* HOSPITAL */}
+      {tenantType === "HOSPITAL" && (
         <>
-          <h3 className="text-lg font-semibold text-gray-800 mt-4">Hospital Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Employee ID</label>
-              <input
-                type="text"
-                name="employeeId"
-                value={formData.employeeId}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Department</label>
-              <input
-                type="text"
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                placeholder="e.g., Cardiology"
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Specialization</label>
-              <input
-                type="text"
-                name="specialization"
-                value={formData.specialization}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">License Number</label>
-              <input
-                type="text"
-                name="licenseNumber"
-                value={formData.licenseNumber}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="font-medium text-gray-800">Emergency Contact</label>
-            <input
-              type="text"
-              name="emergencyContact"
-              value={formData.emergencyContact}
-              onChange={handleChange}
-              className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-            />
-          </div>
+          <Title level={5} className="text-sm sm:text-base">Hospital Information</Title>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="employeeId" label="Employee ID">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="department" label="Department">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="specialization" label="Specialization">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="licenseNumber" label="License Number">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="emergencyContact" label="Emergency Contact">
+            <Input />
+          </Form.Item>
         </>
       )}
 
-      {/* Business-specific fields */}
-      {tenantType === 'BUSINESS' && (
+      {/* BUSINESS */}
+      {tenantType === "BUSINESS" && (
         <>
-          <h3 className="text-lg font-semibold text-gray-800 mt-4">Business Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Company</label>
-              <input
-                type="text"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Position</label>
-              <input
-                type="text"
-                name="position"
-                value={formData.position}
-                onChange={handleChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">LinkedIn URL</label>
-              <input
-                type="url"
-                name="linkedIn"
-                value={formData.linkedIn}
-                onChange={handleChange}
-                placeholder="https://linkedin.com/in/username"
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="font-medium text-gray-800">Website</label>
-              <input
-                type="url"
-                name="website"
-                value={formData.website}
-                onChange={handleChange}
-                placeholder="https://example.com"
-                className="px-3 py-2 border border-gray-300 rounded-md text-base font-inherit focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-          </div>
+          <Title level={5} className="text-sm sm:text-base">Business Information</Title>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="company" label="Company">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="position" label="Position">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="company" label="Company">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="position" label="Position">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="linkedIn" label="LinkedIn">
+                <Input />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Form.Item name="website" label="Website">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
         </>
       )}
 
-      <div className="flex gap-4 mt-4">
-        <button type="submit" className="px-6 py-3 bg-linear-to-r from-purple-600 to-purple-800 text-white rounded-md font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
-          {loading ? 'Saving...' : card ? 'Update Card' : 'Register Card'}
-        </button>
-        <button type="button" className="px-6 py-3 bg-gray-100 text-gray-800 rounded-md font-medium hover:bg-gray-200" onClick={onCancel}>
+      {/* Buttons */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6">
+        <Button type="primary" htmlType="submit" className="w-full sm:w-auto text-sm sm:text-base">
+          {card ? "Update Card" : "Register Card"}
+        </Button>
+
+        <Button onClick={onCancel} className="w-full sm:w-auto text-sm sm:text-base">
           Cancel
-        </button>
+        </Button>
       </div>
-    </form>
+    </Form>
   );
 }
