@@ -24,10 +24,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear auth data and redirect to login
+      // Clear auth data - App.jsx will handle showing login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/';
+      
+      // Trigger a storage event to notify other tabs/components
+      window.dispatchEvent(new Event('storage'));
     }
     return Promise.reject(error);
   }

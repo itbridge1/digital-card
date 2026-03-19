@@ -186,7 +186,9 @@ async function seedDatabase() {
 
     // Insert users
     console.log('Creating users...');
-    const users = await User.bulkCreate(sampleUsers);
+    const users = await User.bulkCreate(sampleUsers, { 
+      individualHooks: true // This ensures password hashing hooks run
+    });
     console.log(`✓ Created ${users.length} users:`);
     users.forEach(u => {
       console.log(`  - ${u.name} (${u.email}) - Role: ${u.role}`);

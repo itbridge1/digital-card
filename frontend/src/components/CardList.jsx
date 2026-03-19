@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { cardAPI } from '../services/api';
 
-export default function CardList({ onEdit, refreshTrigger }) {
+export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchCards();
-  }, [refreshTrigger]);
+    if (tenantId) {
+      fetchCards();
+    }
+  }, [tenantId, refreshTrigger]);
 
   const fetchCards = async () => {
     try {

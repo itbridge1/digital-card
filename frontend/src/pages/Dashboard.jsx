@@ -3,7 +3,7 @@ import CardList from '../components/CardList';
 import CardForm from '../components/CardForm';
 import { tenantAPI, cardAPI } from '../services/api';
 
-function Dashboard() {
+function Dashboard({ onLogout }) {
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -93,7 +93,17 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-linear-to-r from-purple-600 to-purple-800 text-white p-6 shadow-lg">
-        <h1 className="text-3xl font-bold mb-2">IT Bridge NFC</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold mb-2">IT Bridge NFC</h1>
+          {onLogout && (
+            <button 
+              onClick={onLogout}
+              className="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-md transition-all"
+            >
+              Logout
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-4 mt-4">
           <label className="font-medium">Tenant:</label>
           <select 
