@@ -1,7 +1,5 @@
-import { Button, Card, Divider, Typography, message } from "antd";
-import { FaCopy } from "react-icons/fa";
-
-const { Title, Text } = Typography;
+import { Button, Card, message, Avatar } from "antd";
+import { CopyOutlined, UserOutlined } from "@ant-design/icons";
 
 const getDisplayRows = (card) => {
   if (!card?.metadata) {
@@ -33,9 +31,13 @@ const copyToClipboard = async (text) => {
 const DARK_TEXT_PRIMARY = "rgba(255, 255, 255, 0.92)";
 const DARK_TEXT_SECONDARY = "rgba(255, 255, 255, 0.78)";
 const DARK_TEXT_MUTED = "rgba(255, 255, 255, 0.68)";
+const DARK_SURFACE_BASE = "#111827";
+const DARK_SURFACE_ELEVATED = "#1f2937";
+const DARK_BORDER_SOFT = "rgba(255, 255, 255, 0.2)";
 
 function CardDesignOne({ card, tenant, formatFieldName, theme }) {
   const displayRows = getDisplayRows(card);
+
   const {
     primaryColor,
     secondaryColor,
@@ -44,364 +46,408 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
     isDark,
     hexToRgba,
   } = theme;
+  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
+  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#666";
+  const labelColor = isDark ? DARK_TEXT_MUTED : "#888";
+  const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+  const valueColor = isDark ? DARK_TEXT_PRIMARY : primaryColor;
 
   return (
     <Card
-      className="overflow-hidden"
-      style={{ 
-        width: 340, 
-        background: isDark ? "#1f1f1f" : "white",
-        borderRadius: '24px',
-        position: 'relative',
+      style={{
+        width: 340,
+        borderRadius: 16,
+        overflow: "hidden",
+        position: "relative",
+        background: cardSurfaceColor,
+        border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
     >
-      {/* Curved Header Background */}
+      {/* 🔷 Top Right Diagonal */}
       <div
-        className="relative overflow-hidden"
         style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: "100%",
+          height: "130px",
           background: primaryColor,
-          borderRadius: '0 0 40px 40px',
-          position: 'relative',
+          clipPath: "polygon(40% 0, 100% 0, 100% 100%, 70% 100%)",
+        }}
+      />
+
+      {/* 🔶 Bottom Left Diagonal */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          width: "100%",
+          height: "130px",
+          background: secondaryColor,
+          clipPath: "polygon(0 0, 30% 0, 60% 100%, 0% 100%)",
+        }}
+      />
+
+      {/* 🏢 Company Section with Logo */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "#fff",
         }}
       >
-        <div className="py-3 text-center text-white relative z-10">
-          <Text strong className="text-xs text-white">
-            {tenant?.name || "Organization"}
-          </Text>
-          <div className="text-[8px] opacity-80">{tenant?.type}</div>
-        </div>
-        {/* Decorative curved shape */}
-        <div 
-          className="absolute bottom-0 left-0 right-0 h-8"
-          style={{
-            background: isDark ? "#1f1f1f" : "white",
-            borderRadius: '40px 40px 0 0',
-          }}
+        <Avatar
+          size={28}
+          icon={<UserOutlined />}
+          src={tenant?.logo}
+          style={{ background: "#fff" }}
         />
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12, fontWeight: "bold" }}>
+            {tenant?.name || "Company"}
+          </div>
+          <div style={{ fontSize: 10, opacity: 0.8 }}>{tenant?.type}</div>
+        </div>
       </div>
 
-      <div className="mt-2 flex flex-col items-center px-4">
-        {/* Larger Avatar Container */}
+      {/* 📦 Content */}
+      <div style={{ padding: "20px", position: "relative" }}>
+        {/* 👤 BIGGER Avatar */}
         <div
-          className="flex h-28 w-28 items-center justify-center text-3xl font-bold shadow-xl"
           style={{
-            background: `linear-gradient(135deg, ${secondaryColor}, ${primaryColor})`,
-            color: 'white',
-            borderRadius: '28px',
-            transform: 'rotate(45deg)',
+            width: 120, // 🔥 increased
+            height: 120, // 🔥 increased
+            borderRadius: "50%",
+            overflow: "hidden",
+            margin: "0 auto",
+            border: isDark ? `3px solid ${DARK_BORDER_SOFT}` : "4px solid white",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
           }}
         >
-          <span style={{ transform: 'rotate(-45deg)', fontSize: '32px' }}>
-            {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
-          </span>
-        </div>
-
-        {/* Curved Name Background */}
-        <div 
-          className="mt-2 px-4 py-0.5 rounded-full"
-          style={{
-            background: hexToRgba(secondaryColor, 0.15),
-            borderRadius: '30px',
-          }}
-        >
-          <Title
-            level={5}
-            className={`mb-0 text-center ${isDark ? "text-white" : ""}`}
-            style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor, fontSize: '12px', marginBottom: 0 }}
-          >
-            {card.metadata?.name || "No Name"}
-          </Title>
-        </div>
-
-        <Text
-          type={isDark ? undefined : "secondary"}
-          className="text-[8px] mt-0.5"
-          style={{ color: isDark ? DARK_TEXT_SECONDARY : undefined }}
-        >
-          {card.metadata?.title || "Member"}
-        </Text>
-      </div>
-
-      {/* Curved Divider */}
-      <div className="relative my-2 px-4">
-        <div className="border-t border-dashed" style={{ borderColor: hexToRgba(primaryColor, 0.3) }} />
-        <div className="absolute left-1/2 transform -translate-x-1/2 -top-2 px-2 rounded-full" style={{ background: isDark ? "#1f1f1f" : "white" }}>
-          <Text className="text-[6px]" style={{ color: primaryColor }}>✦</Text>
-        </div>
-      </div>
-
-      {/* Curved Content Container */}
-      <div className="mx-3 mb-3 rounded-2xl overflow-hidden" style={{
-        background: hexToRgba(primaryColor, 0.05),
-        borderRadius: '20px',
-      }}>
-        <div className="p-2 space-y-1">
-          {/* ID with curved background */}
-          <div
-            className="flex justify-between rounded-xl p-1.5"
-            style={{
-              background: hexToRgba(primaryColor, 0.1),
-              borderRadius: '16px',
-            }}
-          >
-            <Text
-              strong
-              className={isDark ? "text-gray-300" : ""}
-              style={{ color: isDark ? DARK_TEXT_SECONDARY : primaryColor, fontSize: '9px' }}
-            >
-              ID
-            </Text>
-            <Text
-              className={isDark ? "text-gray-300" : ""}
+          {card.image ? (
+            <img
+              src="https://static.vecteezy.com/system/resources/previews/048/467/312/non_2x/modern-purple-identity-card-design-template-employee-id-card-design-vector.jpg"
+              alt="profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div
               style={{
-                color: isDark ? DARK_TEXT_PRIMARY : accentColor,
+                width: "100%",
+                height: "100%",
+                background: hexToRgba(primaryColor, 0.3),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 36,
                 fontWeight: "bold",
-                fontSize: '9px',
+                color: "#fff",
               }}
             >
-              {card.tagId}
-            </Text>
+              {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
+            </div>
+          )}
+        </div>
+
+        {/* 🧑 Name */}
+        <div style={{ textAlign: "center", marginTop: 10 }}>
+          <h3 style={{ marginBottom: 0 }}>
+            <span style={{ color: primaryColor }}>
+              {card.metadata?.name?.split(" ")[0] || "Name"}
+            </span>{" "}
+            <span style={{ color: secondaryColor }}>
+              {card.metadata?.name?.split(" ")[1] || ""}
+            </span>
+          </h3>
+
+          <p
+            style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}
+          >
+            {card.metadata?.title || "Member"}
+          </p>
+        </div>
+
+        {/* 📋 Data */}
+        <div style={{ marginTop: 12, fontSize: 12 }}>
+          {/* ID */}
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: labelColor }}>ID</span>
+            <strong style={{ color: accentColor }}>{card.tagId}</strong>
           </div>
 
+          {/* Dynamic Rows */}
           {displayRows.map(([key, value]) => (
             <div
               key={key}
-              className="flex justify-between gap-3 rounded-xl p-1.5 transition-all hover:scale-[1.02]"
               style={{
-                background: hexToRgba(secondaryColor, 0.08),
-                borderRadius: '16px',
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 4,
               }}
             >
-              <Text
-                type={isDark ? undefined : "secondary"}
-                style={{ color: isDark ? DARK_TEXT_SECONDARY : undefined, fontSize: '8px' }}
-              >
-                {formatFieldName(key)}
-              </Text>
-              <Text
-                strong
-                className={`truncate text-right ${isDark ? "text-white" : ""}`}
-                style={{
-                  maxWidth: 150,
-                  color: isDark ? DARK_TEXT_PRIMARY : primaryColor,
-                  fontSize: '8px',
-                }}
-              >
-                {value}
-              </Text>
+              <span style={{ color: labelColor }}>{formatFieldName(key)}</span>
+              <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
         </div>
-      </div>
 
-      {card.businessUrl && (
-        <div className="px-4 pb-3">
+        {/* 🌐 Business URL + COPY BUTTON ✅ */}
+        {card.businessUrl && (
           <div
-            className="flex items-center justify-between gap-2 rounded-2xl p-1.5"
             style={{
+              marginTop: 10,
+              padding: "6px 10px",
+              borderRadius: 20,
               background: hexToRgba(accentColor, 0.1),
-              borderRadius: '30px',
+              border: isDark ? `1px solid ${hexToRgba(accentColor, 0.35)}` : undefined,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: 10,
+              gap: 6,
             }}
           >
-            <Text
-              className={`truncate ${isDark ? "text-gray-400" : ""}`}
+            <span
               style={{
-                color: isDark ? DARK_TEXT_MUTED : accentColor,
+                color: accentColor,
                 fontWeight: "bold",
-                fontSize: '7px',
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: 180,
               }}
             >
               {card.businessUrl}
-            </Text>
+            </span>
+
             <Button
               size="small"
-              icon={<FaCopy style={{ fontSize: '8px' }} />}
+              icon={<CopyOutlined />}
               onClick={() => copyToClipboard(card.businessUrl)}
-              style={{ color: accentColor }}
             />
           </div>
+        )}
+
+        <div style={{ marginTop: 12, textAlign: "center" }}>
+          <div style={{ fontSize: 10, marginTop: 4, color: bodyTextColor }}>
+            {tenant?.website || "www.company.com"}
+          </div>
         </div>
-      )}
+      </div>
     </Card>
   );
 }
 
 function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
   const displayRows = getDisplayRows(card);
+
   const {
     primaryColor,
     secondaryColor,
-    accentColor,
     surfaceColor,
     isDark,
     hexToRgba,
   } = theme;
+  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
+  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#888";
+  const labelColor = isDark ? DARK_TEXT_MUTED : "#777";
+  const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+  const valueColor = isDark ? DARK_TEXT_PRIMARY : primaryColor;
 
   return (
     <Card
-      className="overflow-hidden"
-      style={{ 
-        width: 340, 
-        background: isDark ? "#1f1f1f" : "white",
-        borderRadius: '32px',
-        position: 'relative',
+      style={{
+        width: 340,
+        borderRadius: 24,
+        overflow: "hidden",
+        position: "relative",
+        background: cardSurfaceColor,
+        border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
     >
-      {/* Curved Header with Bottom Wave */}
-      <div
-        className="relative"
-        style={{
-          background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-          borderRadius: '0 0 50% 50% / 0 0 30px 30px',
-          overflow: 'hidden',
-        }}
-      >
-        <div className="py-2 px-4">
-          <Text strong className="text-xs text-white">
-            {tenant?.name || "Organization"}
-          </Text>
-          <div className="text-[7px] opacity-90">{tenant?.type}</div>
+      {/* 🔺 TOP MULTI COLOR WAVE */}
+      <div style={{ position: "relative" }}>
+        {/* Dark Top */}
+        <div
+          style={{
+            background: hexToRgba(primaryColor, 0.95),
+            padding: "10px 16px",
+            color: "#fff",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+            <Avatar size={22} icon={<UserOutlined />} src={tenant?.logo} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: "bold" }}>
+                {tenant?.name || "Company Name"}
+              </div>
+              <div style={{ fontSize: 9, opacity: 0.7 }}>
+                {tenant?.type || "Slogan here"}
+              </div>
+            </div>
+          </div>
         </div>
-        {/* Wave decoration */}
-        <svg className="absolute bottom-0 left-0 w-full h-5" preserveAspectRatio="none" viewBox="0 0 1440 120">
-          <path fill={isDark ? "#1f1f1f" : "white"} fillOpacity="1" d="M0,64L80,69.3C160,75,320,85,480,80C640,75,800,53,960,48C1120,43,1280,53,1360,58.7L1440,64L1440,120L1360,120C1280,120,1120,120,960,120C800,120,640,120,480,120C320,120,160,120,80,120L0,120Z" />
+
+        {/* Red Wave */}
+        <svg
+          viewBox="0 0 500 80"
+          preserveAspectRatio="none"
+          style={{ display: "block" }}
+        >
+          <path
+            d="M0,40 C150,80 350,0 500,40 L500,0 L0,0 Z"
+            style={{ fill: primaryColor }}
+          />
+        </svg>
+
+        {/* Second Wave Layer */}
+        <svg
+          viewBox="0 0 500 80"
+          preserveAspectRatio="none"
+          style={{ marginTop: -40 }}
+        >
+          <path
+            d="M0,50 C150,10 350,90 500,50 L500,0 L0,0 Z"
+            style={{ fill: secondaryColor, opacity: 0.7 }}
+          />
         </svg>
       </div>
 
-      {/* Larger Circular Avatar with Curved Background */}
-      <div className="relative flex justify-center mt-1">
-        <div 
-          className="absolute -top-12 w-28 h-28 rounded-full flex items-center justify-center"
+      {/* 👤 Avatar */}
+      <div style={{ textAlign: "center" }}>
+        <div
           style={{
-            background: `radial-gradient(circle, ${secondaryColor}, ${primaryColor})`,
-            boxShadow: `0 0 0 3px ${isDark ? "#1f1f1f" : "white"}, 0 0 0 6px ${hexToRgba(secondaryColor, 0.3)}`,
+            width: 120,
+            height: 120,
+            borderRadius: "50%",
+            overflow: "hidden",
+            margin: "0 auto",
+            border: `4px solid ${primaryColor}`,
+            background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
           }}
         >
-          <span className="text-3xl font-bold text-white">
-            {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
-          </span>
+          {card.image ? (
+            <img
+              src="https://static.vecteezy.com/system/resources/previews/048/467/312/non_2x/modern-purple-identity-card-design-template-employee-id-card-design-vector.jpg"
+              alt="profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                fontWeight: "bold",
+                background: hexToRgba(primaryColor, 0.3),
+                color: "#fff",
+              }}
+            >
+              {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="mt-14 px-4 pb-3">
-        {/* Curved Name Badge */}
-        <div className="text-center mb-2">
-          <div 
-            className="inline-block px-4 py-0.5 rounded-full"
-            style={{
-              background: hexToRgba(primaryColor, 0.1),
-              borderRadius: '40px',
-            }}
-          >
-            <Title
-              level={5}
-              className={`mb-0 ${isDark ? "text-white" : ""}`}
-              style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor, fontSize: '11px', marginBottom: 0 }}
-            >
-              {card.metadata?.name || "No Name"}
-            </Title>
-          </div>
-          <Text
-            type={isDark ? undefined : "secondary"}
-            className="text-[7px] block mt-0.5"
-            style={{ color: isDark ? DARK_TEXT_SECONDARY : undefined }}
-          >
-            {card.metadata?.title || "Member"}
-          </Text>
+      {/* 📦 CONTENT */}
+      <div style={{ padding: "16px" }}>
+        {/* Name */}
+        <div style={{ textAlign: "center" }}>
+          <h3 style={{ marginBottom: 0, color: isDark ? DARK_TEXT_PRIMARY : primaryColor }}>
+            {card.metadata?.name || "Your Name"}
+          </h3>
+          <p style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}>
+            {card.metadata?.title || "Designation"}
+          </p>
         </div>
 
-        {/* Curved ID Badge */}
-        <div className="flex justify-center mb-3">
-          <div
-            className="inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-[8px]"
-            style={{
-              background: hexToRgba(accentColor, 0.15),
-              color: accentColor,
-              borderRadius: '30px',
-              border: `1px solid ${hexToRgba(accentColor, 0.3)}`,
-            }}
-          >
-            <span className="font-medium">ID:</span>
-            <span className="font-mono font-bold">{card.tagId}</span>
-          </div>
+        {/* ID */}
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <span style={{ fontSize: 11, color: bodyTextColor }}>
+            ID No: <strong>{card.tagId}</strong>
+          </span>
         </div>
 
-        {/* Curved Cards Container */}
-        <div className="space-y-1.5">
+        {/* 📋 Dynamic Fields */}
+        <div style={{ marginTop: 10, fontSize: 12 }}>
           {displayRows.map(([key, value]) => (
             <div
               key={key}
-              className="group flex items-center rounded-2xl p-1.5 transition-all hover:translate-x-1"
               style={{
-                background: hexToRgba(secondaryColor, 0.08),
-                borderRadius: '20px',
-                borderLeft: `2px solid ${accentColor}`,
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 4,
+                borderBottom: `1px dashed ${hexToRgba(primaryColor, 0.2)}`,
+                paddingBottom: 2,
               }}
             >
-              <Text
-                type={isDark ? undefined : "secondary"}
-                className="text-[8px]"
-                style={{
-                  minWidth: 85,
-                  color: isDark ? DARK_TEXT_SECONDARY : undefined,
-                  fontSize: '8px'
-                }}
-              >
-                {formatFieldName(key)}
-              </Text>
-              <div className="flex-1 text-right">
-                <Text
-                  className={`font-medium ${isDark ? "text-gray-300" : "text-gray-800"}`}
-                  style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor, fontSize: '8px' }}
-                >
-                  {value}
-                </Text>
-              </div>
+              <span style={{ color: labelColor }}>{formatFieldName(key)}</span>
+              <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
         </div>
 
-        {/* Curved URL Container */}
+        {/* 🌐 URL + COPY */}
         {card.businessUrl && (
-          <div className="mt-3">
-            <div
-              className="flex items-center justify-between rounded-2xl p-1.5"
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: hexToRgba(primaryColor, 0.1),
+              border: isDark ? `1px solid ${hexToRgba(primaryColor, 0.35)}` : undefined,
+              padding: "6px 10px",
+              borderRadius: 20,
+            }}
+          >
+            <span
               style={{
-                background: hexToRgba(secondaryColor, 0.1),
-                borderRadius: '40px',
+                fontSize: 10,
+                color: isDark ? DARK_TEXT_PRIMARY : primaryColor,
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                maxWidth: 180,
               }}
             >
-              <div className="flex items-center gap-1 overflow-hidden flex-1">
-                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: hexToRgba(secondaryColor, 0.2) }}>
-                  <FaCopy className="text-[7px]" style={{ color: secondaryColor }} />
-                </div>
-                <Text
-                  className={`truncate ${isDark ? "text-gray-400" : ""}`}
-                  style={{ color: isDark ? DARK_TEXT_MUTED : undefined, fontSize: '7px' }}
-                >
-                  {card.businessUrl}
-                </Text>
-              </div>
-              <Button
-                size="small"
-                type="text"
-                icon={<FaCopy style={{ fontSize: '7px' }} />}
-                onClick={() => copyToClipboard(card.businessUrl)}
-                className="opacity-0 group-hover:opacity-100"
-              />
-            </div>
+              {card.businessUrl}
+            </span>
+
+            <Button
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={() => copyToClipboard(card.businessUrl)}
+            />
           </div>
         )}
       </div>
+
+      {/* 🔻 BOTTOM WAVE */}
+      <svg viewBox="0 0 500 80" preserveAspectRatio="none">
+        <path
+          d="M0,40 C150,0 350,80 500,40 L500,80 L0,80 Z"
+          style={{ fill: primaryColor }}
+        />
+      </svg>
     </Card>
   );
 }
 
 function CardDesignThree({ card, tenant, formatFieldName, theme }) {
   const displayRows = getDisplayRows(card);
+
   const {
     primaryColor,
     secondaryColor,
@@ -410,212 +456,164 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
     isDark,
     hexToRgba,
   } = theme;
+  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
+  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#888";
+  const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
 
   return (
     <Card
-      className="overflow-hidden"
-      style={{ 
-        width: 340, 
-        background: isDark ? "#1f1f1f" : "white",
-        borderRadius: '28px',
-        position: 'relative',
+      style={{
+        width: 340, // increased width
+        borderRadius: "18px",
+        overflow: "hidden",
+        position: "relative",
+        background: cardSurfaceColor,
+        border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
     >
-      {/* Curved Top Section with Diagonal Blend */}
-      <div className="relative overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
-            clipPath: "ellipse(100% 80% at 50% 0%)",
-          }}
-        />
-        <div className="relative p-3 pb-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <Text className="text-[7px] text-white/80 block">ORGANIZATION</Text>
-              <Text strong className="text-xs text-white block">
-                {tenant?.name || "Company"}
-              </Text>
-            </div>
-            <div className="text-right">
-              <Text className="text-[7px] text-white/80 block">TYPE</Text>
-              <Text className="text-[8px] text-white font-medium">
-                {tenant?.type || "Member"}
-              </Text>
-            </div>
+      {/* 🔵 Top with Company Logo */}
+      <div
+        style={{
+          height: 80, // increased height for header
+          background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+          borderBottomLeftRadius: "100% 45%",
+          borderBottomRightRadius: "100% 45%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 8,
+          color: "#fff",
+        }}
+      >
+        <Avatar size={28} src={tenant?.logo} />
+        <div>
+          <div style={{ fontSize: 12, fontWeight: "bold" }}>
+            {tenant?.name || "Company Name"}
+          </div>
+          <div style={{ fontSize: 9, opacity: 0.8 }}>
+            {tenant?.type || "Slogan"}
           </div>
         </div>
       </div>
 
-      {/* Main content with Curved Containers */}
-      <div className="px-3 pb-3 -mt-3">
-        {/* Profile section with larger curved container */}
-        <div className="flex items-end gap-3 mb-2">
-          <div
-            className="h-24 w-24 rounded-2xl shadow-lg flex items-center justify-center text-3xl font-bold text-white"
-            style={{
-              background: `radial-gradient(circle at 30% 20%, ${secondaryColor}, ${primaryColor})`,
-              borderRadius: '24px',
-              transform: 'rotate(5deg)',
-            }}
-          >
-            <span style={{ transform: 'rotate(-5deg)', fontSize: '32px' }}>
-              {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
-            </span>
-          </div>
-          <div className="flex-1">
-            <div 
-              className="inline-block px-3 py-0.5 rounded-full"
-              style={{
-                background: hexToRgba(primaryColor, 0.1),
-                borderRadius: '30px',
-              }}
-            >
-              <Text
-                strong
-                className={`text-xs block ${isDark ? "text-white" : ""}`}
-                style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor }}
-              >
-                {card.metadata?.name || "No Name"}
-              </Text>
-            </div>
-            <Text
-              className={`text-[7px] block mt-0.5 ${isDark ? "text-gray-400" : "text-gray-500"}`}
-              style={{ color: isDark ? DARK_TEXT_SECONDARY : undefined }}
-            >
-              {card.metadata?.title || "Member"}
-            </Text>
-          </div>
-        </div>
-
-        {/* Curved ID Badge */}
+      {/* 🟣 Profile Image (downward) */}
+      <div
+        style={{
+          position: "absolute",
+          top: 90, // moved image below header
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
+        }}
+      >
         <div
-          className={`mt-2 p-2 rounded-2xl`}
           style={{
-            background: `linear-gradient(135deg, ${hexToRgba(accentColor, 0.1)}, ${hexToRgba(primaryColor, 0.05)})`,
-            borderRadius: '24px',
-            border: `1px solid ${hexToRgba(accentColor, 0.2)}`,
+            width: 80, // increased image size
+            height: 80,
+            borderRadius: "50%",
+            overflow: "hidden",
+            border: `3px solid ${accentColor}`,
+            background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
           }}
         >
-          <Text
-            className={`text-[7px] block ${isDark ? "text-gray-400" : "text-gray-500"}`}
-            style={{ color: isDark ? DARK_TEXT_SECONDARY : primaryColor }}
-          >
-            ID Number
-          </Text>
-          <div className="flex items-center justify-between mt-0.5">
-            <Text
-              className="text-xs font-mono font-bold"
-              style={{ color: accentColor }}
+          {card.image ? (
+            <img
+              src={card.image}
+              alt="profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 24,
+                fontWeight: "bold",
+                background: hexToRgba(primaryColor, 0.3),
+                color: "#fff",
+              }}
             >
-              {card.tagId}
-            </Text>
-            <div className="flex gap-0.5">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="w-1 h-1 rounded-full" style={{ background: accentColor }} />
-              ))}
+              {card?.metadata?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* ⚪ Content */}
+      <div style={{ marginTop: 80, padding: "14px" }}>
+        {/* Name */}
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontWeight: "bold", fontSize: 14, color: bodyTextColor }}>
+            {card?.metadata?.name || "Your Name"}
+          </div>
+          <div style={{ fontSize: 10, color: mutedTextColor }}>
+            {card?.metadata?.title || "Job Position"}
           </div>
         </div>
 
-        {/* Two column curved cards */}
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          {displayRows.slice(0, 4).map(([key, value]) => (
-            <div
-              key={key}
-              className="p-1.5 rounded-2xl transition-all hover:scale-105"
-              style={{
-                background: hexToRgba(secondaryColor, 0.08),
-                borderRadius: '20px',
-                backdropFilter: 'blur(2px)',
-              }}
-            >
-              <Text
-                className={`text-[6px] block uppercase ${isDark ? "text-gray-400" : "text-gray-500"}`}
-                style={{ color: isDark ? DARK_TEXT_MUTED : undefined }}
-              >
-                {formatFieldName(key)}
-              </Text>
-              <Text
-                strong
-                className={`text-[7px] block truncate mt-0.5 ${isDark ? "text-white" : ""}`}
-                style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor }}
-              >
-                {value}
-              </Text>
+        {/* ID */}
+        <div style={{ textAlign: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 9, color: mutedTextColor }}>ID: </span>
+          <span
+            style={{ fontSize: 11, fontWeight: "bold", color: accentColor }}
+          >
+            {card.tagId}
+          </span>
+        </div>
+
+        {/* Simple Fields */}
+        <div style={{ fontSize: 11, lineHeight: "18px" }}>
+          {displayRows.map(([key, value]) => (
+            <div key={key}>
+              <span style={{ color: accentColor, fontWeight: 500 }}>
+                {formatFieldName(key)}:
+              </span>{" "}
+              <span style={{ color: bodyTextColor }}>{value}</span>
             </div>
           ))}
         </div>
 
-        {/* Additional rows with curved left border */}
-        {displayRows.length > 4 && (
-          <div className="mt-2 space-y-1">
-            {displayRows.slice(4).map(([key, value]) => (
-              <div
-                key={key}
-                className="flex justify-between items-center rounded-2xl p-1.5 transition-all"
-                style={{
-                  background: hexToRgba(accentColor, 0.05),
-                  borderRadius: '18px',
-                  borderLeft: `2px solid ${accentColor}`,
-                }}
-              >
-                <Text
-                  className={`text-[7px] ${isDark ? "text-gray-400" : "text-gray-500"}`}
-                  style={{ color: isDark ? DARK_TEXT_SECONDARY : undefined }}
-                >
-                  {formatFieldName(key)}
-                </Text>
-                <Text
-                  className={`text-[7px] font-medium ${isDark ? "text-white" : ""}`}
-                  style={{ color: isDark ? DARK_TEXT_PRIMARY : primaryColor }}
-                >
-                  {value}
-                </Text>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Curved URL section */}
+        {/* URL */}
         {card.businessUrl && (
-          <div
-            className={`mt-2 p-2 rounded-3xl`}
-            style={{
-              background: hexToRgba(accentColor, 0.08),
-              borderRadius: '30px',
-            }}
-          >
-            <Text
-              className={`text-[6px] block uppercase ${isDark ? "text-gray-400" : "text-gray-500"}`}
-              style={{ color: isDark ? DARK_TEXT_MUTED : primaryColor }}
+          <div style={{ marginTop: 8, fontSize: 10, color: bodyTextColor }}>
+            <span style={{ color: accentColor }}>Link: </span>
+            <span>{card.businessUrl}</span>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => copyToClipboard(card.businessUrl)}
+              style={{ fontSize: 10, color: isDark ? DARK_TEXT_PRIMARY : undefined }}
             >
-              Digital Link
-            </Text>
-            <div className="flex items-center justify-between mt-0.5">
-              <Text
-                className={`text-[7px] truncate flex-1 ${isDark ? "text-gray-300" : ""}`}
-                style={{ color: isDark ? DARK_TEXT_SECONDARY : accentColor }}
-              >
-                {card.businessUrl}
-              </Text>
-              <Button
-                size="small"
-                type="text"
-                icon={<FaCopy style={{ fontSize: '7px' }} />}
-                onClick={() => copyToClipboard(card.businessUrl)}
-                className={isDark ? "text-white hover:text-gray-300" : "text-gray-800"}
-              />
-            </div>
+              Copy
+            </Button>
           </div>
         )}
+      </div>
+
+      {/* 🔵 Bottom */}
+      <div
+        style={{
+          height: 50,
+          background: secondaryColor,
+          borderTopLeftRadius: "100% 45%",
+          borderTopRightRadius: "100% 45%",
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          paddingBottom: 8,
+          color: "#fff",
+          fontSize: 10,
+        }}
+      >
+        {tenant?.name || "Your Brand"}
       </div>
     </Card>
   );
 }
-
 const CARD_DESIGNS = {
   one: CardDesignOne,
   two: CardDesignTwo,

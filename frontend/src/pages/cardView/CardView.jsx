@@ -8,9 +8,7 @@ import {
   Slider,
   Switch,
   Drawer,
-  Descriptions,
   Select,
-  Divider,
 } from "antd";
 import {
   FaArrowLeft,
@@ -25,11 +23,36 @@ import SelectCard from "./components/SelectCard";
 
 const { Text } = Typography;
 
+const THEME_PRESETS = {
+  ocean: {
+    primaryColor: "#1890ff",
+    secondaryColor: "#52c41a",
+    accentColor: "#ff6b6b",
+    surfaceColor: "#f0f2f5",
+  },
+  sunset: {
+    primaryColor: "#f97316",
+    secondaryColor: "#facc15",
+    accentColor: "#dc2626",
+    surfaceColor: "#fff7ed",
+  },
+  royal: {
+    primaryColor: "#4f46e5",
+    secondaryColor: "#06b6d4",
+    accentColor: "#db2777",
+    surfaceColor: "#eef2ff",
+  },
+  forest: {
+    primaryColor: "#166534",
+    secondaryColor: "#22c55e",
+    accentColor: "#b45309",
+    surfaceColor: "#f0fdf4",
+  },
+};
+
 const DEFAULT_THEME = {
-  primaryColor: "#1890ff",
-  secondaryColor: "#52c41a",
-  accentColor: "#ff6b6b",
-  surfaceColor: "#f0f2f5",
+  ...THEME_PRESETS.ocean,
+  preset: "ocean",
   isDark: false,
   contrast: 100,
 };
@@ -44,7 +67,17 @@ function CardView() {
   const [selectedDesign, setSelectedDesign] = useState("one");
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem("cardTheme");
-    return savedTheme ? JSON.parse(savedTheme) : DEFAULT_THEME;
+
+    if (!savedTheme) {
+      return DEFAULT_THEME;
+    }
+
+    try {
+      const parsedTheme = JSON.parse(savedTheme);
+      return { ...DEFAULT_THEME, ...parsedTheme };
+    } catch {
+      return DEFAULT_THEME;
+    }
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -102,6 +135,14 @@ function CardView() {
   const handleDarkModeToggle = (checked) => {
     setTheme((prev) => ({ ...prev, isDark: checked }));
   };
+  const handlePresetChange = (presetName) => {
+    const selectedPreset = THEME_PRESETS[presetName] || THEME_PRESETS.ocean;
+    setTheme((prev) => ({
+      ...prev,
+      ...selectedPreset,
+      preset: presetName,
+    }));
+  };
   const resetToDefault = () => setTheme(DEFAULT_THEME);
 
   const hexToRgba = (hex, opacity, contrast = 100) => {
@@ -120,16 +161,6 @@ function CardView() {
     ...theme,
     hexToRgba: (hex, opacity) => hexToRgba(hex, opacity, theme.contrast),
   };
-
-  const detailRows = card?.metadata
-    ? Object.entries(card.metadata).filter(([key, value]) => {
-        if (!value) {
-          return false;
-        }
-
-        return key !== "name" && key !== "title" && key !== "custom";
-      })
-    : [];
 
   const sidebarContent = (
     <div className="space-y-4">
@@ -173,6 +204,22 @@ function CardView() {
             size="small"
             checked={theme.isDark}
             onChange={handleDarkModeToggle}
+          />
+        </div>
+
+        <div className="mb-3">
+          <Text className="mb-1 block text-xs">Theme Preset</Text>
+          <Select
+            value={theme.preset || "ocean"}
+            onChange={handlePresetChange}
+            size="middle"
+            className="w-full"
+            options={[
+              { label: "Ocean", value: "ocean" },
+              { label: "Sunset", value: "sunset" },
+              { label: "Royal", value: "royal" },
+              { label: "Forest", value: "forest" },
+            ]}
           />
         </div>
 
