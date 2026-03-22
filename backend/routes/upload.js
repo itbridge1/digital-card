@@ -91,18 +91,24 @@ router.post(
   protect,
   authorize('admin', 'manager'),
   (req, res, next) => {
+   console.log('📡 Logo upload request received');
+   console.log('Headers:', req.headers);
     uploadLogo.single('image')(req, res, (err) => {
       if (err) {
+        console.error('❌ Multer error:', err.message);
         return res.status(400).json({ success: false, error: err.message });
       }
+      console.log('✅ File received by multer:', req.file);
       next();
     });
   },
   (req, res) => {
+    console.log('Final handler - req.file:', req.file);
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
     const url = `/uploads/logos/${req.file.filename}`;
+    console.log('✅ Sending response with URL:', url);
     res.json({ success: true, url });
   }
 );

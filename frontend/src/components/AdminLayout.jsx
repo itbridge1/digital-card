@@ -52,9 +52,9 @@ function AdminLayout() {
       label: <NavLink to="/admin/users">Users</NavLink>,
     },
     {
-      key: "/manager/organizations",
+      key: "/admin/organizations",
       icon: <ApartmentOutlined />,
-      label: <NavLink to="/manager/organizations">Organizations</NavLink>,
+      label: <NavLink to="/admin/organizations">Organizations</NavLink>,
     },
   ];
 

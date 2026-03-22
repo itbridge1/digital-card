@@ -16,6 +16,14 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // For FormData, remove Content-Type so axios sets it with proper boundary
+  if (config.data instanceof FormData) {
+    console.log("📡 Sending FormData request to:", config.url);
+    console.log("📦 FormData contents:", Array.from(config.data.entries()));
+    delete config.headers['Content-Type'];
+  }
+  
   return config;
 });
 
@@ -74,6 +82,8 @@ export const useraccessAPI = {
 
   getOrganizationCards: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/cards`),
+  getOrganizationCard: (tenantId, tagId) =>
+    api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/cards/${encodeURIComponent(tagId)}`),
   addCard: (tenantId, data) =>
     api.post(`/manager/organizations/${encodeURIComponent(tenantId)}/cards`, data),
   updateCard: (tenantId, cardId, data) =>
@@ -89,16 +99,12 @@ export const uploadAPI = {
   uploadProfile: (file) => {
     const formData = new FormData();
     formData.append('image', file);
-    return api.post('/upload/profile', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    return api.post('/upload/profile', formData);
   },
   uploadLogo: (file) => {
     const formData = new FormData();
     formData.append('image', file);
-    return api.post('/upload/logo', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    return api.post('/upload/logo', formData);
   }
 };
 
