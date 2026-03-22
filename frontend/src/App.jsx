@@ -3,6 +3,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Users from "./pages/admin/Users";
+import CardRegistration from "./pages/admin/CardRegistration";
 import ErrorPage from "./pages/ErrorPage";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -26,6 +27,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
+          <Route path="card-registration" element={<CardRegistration />} />
         </Route>
       </Route>
 
