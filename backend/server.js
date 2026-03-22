@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 const { connectDB } = require('./config/database');
 
 // Initialize Express app
@@ -16,14 +19,25 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Serve uploaded images as static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// API Docs — Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'NFC Platform API Docs',
+  swaggerOptions: { persistAuthorization: true },
+}));
+
 // Routes
 // Global redirector - must be first to catch /t/:tagId (no auth required)
 app.use('/t', require('./routes/redirect'));
 
 // API routes
-app.use('/api/auth', require('./routes/auth')); // Authentication routes
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/tenants', require('./routes/tenants'));
-app.use('/api/cards', require('./routes/cards')); // Protected routes
+app.use('/api/cards', require('./routes/cards'));
+app.use('/api/upload', require('./routes/upload'));
+app.use('/api/manager', require('./routes/manager'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -42,11 +56,14 @@ app.get('/', (req, res) => {
     version: '2.0.0',
     database: 'MySQL',
     endpoints: {
-      auth: '/api/auth (register, login, me)',
+      auth: '/api/auth (login, register, me)',
       redirect: 'GET /t/:tagId',
       cards: '/api/cards (protected)',
       tenants: '/api/tenants',
-      health: '/health'
+      manager: '/api/manager (admin & manager)',
+      upload: '/api/upload (image uploads)',
+      health: '/health',
+      docs: '/api-docs'
     }
   });
 });

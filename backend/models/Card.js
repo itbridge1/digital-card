@@ -47,6 +47,10 @@ const Card = sequelize.define('Card', {
       return rawValue || {};
     }
   },
+  profileImageUrl: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

@@ -33,6 +33,10 @@ const Tenant = sequelize.define('Tenant', {
       isEmail: true
     }
   },
+  logoUrl: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

@@ -3,9 +3,9 @@ import { Form, Input, Button, Card, Typography, message } from "antd";
 import { authAPI } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
-function Login({ onLoginSuccess, onSwitchToRegister }) {
+function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -25,29 +25,20 @@ function Login({ onLoginSuccess, onSwitchToRegister }) {
       }
 
       const { token, ...user } = data;
-
-      // Save to localStorage
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Show success message
       message.success("Login successful");
 
-      // Call parent callback safely
-      if (onLoginSuccess) {
-        try {
-          onLoginSuccess(user, token);
-        } catch (err) {
-          console.error("onLoginSuccess error:", err);
-        }
+      // Redirect based on role
+      if (user.role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (user.role === "manager") {
+        navigate("/manager/dashboard");
+      } else {
+        navigate("/");
       }
-
-      // Navigate to dashboard
-      navigate("/");
     } catch (err) {
-      console.error("LOGIN ERROR:", err);
-
-      // Only one message will show
       message.error(err.response?.data?.error || err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -94,18 +85,7 @@ function Login({ onLoginSuccess, onSwitchToRegister }) {
           </Button>
         </Form>
 
-        {/* Switch to Register */}
-        <div className="text-center mt-4">
-          <Text>
-            Don’t have an account?{" "}
-            <span
-              className="app-theme-link cursor-pointer"
-              onClick={onSwitchToRegister}
-            >
-              Register
-            </span>
-          </Text>
-        </div>
+
       </Card>
     </div>
   );

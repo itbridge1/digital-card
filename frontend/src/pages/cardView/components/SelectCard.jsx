@@ -1,6 +1,14 @@
 import { Button, Card, message, Avatar } from "antd";
 import { CopyOutlined, UserOutlined } from "@ant-design/icons";
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+
+const resolveImg = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${API_BASE}${url}`;
+};
+
 const getDisplayRows = (card) => {
   if (!card?.metadata) {
     return [];
@@ -105,7 +113,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
         <Avatar
           size={28}
           icon={<UserOutlined />}
-          src={tenant?.logo}
+          src={resolveImg(tenant?.logoUrl)}
           style={{ background: "#fff" }}
         />
         <div style={{ textAlign: "right" }}>
@@ -130,9 +138,9 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
             boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
           }}
         >
-          {card.image ? (
+          {card.profileImageUrl ? (
             <img
-              src="https://static.vecteezy.com/system/resources/previews/048/467/312/non_2x/modern-purple-identity-card-design-template-employee-id-card-design-vector.jpg"
+              src={resolveImg(card.profileImageUrl)}
               alt="profile"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
@@ -284,7 +292,7 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
           }}
         >
           <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-            <Avatar size={22} icon={<UserOutlined />} src={tenant?.logo} />
+            <Avatar size={22} icon={<UserOutlined />} src={resolveImg(tenant?.logoUrl)} />
             <div>
               <div style={{ fontSize: 12, fontWeight: "bold" }}>
                 {tenant?.name || "Company Name"}
@@ -334,9 +342,9 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
             background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
           }}
         >
-          {card.image ? (
+          {card.profileImageUrl ? (
             <img
-              src="https://static.vecteezy.com/system/resources/previews/048/467/312/non_2x/modern-purple-identity-card-design-template-employee-id-card-design-vector.jpg"
+              src={resolveImg(card.profileImageUrl)}
               alt="profile"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
@@ -486,7 +494,7 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
           color: "#fff",
         }}
       >
-        <Avatar size={28} src={tenant?.logo} />
+        <Avatar size={28} src={resolveImg(tenant?.logoUrl)} />
         <div>
           <div style={{ fontSize: 12, fontWeight: "bold" }}>
             {tenant?.name || "Company Name"}
@@ -517,9 +525,9 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
             background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
           }}
         >
-          {card.image ? (
+          {card.profileImageUrl ? (
             <img
-              src={card.image}
+              src={resolveImg(card.profileImageUrl)}
               alt="profile"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />

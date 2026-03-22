@@ -107,7 +107,7 @@ function CardView() {
 
       const tenantRes = await tenantAPI.getAll();
       const currentTenant = tenantRes.data.data.find(
-        (t) => t.tenantId === tenantId,
+        (t) => t.tenantId === tenantId.toUpperCase(),
       );
       setTenant(currentTenant);
 

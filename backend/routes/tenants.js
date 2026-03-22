@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
   try {
     const tenants = await Tenant.findAll({ 
       where: { isActive: true },
-      attributes: ['id', 'tenantId', 'name', 'type', 'contactEmail']
+      attributes: ['id', 'tenantId', 'name', 'type', 'contactEmail', 'logoUrl']
     });
     
     res.json({

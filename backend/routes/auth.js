@@ -3,12 +3,13 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const { User, Tenant } = require('../models');
 const generateToken = require('../utils/generateToken');
+const { protect, authorize } = require('../middleware/auth');
 
 /**
  * POST /api/auth/register
- * Register a new user
+ * Create a manager account — admin only
  */
-router.post('/register', [
+router.post('/register', protect, authorize('admin'), [
   body('name').notEmpty().trim().withMessage('Name is required'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
@@ -25,6 +26,16 @@ router.post('/register', [
     }
 
     const { name, email, password, tenantId, role } = req.body;
+
+    // Only admin and manager roles are valid login accounts
+    const allowedRoles = ['admin', 'manager'];
+    const assignedRole = role || 'manager';
+    if (!allowedRoles.includes(assignedRole)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Role must be admin or manager'
+      });
+    }
 
     // Check if user exists
     const userExists = await User.findOne({ where: { email } });
@@ -53,29 +64,25 @@ router.post('/register', [
       email,
       password,
       tenantId: tenantId.toUpperCase(),
-      role: role || 'viewer'
+      role: assignedRole
     });
-
-    // Generate token
-    const token = generateToken(user.id);
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: 'Account created successfully',
       data: {
         id: user.id,
         name: user.name,
         email: user.email,
         tenantId: user.tenantId,
-        role: user.role,
-        token
+        role: user.role
       }
     });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to register user'
+      error: 'Failed to create account'
     });
   }
 });
@@ -204,4 +211,86 @@ router.get('/me', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auth/managers
+ * List all admin and manager accounts — admin only
+ */
+router.get('/managers', protect, authorize('admin'), async (req, res) => {
+  try {
+    const managers = await User.findAll({
+      where: { role: ['admin', 'manager'] },
+      attributes: { exclude: ['password'] },
+      include: [{ model: Tenant, attributes: ['tenantId', 'name', 'type'] }],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json({ success: true, count: managers.length, data: managers });
+  } catch (error) {
+    console.error('Get managers error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch managers' });
+  }
+});
+
+/**
+ * PATCH /api/auth/managers/:id/deactivate
+ * Deactivate a manager account — admin only
+ */
+router.patch('/managers/:id/deactivate', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, { attributes: { exclude: ['password'] } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    if (user.id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'Cannot deactivate your own account' });
+    }
+    user.isActive = false;
+    await user.save();
+    res.json({ success: true, message: 'Account deactivated successfully' });
+  } catch (error) {
+    console.error('Deactivate manager error:', error);
+    res.status(500).json({ success: false, error: 'Failed to deactivate account' });
+  }
+});
+
+/**
+ * PATCH /api/auth/managers/:id/activate
+ * Reactivate a manager account — admin only
+ */
+router.patch('/managers/:id/activate', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, { attributes: { exclude: ['password'] } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    user.isActive = true;
+    await user.save();
+    res.json({ success: true, message: 'Account activated successfully' });
+  } catch (error) {
+    console.error('Activate manager error:', error);
+    res.status(500).json({ success: false, error: 'Failed to activate account' });
+  }
+});
+
+/**
+ * DELETE /api/auth/managers/:id
+ * Permanently delete a manager account — admin only
+ */
+router.delete('/managers/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    if (user.id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+    }
+    await user.destroy();
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Delete manager error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete account' });
+  }
+});
+
 module.exports = router;
+
