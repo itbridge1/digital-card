@@ -1,11 +1,12 @@
 import { Button, Card, message, Avatar } from "antd";
 import { CopyOutlined, UserOutlined } from "@ant-design/icons";
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE =
+  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
 const resolveImg = (url) => {
   if (!url) return null;
-  if (url.startsWith('http')) return url;
+  if (url.startsWith("http")) return url;
   return `${API_BASE}${url}`;
 };
 
@@ -102,21 +103,21 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
       <div
         style={{
           position: "absolute",
-          top: 16,
-          right: 16,
+          top: 10,
+          right: 10,
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start", // ✅ FIXED
           gap: 6,
           color: "#fff",
         }}
       >
         <Avatar
-          size={28}
+          size={20}
           icon={<UserOutlined />}
           src={resolveImg(tenant?.logoUrl)}
           style={{ background: "#fff" }}
         />
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign: "right", lineHeight: 1.2 }}>
           <div style={{ fontSize: 12, fontWeight: "bold" }}>
             {tenant?.name || "Company"}
           </div>
@@ -129,12 +130,14 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
         {/* 👤 BIGGER Avatar */}
         <div
           style={{
-            width: 120, // 🔥 increased
-            height: 120, // 🔥 increased
+            width: 100, // 🔥 increased
+            height: 100, // 🔥 increased
             borderRadius: "50%",
             overflow: "hidden",
-            margin: "0 auto",
-            border: isDark ? `3px solid ${DARK_BORDER_SOFT}` : "4px solid white",
+            margin: "20px auto",
+            border: isDark
+              ? `3px solid ${DARK_BORDER_SOFT}`
+              : "4px solid white",
             boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
           }}
         >
@@ -174,9 +177,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
             </span>
           </h3>
 
-          <p
-            style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}
-          >
+          <p style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}>
             {card.metadata?.title || "Member"}
           </p>
         </div>
@@ -213,7 +214,9 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
               padding: "6px 10px",
               borderRadius: 20,
               background: hexToRgba(accentColor, 0.1),
-              border: isDark ? `1px solid ${hexToRgba(accentColor, 0.35)}` : undefined,
+              border: isDark
+                ? `1px solid ${hexToRgba(accentColor, 0.35)}`
+                : undefined,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -255,13 +258,8 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
 function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
   const displayRows = getDisplayRows(card);
 
-  const {
-    primaryColor,
-    secondaryColor,
-    surfaceColor,
-    isDark,
-    hexToRgba,
-  } = theme;
+  const { primaryColor, secondaryColor, surfaceColor, isDark, hexToRgba } =
+    theme;
   const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
   const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#888";
   const labelColor = isDark ? DARK_TEXT_MUTED : "#777";
@@ -292,7 +290,11 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
           }}
         >
           <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-            <Avatar size={22} icon={<UserOutlined />} src={resolveImg(tenant?.logoUrl)} />
+            <Avatar
+              size={22}
+              icon={<UserOutlined />}
+              src={resolveImg(tenant?.logoUrl)}
+            />
             <div>
               <div style={{ fontSize: 12, fontWeight: "bold" }}>
                 {tenant?.name || "Company Name"}
@@ -372,7 +374,12 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
       <div style={{ padding: "16px" }}>
         {/* Name */}
         <div style={{ textAlign: "center" }}>
-          <h3 style={{ marginBottom: 0, color: isDark ? DARK_TEXT_PRIMARY : primaryColor }}>
+          <h3
+            style={{
+              marginBottom: 0,
+              color: isDark ? DARK_TEXT_PRIMARY : primaryColor,
+            }}
+          >
             {card.metadata?.name || "Your Name"}
           </h3>
           <p style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}>
@@ -415,7 +422,9 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
               alignItems: "center",
               justifyContent: "space-between",
               background: hexToRgba(primaryColor, 0.1),
-              border: isDark ? `1px solid ${hexToRgba(primaryColor, 0.35)}` : undefined,
+              border: isDark
+                ? `1px solid ${hexToRgba(primaryColor, 0.35)}`
+                : undefined,
               padding: "6px 10px",
               borderRadius: 20,
             }}
@@ -555,7 +564,9 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
       <div style={{ marginTop: 80, padding: "14px" }}>
         {/* Name */}
         <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <div style={{ fontWeight: "bold", fontSize: 14, color: bodyTextColor }}>
+          <div
+            style={{ fontWeight: "bold", fontSize: 14, color: bodyTextColor }}
+          >
             {card?.metadata?.name || "Your Name"}
           </div>
           <div style={{ fontSize: 10, color: mutedTextColor }}>
@@ -594,7 +605,10 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
               size="small"
               type="text"
               onClick={() => copyToClipboard(card.businessUrl)}
-              style={{ fontSize: 10, color: isDark ? DARK_TEXT_PRIMARY : undefined }}
+              style={{
+                fontSize: 10,
+                color: isDark ? DARK_TEXT_PRIMARY : undefined,
+              }}
             >
               Copy
             </Button>

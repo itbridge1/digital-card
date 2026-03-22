@@ -134,6 +134,34 @@ router.get('/organizations/:tenantId/cards', async (req, res) => {
 });
 
 /**
+ * GET /api/manager/organizations/:tenantId/cards/:tagId
+ * Get a specific card holder by tag ID within an organization
+ */
+router.get('/organizations/:tenantId/cards/:tagId', async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tagId = req.params.tagId.toUpperCase();
+    
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+
+    const card = await Card.findOne({
+      where: { tenantId, tagId }
+    });
+    if (!card) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+
+    res.json({ success: true, data: card, tenant });
+  } catch (error) {
+    console.error('Error fetching card:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch card' });
+  }
+});
+
+/**
  * POST /api/manager/organizations/:tenantId/cards
  * Add a new card holder to an organization
  */

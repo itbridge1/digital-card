@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { cardAPI, tenantAPI } from "../../services/api";
+import { cardAPI, tenantAPI, useraccessAPI } from "../../services/api";
 import {
   Button,
   Card,
@@ -102,20 +102,47 @@ function CardView() {
         return;
       }
 
-      const cardRes = await cardAPI.getById(tagId, tenantId);
-      setCard(cardRes.data.data);
-
-      const tenantRes = await tenantAPI.getAll();
-      const currentTenant = tenantRes.data.data.find(
-        (t) => t.tenantId === tenantId.toUpperCase(),
-      );
-      setTenant(currentTenant);
+      // If tenantId is in URL params, use the protected manager endpoint
+      // Otherwise use the public card endpoint
+      const isFromOrganization = params.has("tenantId");
+      
+      let cardRes, tenantRes;
+      
+      if (isFromOrganization) {
+        // Fetch from organization context
+        cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
+        setCard(cardRes.data.data);
+        setTenant(cardRes.data.tenant);
+      } else {
+        // Fetch from public context
+        cardRes = await cardAPI.getById(tagId);
+        setCard(cardRes.data.data);
+        tenantRes = await tenantAPI.getAll();
+        const currentTenant = tenantRes.data.data.find(
+          (t) => t.tenantId === tenantId.toUpperCase(),
+        );
+        setTenant(currentTenant);
+      }
 
       setError("");
     } catch (err) {
       setError(err.response?.data?.error || "Failed to fetch card");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBackClick = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("tenantId")) {
+      // Determine the correct prefix based on user role
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const prefix = currentUser.role === 'admin' ? '/admin' : '/manager';
+      // Go back to OrganizationDetail
+      navigate(`${prefix}/organizations/${params.get("tenantId")}`);
+    } else {
+      // Go back to home
+      navigate("/");
     }
   };
 
@@ -342,7 +369,7 @@ function CardView() {
         <Card className="max-w-md w-full text-center border-red-300 border">
           <FaTimesCircle className="text-4xl text-red-600 mx-auto" />
           <Text type="danger">{error || "Card not found"}</Text>
-          <Button type="primary" onClick={() => navigate("/")}>
+          <Button type="primary" onClick={handleBackClick}>
             <FaArrowLeft className="mr-2" /> Back
           </Button>
         </Card>

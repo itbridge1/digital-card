@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
-  DownloadOutlined, ArrowLeftOutlined, UserOutlined,
+  DownloadOutlined, ArrowLeftOutlined, UserOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -20,6 +20,8 @@ const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://lo
 function OrganizationDetail() {
   const { tenantId } = useParams();
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const userPrefix = currentUser.role === 'admin' ? '/admin' : '/manager';
 
   const [organization, setOrganization] = useState(null);
   const [cards, setCards] = useState([]);
@@ -71,21 +73,60 @@ function OrganizationDetail() {
     setModalOpen(true);
   };
 
-  const handleProfileUpload = async ({ file }) => {
+  const handleProfileUpload = async (info) => {
+    const { file, onSuccess, onError } = info;
+    const rawFile = file?.originFileObj || file;
     setProfileUploading(true);
+
     try {
-      const res = await uploadAPI.uploadProfile(file);
-      setProfileUrl(res.data.url);
+      if (!rawFile) {
+        const err = new Error('No file selected');
+        message.error(err.message);
+        if (onError) onError(err);
+        return;
+      }
+
+      if (!rawFile.type?.startsWith('image/')) {
+        const err = new Error('Please select an image file');
+        message.error(err.message);
+        if (onError) onError(err);
+        return;
+      }
+
+      if (rawFile.size > 5 * 1024 * 1024) {
+        const err = new Error('Image must be smaller than 5MB');
+        message.error(err.message);
+        if (onError) onError(err);
+        return;
+      }
+
+      const res = await uploadAPI.uploadProfile(rawFile);
+      const uploadedUrl = res.data?.url || res.data?.data?.url;
+
+      if (!uploadedUrl) {
+        const err = new Error('Server did not return uploaded file URL');
+        message.error(err.message);
+        if (onError) onError(err);
+        return;
+      }
+
+      setProfileUrl(uploadedUrl);
       message.success('Profile photo uploaded');
-    } catch {
-      message.error('Profile upload failed');
+      if (onSuccess) onSuccess(res.data);
+    } catch (err) {
+      message.error(err?.response?.data?.error || err.message || 'Profile upload failed');
+      if (onError) onError(err);
     } finally {
       setProfileUploading(false);
     }
-    return false;
   };
 
   const handleSave = async () => {
+    if (profileUploading) {
+      message.warning('Please wait for image upload to finish');
+      return;
+    }
+
     try {
       const values = await form.validateFields();
       setSaving(true);
@@ -181,7 +222,6 @@ function OrganizationDetail() {
     {
       title: 'Photo',
       dataIndex: 'profileImageUrl',
-      width: 60,
       render: (url) =>
         url ? (
           <Avatar src={`${API_BASE}${url}`} size={40} />
@@ -227,6 +267,13 @@ function OrganizationDetail() {
       key: 'actions',
       render: (_, record) => (
         <Space>
+          <Tooltip title="View Card">
+            <Button 
+              size="small" 
+              icon={<EyeOutlined />} 
+              onClick={() => navigate(`/card/${record.tagId}?tenantId=${tenantId}`)}
+            />
+          </Tooltip>
           <Tooltip title="Edit">
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           </Tooltip>
@@ -252,7 +299,7 @@ function OrganizationDetail() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { title: <Link to="/manager/organizations">Organizations</Link> },
+          { title: <Link to={`${userPrefix}/organizations`}>Organizations</Link> },
           { title: organization?.name || tenantId },
         ]}
       />
@@ -321,7 +368,7 @@ function OrganizationDetail() {
         open={modalOpen}
         onOk={handleSave}
         onCancel={() => setModalOpen(false)}
-        confirmLoading={saving}
+        confirmLoading={saving || profileUploading}
         okText={editingCard ? 'Save Changes' : 'Add'}
         width={520}
       >
@@ -347,7 +394,6 @@ function OrganizationDetail() {
               <Upload
                 accept="image/*"
                 showUploadList={false}
-                beforeUpload={() => false}
                 customRequest={handleProfileUpload}
               >
                 <Button icon={<UploadOutlined />} loading={profileUploading}>

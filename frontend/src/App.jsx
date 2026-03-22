@@ -26,11 +26,13 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
+          <Route path="organizations" element={<Organizations />} />
+          <Route path="organizations/:tenantId" element={<OrganizationDetail />} />
         </Route>
       </Route>
 
       {/* Manager routes */}
-      <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["manager"]} />}>
         <Route path="/manager" element={<UserAccessLayout />}>
           <Route path="dashboard" element={<UserAccessDashboard />} />
           <Route path="organizations" element={<Organizations />} />
