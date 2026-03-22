@@ -7,12 +7,27 @@ const { protect, authorize } = require('../middleware/auth');
 router.use(protect, authorize('admin', 'manager'));
 
 /**
+ * Returns a 403 response if the current manager does not own the given tenant.
+ * Admins always pass. Returns true if access is denied (response already sent).
+ */
+const denyIfNotOwner = (req, res, tenant) => {
+  if (req.user.role === 'admin') return false;
+  if (tenant.createdBy !== req.user.id) {
+    res.status(403).json({ success: false, error: 'Access denied: you do not own this organization' });
+    return true;
+  }
+  return false;
+};
+
+/**
  * GET /api/manager/organizations
- * List all organizations
+ * List organizations. Managers only see their own; admins see all.
  */
 router.get('/organizations', async (req, res) => {
   try {
+    const where = req.user.role === 'manager' ? { createdBy: req.user.id } : {};
     const tenants = await Tenant.findAll({
+      where,
       order: [['createdAt', 'DESC']]
     });
     res.json({ success: true, count: tenants.length, data: tenants });
@@ -49,7 +64,8 @@ router.post('/organizations', async (req, res) => {
       name,
       type,
       contactEmail,
-      logoUrl: logoUrl || null
+      logoUrl: logoUrl || null,
+      createdBy: req.user.id
     });
 
     res.status(201).json({ success: true, message: 'Organization created successfully', data: tenant });
@@ -71,6 +87,7 @@ router.put('/organizations/:tenantId', async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found' });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const { name, type, contactEmail, logoUrl, isActive } = req.body;
     if (name) tenant.name = name;
@@ -99,6 +116,7 @@ router.delete('/organizations/:tenantId', authorize('admin'), async (req, res) =
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found' });
     }
+    // admin-only route; no ownership check needed
 
     tenant.isActive = false;
     await tenant.save();
@@ -120,6 +138,7 @@ router.get('/organizations/:tenantId/cards', async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found' });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const cards = await Card.findAll({
       where: { tenantId },
@@ -146,6 +165,7 @@ router.get('/organizations/:tenantId/cards/:tagId', async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found' });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const card = await Card.findOne({
       where: { tenantId, tagId }
@@ -172,6 +192,7 @@ router.post('/organizations/:tenantId/cards', async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found or inactive' });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const { tagId, profileImageUrl, metadata } = req.body;
     if (!tagId) {
@@ -206,6 +227,12 @@ router.post('/organizations/:tenantId/cards', async (req, res) => {
 router.put('/organizations/:tenantId/cards/:cardId', async (req, res) => {
   try {
     const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
     const card = await Card.findOne({
       where: { id: req.params.cardId, tenantId }
     });
@@ -233,6 +260,12 @@ router.put('/organizations/:tenantId/cards/:cardId', async (req, res) => {
 router.delete('/organizations/:tenantId/cards/:cardId', async (req, res) => {
   try {
     const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
     const card = await Card.findOne({
       where: { id: req.params.cardId, tenantId }
     });
@@ -259,6 +292,7 @@ router.get('/organizations/:tenantId/export', async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Organization not found' });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const cards = await Card.findAll({
       where: { tenantId, isActive: true },
