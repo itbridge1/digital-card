@@ -6,6 +6,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   ApartmentOutlined,
+  CreditCardOutlined,
 } from "@ant-design/icons";
 import { Button, Layout, Menu, theme, Avatar, Typography, Dropdown } from "antd";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -52,7 +53,12 @@ function AdminLayout() {
       label: <NavLink to="/admin/users">Users</NavLink>,
     },
     {
-      key: "/admin/organizations",
+      key: "/admin/card-registration",
+      icon: <CreditCardOutlined />,
+      label: <NavLink to="/admin/card-registration">Card Registration</NavLink>,
+    },
+    {
+      key: "/manager/organizations",
       icon: <ApartmentOutlined />,
       label: <NavLink to="/admin/organizations">Organizations</NavLink>,
     },

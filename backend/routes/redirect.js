@@ -1,24 +1,48 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { Card } = require('../models');
+const { Card, CardRegister } = require("../models");
 
 /**
  * Global Redirector Endpoint
  * GET /t/:tagId
- * 
+ *
  * This is the most important endpoint - the short URL encoded on NFC chips
  * Example: https://tap.io/t/A1B2C3D4
  */
-router.get('/:tagId', async (req, res) => {
+router.get("/:tagId", async (req, res) => {
   try {
     const tagId = req.params.tagId.toUpperCase();
 
+    const registration = await CardRegister.findOne({
+      where: { tagId },
+    });
+
+    if (registration && registration.status !== "registered") {
+      return res.status(403).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Card Not Active</title>
+            <style>
+              body { font-family: Arial; text-align: center; padding: 50px; }
+              h1 { color: #e67e22; }
+            </style>
+          </head>
+          <body>
+            <h1>Card is ${registration.status}</h1>
+            <p>This NFC card cannot be used right now.</p>
+            <p>Tag ID: ${tagId}</p>
+          </body>
+        </html>
+      `);
+    }
+
     // Find the card by tag ID
-    const card = await Card.findOne({ 
+    const card = await Card.findOne({
       where: {
         tagId: tagId,
-        isActive: true
-      }
+        isActive: true,
+      },
     });
 
     if (!card) {
@@ -42,18 +66,28 @@ router.get('/:tagId', async (req, res) => {
     }
 
     // Increment tap count and record timestamp (non-blocking)
-    card.recordTap().catch(err => {
-      console.error('Failed to record tap:', err);
+    card.recordTap().catch((err) => {
+      console.error("Failed to record tap:", err);
     });
 
     // Log the tap for analytics
-    console.log(`Tap recorded - Tag: ${card.tagId}, Tenant: ${card.tenantId}, Count: ${card.tapCount + 1}`);
+    console.log(
+      `Tap recorded - Tag: ${card.tagId}, Tenant: ${card.tenantId}, Count: ${card.tapCount + 1}`,
+    );
 
-    // Redirect to the business URL
-    res.redirect(card.businessUrl);
+    const redirectTarget = registration?.redirectUrl || card.businessUrl;
 
+    // Redirect to the business URL / registration redirect URL
+    if (
+      redirectTarget.startsWith("http://") ||
+      redirectTarget.startsWith("https://")
+    ) {
+      return res.redirect(redirectTarget);
+    }
+
+    return res.redirect(`/${String(redirectTarget).replace(/^\/+/, "")}`);
   } catch (error) {
-    console.error('Redirect error:', error);
+    console.error("Redirect error:", error);
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
