@@ -60,7 +60,7 @@ function AdminLayout() {
     {
       key: "/manager/organizations",
       icon: <ApartmentOutlined />,
-      label: <NavLink to="/manager/organizations">Organizations</NavLink>,
+      label: <NavLink to="/admin/organizations">Organizations</NavLink>,
     },
   ];
 

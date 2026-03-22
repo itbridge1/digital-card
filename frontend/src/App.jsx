@@ -32,7 +32,7 @@ function App() {
       </Route>
 
       {/* Manager routes */}
-      <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
+      <Route element={<ProtectedRoute allowedRoles={["manager"]} />}>
         <Route path="/manager" element={<UserAccessLayout />}>
           <Route path="dashboard" element={<UserAccessDashboard />} />
           <Route path="organizations" element={<Organizations />} />

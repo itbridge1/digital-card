@@ -8,11 +8,25 @@ const { registerNfcCard } = require("../utils/nfcRegistration");
 router.use(protect, authorize("admin", "manager"));
 
 /**
+ * Returns a 403 response if the current manager does not own the given tenant.
+ * Admins always pass. Returns true if access is denied (response already sent).
+ */
+const denyIfNotOwner = (req, res, tenant) => {
+  if (req.user.role === 'admin') return false;
+  if (tenant.createdBy !== req.user.id) {
+    res.status(403).json({ success: false, error: 'Access denied: you do not own this organization' });
+    return true;
+  }
+  return false;
+};
+
+/**
  * GET /api/manager/organizations
- * List all organizations
+ * List organizations. Managers only see their own; admins see all.
  */
 router.get("/organizations", async (req, res) => {
   try {
+    const where = req.user.role === 'manager' ? { createdBy: req.user.id } : {};
     const tenants = await Tenant.findAll({
       order: [["createdAt", "DESC"]],
     });
@@ -86,6 +100,7 @@ router.put("/organizations/:tenantId", async (req, res) => {
         .status(404)
         .json({ success: false, error: "Organization not found" });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const { name, type, contactEmail, logoUrl, isActive } = req.body;
     if (name) tenant.name = name;
@@ -154,6 +169,7 @@ router.get("/organizations/:tenantId/cards", async (req, res) => {
         .status(404)
         .json({ success: false, error: "Organization not found" });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const cards = await Card.findAll({
       where: { tenantId },
@@ -166,6 +182,35 @@ router.get("/organizations/:tenantId/cards", async (req, res) => {
     res
       .status(500)
       .json({ success: false, error: "Failed to fetch card holders" });
+  }
+});
+
+/**
+ * GET /api/manager/organizations/:tenantId/cards/:tagId
+ * Get a specific card holder by tag ID within an organization
+ */
+router.get('/organizations/:tenantId/cards/:tagId', async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tagId = req.params.tagId.toUpperCase();
+    
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    const card = await Card.findOne({
+      where: { tenantId, tagId }
+    });
+    if (!card) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+
+    res.json({ success: true, data: card, tenant });
+  } catch (error) {
+    console.error('Error fetching card:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch card' });
   }
 });
 
@@ -241,6 +286,12 @@ router.post(
 router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
   try {
     const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
     const card = await Card.findOne({
       where: { id: req.params.cardId, tenantId },
     });
@@ -276,6 +327,12 @@ router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
 router.delete("/organizations/:tenantId/cards/:cardId", async (req, res) => {
   try {
     const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: 'Organization not found' });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
     const card = await Card.findOne({
       where: { id: req.params.cardId, tenantId },
     });
@@ -308,6 +365,7 @@ router.get("/organizations/:tenantId/export", async (req, res) => {
         .status(404)
         .json({ success: false, error: "Organization not found" });
     }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     const cards = await Card.findAll({
       where: { tenantId, isActive: true },
