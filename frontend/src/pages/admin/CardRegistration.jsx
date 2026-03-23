@@ -58,7 +58,7 @@ function CardRegistration() {
 
   const loadTenants = async () => {
     try {
-      const res = await managerAPI.getAll();
+      const res = await managerAPI.getManagerInfo();
       const tenantList = res.data.data || [];
       setTenants(tenantList);
 
@@ -459,9 +459,7 @@ function CardRegistration() {
             <Input placeholder="t/STUDENT001 (leave empty to auto-generate)" />
           </Form.Item>
 
-          <Form.Item label="Auto register on websocket scan">
-            <Switch checked={autoRegisterOnScan} onChange={setAutoRegisterOnScan} />
-          </Form.Item>
+        
         </Form>
       </Modal>
 

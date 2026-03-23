@@ -55,6 +55,7 @@ export const authAPI = {
 
 // Manager account management (admin only)
 export const managerAPI = {
+  getManagerInfo: () => api.get("/tenants/managerList"),
   getAll: () => api.get("/auth/managers"),
   deactivate: (id) => api.patch(`/auth/managers/${id}/deactivate`),
   activate: (id) => api.patch(`/auth/managers/${id}/activate`),
