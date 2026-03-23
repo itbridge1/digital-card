@@ -27,11 +27,61 @@ function buildRedirectUrl(tagId) {
   return `t/${encodeURIComponent(tagId)}`;
 }
 
+function isMetadataTooLarge(metadata, maxBytes = 256 * 1024) {
+  try {
+    return Buffer.byteLength(JSON.stringify(metadata || {}), "utf8") > maxBytes;
+  } catch {
+    return true;
+  }
+}
+
 function buildDefaultBusinessUrl(tagId) {
+  const tagWriteBase = (process.env.TAG_WRITE_BASE_URL || "").replace(
+    /\/$/,
+    "",
+  );
+  if (tagWriteBase) {
+    return `${tagWriteBase}/${encodeURIComponent(tagId)}`;
+  }
+
   const frontendBase = (
     process.env.FRONTEND_URL || "http://localhost:3030"
   ).replace(/\/$/, "");
   return `${frontendBase}/view/${encodeURIComponent(tagId)}`;
+}
+
+function normalizeRegistrationStatus(status = "registered") {
+  const value = String(status || "registered")
+    .trim()
+    .toLowerCase();
+
+  if (value === "active") return "registered";
+  if (value === "inactive") return "unregistered";
+  if (value === "blocked") return "blocked";
+  return value;
+}
+
+async function resolveTenant(tenantId) {
+  const raw = String(tenantId || "").trim();
+  if (!raw) return null;
+
+  if (/^\d+$/.test(raw)) {
+    const byNumericId = await Tenant.findOne({
+      where: {
+        id: Number(raw),
+        isActive: true,
+      },
+    });
+
+    if (byNumericId) return byNumericId;
+  }
+
+  return Tenant.findOne({
+    where: {
+      tenantId: raw.toUpperCase(),
+      isActive: true,
+    },
+  });
 }
 
 async function registerNfcCard({
@@ -44,6 +94,7 @@ async function registerNfcCard({
   metadata = {},
   actorUserId,
   actorRole,
+  actorTenantId,
 }) {
   if (actorRole !== "admin") {
     const err = new Error("Only admin users can register NFC cards");
@@ -58,15 +109,8 @@ async function registerNfcCard({
     throw err;
   }
 
-  if (!tenantId) {
-    const err = new Error("tenantId is required");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const tenant = await User.findOne({
-    where: { id: String(tenantId).toUpperCase(), isActive: true },
-  });
+  const tenantLookupId = tenantId || actorTenantId;
+  const tenant = await resolveTenant(tenantLookupId);
   if (!tenant) {
     const err = new Error("Tenant not found or inactive");
     err.statusCode = 404;
@@ -90,8 +134,9 @@ async function registerNfcCard({
     }
   }
 
+  const normalizedStatus = normalizeRegistrationStatus(status);
   const allowedStatuses = ["registered", "unregistered", "blocked"];
-  if (!allowedStatuses.includes(status)) {
+  if (!allowedStatuses.includes(normalizedStatus)) {
     const err = new Error(
       "status must be registered, unregistered, or blocked",
     );
@@ -106,17 +151,18 @@ async function registerNfcCard({
   // IMPORTANT: If already registered, keep same URL (do not recreate).
   const shortCode = existingRegister?.url || (await generateUniqueShortCode());
 
-  const resolvedPublicUrl = `${(process.env.FRONTEND_URL || 'http://localhost:3030').replace(/\/$/, '')}/view/${encodeURIComponent(normalizedTagId)}`;
+  const resolvedPublicUrl = `${(process.env.FRONTEND_URL || "http://localhost:3030").replace(/\/$/, "")}/view/${encodeURIComponent(normalizedTagId)}`;
 
   let card = await Card.findOne({ where: { tagId: normalizedTagId } });
   if (!card) {
+    const safeMetadata = isMetadataTooLarge(metadata) ? {} : metadata || {};
     card = await Card.create({
       tenantId: tenant.tenantId,
       tagId: normalizedTagId,
       businessUrl: businessUrl || buildDefaultBusinessUrl(normalizedTagId),
       publicUrl: resolvedPublicUrl,
       metadata: {
-        ...(metadata || {}),
+        ...(safeMetadata || {}),
         shortCode,
         createdBy: actorUserId || null,
       },
@@ -128,23 +174,30 @@ async function registerNfcCard({
       card.businessUrl ||
       buildDefaultBusinessUrl(normalizedTagId);
     card.publicUrl = card.publicUrl || resolvedPublicUrl;
-    card.metadata = {
-      ...(card.metadata || {}),
-      ...(metadata || {}),
-      shortCode,
-      updatedBy: actorUserId || null,
-    };
+
+    if (
+      metadata &&
+      Object.keys(metadata).length > 0 &&
+      !isMetadataTooLarge(metadata)
+    ) {
+      card.metadata = {
+        ...(card.metadata || {}),
+        ...(metadata || {}),
+        updatedBy: actorUserId || null,
+      };
+    }
+
     await card.save();
   }
 
   const finalRedirectUrl =
     typeof redirectUrl === "undefined"
-      ? buildRedirectUrl(card.tagId)
-      : redirectUrl;
+      ? null
+      : String(redirectUrl || "").trim() || null;
 
   let cardRegister;
   if (existingRegister) {
-    existingRegister.status = status;
+    existingRegister.status = normalizedStatus;
     existingRegister.url = existingRegister.url || shortCode;
     existingRegister.redirectUrl = finalRedirectUrl || null;
     existingRegister.tenantId = tenant.tenantId;
@@ -154,7 +207,7 @@ async function registerNfcCard({
   } else {
     cardRegister = await CardRegister.create({
       tagId: normalizedTagId,
-      status,
+      status: normalizedStatus,
       url: shortCode,
       redirectUrl: finalRedirectUrl || null,
       tenantId: tenant.tenantId,

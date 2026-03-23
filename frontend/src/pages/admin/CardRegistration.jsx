@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Spin,
@@ -15,23 +16,28 @@ import {
   Typography,
   message,
 } from 'antd';
-import { PlusOutlined, WifiOutlined } from '@ant-design/icons';
+import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined } from '@ant-design/icons';
 import { io } from 'socket.io-client';
-import { authAPI, cardAPI,managerApi, SOCKET_BASE_URL } from '../../services/api';
+import { cardAPI, tenantAPI, SOCKET_BASE_URL } from '../../services/api';
 
 const { Title, Text } = Typography;
 
 function CardRegistration() {
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [deletingTagId, setDeletingTagId] = useState('');
   const [autoRegisterOnScan, setAutoRegisterOnScan] = useState(true);
   const [tenants, setTenants] = useState([]);
-  const [users, setUsers] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [lastScan, setLastScan] = useState('');
   const [socketState, setSocketState] = useState('connecting');
+  const watchedTagId = Form.useWatch('tagId', form);
   const socketRef = useRef(null);
   const lastEventRef = useRef({ tagId: null, ts: 0 });
   const autoRegisterRef = useRef(autoRegisterOnScan);
@@ -52,7 +58,7 @@ function CardRegistration() {
 
   const loadTenants = async () => {
     try {
-      const res = await managerApi.getAll();
+      const res = await tenantAPI.getAll();
       const tenantList = res.data.data || [];
       setTenants(tenantList);
 
@@ -70,15 +76,6 @@ function CardRegistration() {
     }
   };
 
-  const loadUsers = async () => {
-    try {
-      const res = await authAPI.getUsers();
-      setUsers(res.data.data || []);
-    } catch {
-      message.error('Failed to load users');
-    }
-  };
-
   const loadRegistrations = async (tenantId) => {
     try {
       const res = await cardAPI.getRegistrations(tenantId);
@@ -90,7 +87,6 @@ function CardRegistration() {
 
   useEffect(() => {
     loadTenants();
-    loadUsers();
     loadRegistrations();
   }, []);
 
@@ -122,19 +118,17 @@ function CardRegistration() {
       setLastScan(incomingTag);
       form.setFieldValue('tagId', incomingTag);
 
-      if (!modalOpenRef.current) {
-        setModalOpen(true);
-      }
-
-      if (!autoRegisterRef.current) return;
-
-      const currentValues = form.getFieldsValue();
-      if (!currentValues?.tenantId) {
-        message.warning('Select tenant first for auto registration');
+      if (autoRegisterRef.current) {
+        await registerCard(incomingTag, {
+          openEditOnSuccess: true,
+          closeRegistrationModal: true,
+        });
         return;
       }
 
-      await registerCard(incomingTag);
+      if (!modalOpenRef.current) {
+        setModalOpen(true);
+      }
     };
 
     socket.on('connect', () => {
@@ -154,7 +148,7 @@ function CardRegistration() {
     });
 
     socket.on('nfc_update', (payload) => {
-      if (payload?.event === 'card_registered') {
+      if (payload?.event === 'card_registered' || payload?.event === 'card_updated') {
         loadRegistrations(selectedTenantRef.current || undefined);
         return;
       }
@@ -170,30 +164,35 @@ function CardRegistration() {
     };
   }, []);
 
-  const filteredUsers = useMemo(() => {
-    const managers = users.filter((u) => u.role === 'manager');
-    if (!selectedTenant) return managers;
-    return managers.filter((u) => u.tenantId === selectedTenant);
-  }, [users, selectedTenant]);
-
   const tenantDropdownOptions = useMemo(() => {
-    const managerTenantIds = new Set(
-      users.filter((u) => u.role === 'manager').map((u) => u.tenantId),
-    );
-
     return tenants
-      .filter((t) => managerTenantIds.has(t.tenantId))
-      .map((t) => ({ value: t.id, label: `${t.name}` }));
-  }, [tenants, users]);
+      .map((t) => ({ value: t.tenantId, label: `${t.name} (${t.tenantId})` }));
+  }, [tenants]);
+
+  const autoBusinessUrl = useMemo(() => {
+    const base = (
+      import.meta.env.TAG_WRITE_BASE_URL ||
+      import.meta.env.VITE_TAG_WRITE_BASE_URL ||
+      `${window.location.origin.replace(/\/$/, '')}/card`
+    ).replace(/\/$/, '');
+    const tag = String(watchedTagId || lastScan || '').trim().toUpperCase();
+    if (!tag) return 'Auto generated after tag scan';
+    return `${base}/${encodeURIComponent(tag)}`;
+  }, [watchedTagId, lastScan]);
 
   const onTenantChange = async (tenantId) => {
     setSelectedTenant(tenantId || null);
+    selectedTenantRef.current = tenantId || null;
+    form.setFieldValue('tenantId', tenantId || undefined);
     await loadRegistrations(tenantId || undefined);
   };
 
-  const registerCard = async (forcedTagId) => {
+  const registerCard = async (forcedTagId, options = {}) => {
+    const { openEditOnSuccess = true, closeRegistrationModal = true } = options;
+
     try {
-      const values = await form.validateFields();
+      const values = await form.validateFields(['tagId']);
+      const allValues = form.getFieldsValue();
       const tagId = (forcedTagId || values.tagId || '').toUpperCase().trim();
       if (!tagId) {
         message.error('Tag ID is required');
@@ -203,23 +202,98 @@ function CardRegistration() {
       setSaving(true);
       const payload = {
         tagId,
-        tenantId: values.tenantId,
-        status: 'registered',
-        redirectUrl: values.redirectUrl || null,
+        tenantId: allValues.tenantId || undefined,
+        status: 'active',
+        redirectUrl: allValues.redirectUrl || undefined,
       };
 
-      const res = await cardAPI.create(payload);
-      message.success(`Registered: ${res.data.tag_id} → ${res.data.url}`);
-      await loadRegistrations(values.tenantId);
+      const res = await cardAPI.upsertOnScan(payload);
+      const updatedRow = res?.data?.data;
+      message.success(`Synced: ${updatedRow?.tagId || tagId} → ${updatedRow?.url || ''}`);
+
+      await loadRegistrations(allValues.tenantId || selectedTenantRef.current || undefined);
+
+      if (updatedRow && openEditOnSuccess) {
+        openEditModal(updatedRow);
+      }
 
       form.setFieldValue('tagId', '');
-      setModalOpen(false);
+      if (closeRegistrationModal) {
+        setModalOpen(false);
+      }
     } catch (err) {
       if (err?.response?.data?.error) {
         message.error(err.response.data.error);
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEditModal = (row) => {
+    setEditingRow(row);
+    editForm.setFieldsValue({
+      tagId: row.tagId,
+      tenantId: row.tenantId || undefined,
+      status:
+        row.status === 'registered'
+          ? 'active'
+          : row.status === 'blocked'
+            ? 'blocked'
+            : 'inactive',
+      redirectUrl: row.redirectUrl || '',
+      businessUrl: row?.Card?.businessUrl || '',
+    });
+    setEditModalOpen(true);
+  };
+
+  const updateRegistration = async () => {
+    if (!editingRow?.tagId) return;
+
+    try {
+      const values = await editForm.validateFields();
+      setEditing(true);
+
+      await cardAPI.updateRegistration(editingRow.tagId, {
+        status: values.status,
+        redirectUrl: values.redirectUrl || null,
+        tenantId: values.tenantId || undefined,
+      });
+
+      message.success(`Updated tag: ${editingRow.tagId}`);
+      setEditModalOpen(false);
+      setEditingRow(null);
+      await loadRegistrations(selectedTenantRef.current || undefined);
+    } catch (err) {
+      if (err?.response?.data?.error) {
+        message.error(err.response.data.error);
+      }
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  const deleteRegistration = async (row) => {
+    const tagId = String(row?.tagId || '').trim().toUpperCase();
+    if (!tagId) return;
+
+    try {
+      setDeletingTagId(tagId);
+      await cardAPI.deleteRegistration(tagId);
+      message.success(`Deleted tag: ${tagId}`);
+
+      if (editingRow?.tagId === tagId) {
+        setEditModalOpen(false);
+        setEditingRow(null);
+      }
+
+      await loadRegistrations(selectedTenantRef.current || undefined);
+    } catch (err) {
+      if (err?.response?.data?.error) {
+        message.error(err.response.data.error);
+      }
+    } finally {
+      setDeletingTagId('');
     }
   };
 
@@ -230,11 +304,28 @@ function CardRegistration() {
       dataIndex: 'status',
       key: 'status',
       render: (v) => {
-        const color = v === 'registered' ? 'green' : v === 'blocked' ? 'red' : 'gold';
-        return <Tag color={color}>{String(v || '').toUpperCase()}</Tag>;
+        if (v === 'registered') return <Tag color="green">ACTIVE</Tag>;
+        if (v === 'blocked') return <Tag color="red">BLOCKED</Tag>;
+        return <Tag color="gold">INACTIVE</Tag>;
       },
     },
     { title: 'URL', dataIndex: 'url', key: 'url' },
+    {
+      title: 'Business URL',
+      key: 'businessUrl',
+      render: (_, row) => {
+        const value = row?.Card?.businessUrl;
+        if (!value) return <Text type="secondary">N/A</Text>;
+        return (
+          <a href={value} target="_blank" rel="noreferrer">
+            <Space size={6}>
+              <LinkOutlined />
+              <span>{value}</span>
+            </Space>
+          </a>
+        );
+      },
+    },
     {
       title: 'Redirect URL',
       dataIndex: 'redirectUrl',
@@ -251,9 +342,34 @@ function CardRegistration() {
       key: 'user',
       render: (_, row) => row.User?.name || <Text type="secondary">Unassigned</Text>,
     },
+    {
+      title: 'Action',
+      key: 'actions',
+      render: (_, row) => (
+        <Space>
+          <Button icon={<EditOutlined />} onClick={() => openEditModal(row)}>
+            Edit
+          </Button>
+          <Popconfirm
+            title="Delete registration?"
+            description="This will remove registration by tag ID."
+            okText="Delete"
+            okButtonProps={{ danger: true, loading: deletingTagId === row.tagId }}
+            onConfirm={() => deleteRegistration(row)}
+          >
+            <Button danger loading={deletingTagId === row.tagId}>
+              Delete
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
+  const isBusy = saving || editing;
+
   return (
+    <Spin spinning={isBusy} tip="Syncing card data...">
     <div>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Card Registration</Title>
@@ -313,9 +429,10 @@ function CardRegistration() {
         okText="Register"
       >
         <Form form={form} layout="vertical" initialValues={{ status: 'registered' }}>
-          <Form.Item label="Tenant" name="tenantId" rules={[{ required: true, message: 'Select tenant' }]}>
+          <Form.Item label="Tenant (optional)" name="tenantId">
             <Select
-              placeholder="Select tenant"
+              allowClear
+              placeholder="Select tenant (optional)"
               onChange={onTenantChange}
               options={tenantDropdownOptions}
             />
@@ -323,6 +440,10 @@ function CardRegistration() {
 
           <Form.Item label="Tag ID" name="tagId" rules={[{ required: true, message: 'Tag ID required' }]}>
             <Input placeholder="Scan NFC or type tag id" />
+          </Form.Item>
+
+          <Form.Item label="Business URL (auto generated)">
+            <Input value={autoBusinessUrl} disabled readOnly />
           </Form.Item>
 
           <Form.Item label="Redirect URL (nullable)" name="redirectUrl">
@@ -334,7 +455,56 @@ function CardRegistration() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal
+        title="Edit Card Registration"
+        open={editModalOpen}
+        confirmLoading={editing}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setEditingRow(null);
+        }}
+        onOk={updateRegistration}
+        okText="Save"
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item label="Tag ID" name="tagId">
+            <Input disabled readOnly />
+          </Form.Item>
+
+          <Form.Item label="Tenant (optional)" name="tenantId">
+            <Select
+              allowClear
+              placeholder="Select tenant (optional)"
+              options={tenantDropdownOptions}
+            />
+          </Form.Item>
+
+          <Form.Item label="Business URL (auto generated)" name="businessUrl">
+            <Input disabled readOnly />
+          </Form.Item>
+
+          <Form.Item
+            label="Status"
+            name="status"
+            rules={[{ required: true, message: 'Select status' }]}
+          >
+            <Select
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'blocked', label: 'Blocked' },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item label="Redirect URL" name="redirectUrl">
+            <Input placeholder="t/STUDENT001 or https://example.com" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
+    </Spin>
   );
 }
 
