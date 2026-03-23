@@ -18,7 +18,7 @@ import {
 } from 'antd';
 import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined } from '@ant-design/icons';
 import { io } from 'socket.io-client';
-import { cardAPI, tenantAPI, SOCKET_BASE_URL } from '../../services/api';
+import { cardAPI, tenantAPI, SOCKET_BASE_URL, managerAPI } from '../../services/api';
 
 const { Title, Text } = Typography;
 
@@ -58,7 +58,7 @@ function CardRegistration() {
 
   const loadTenants = async () => {
     try {
-      const res = await tenantAPI.getAll();
+      const res = await managerAPI.getAll();
       const tenantList = res.data.data || [];
       setTenants(tenantList);
 
