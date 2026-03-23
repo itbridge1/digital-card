@@ -4,6 +4,47 @@ const { Card, CardRegister, User, Tenant } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const { Op } = require("sequelize");
 const { registerNfcCard } = require("../utils/nfcRegistration");
+const { getIO } = require("../utils/socket");
+
+function normalizeRegistrationStatus(status) {
+  const value = String(status || "")
+    .trim()
+    .toLowerCase();
+
+  if (value === "active") return "registered";
+  if (value === "inactive") return "unregistered";
+  if (value === "blocked") return "blocked";
+  return value;
+}
+
+function buildBusinessUrl(tagId) {
+  const base = (
+    process.env.TAG_WRITE_BASE_URL ||
+    `${(process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`).replace(/\/$/, "")}/card`
+  ).replace(/\/$/, "");
+  return `${base}/${encodeURIComponent(tagId)}`;
+}
+
+function generateRandomString(length = 4) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < length; i += 1) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function generateUniqueShortCode(maxAttempts = 20) {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    const candidate = generateRandomString(4);
+    const exists = await CardRegister.findOne({ where: { url: candidate } });
+    if (!exists) return candidate;
+  }
+
+  const err = new Error("Unable to generate unique short URL. Retry.");
+  err.statusCode = 500;
+  throw err;
+}
 
 // Protect all routes - require authentication
 router.use(protect);
@@ -49,6 +90,10 @@ router.get("/registrations", authorize("admin"), async (req, res) => {
       include: [
         { model: User, attributes: ["id", "name", "email", "tenantId"] },
         { model: Tenant, attributes: ["tenantId", "name", "type"] },
+        {
+          model: Card,
+          attributes: ["id", "tagId", "businessUrl", "publicUrl", "isActive"],
+        },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -59,6 +104,341 @@ router.get("/registrations", authorize("admin"), async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch card registrations",
+    });
+  }
+});
+
+/**
+ * PUT /api/cards/registrations/:tagId
+ * Update card registration fields by tag ID (status + redirectUrl + optional tenant)
+ */
+router.put("/registrations/:tagId", authorize("admin"), async (req, res) => {
+  try {
+    const tagId = String(req.params.tagId || "")
+      .trim()
+      .toUpperCase();
+
+    if (!tagId) {
+      return res.status(400).json({
+        success: false,
+        error: "tagId is required",
+      });
+    }
+
+    const registration = await CardRegister.findOne({
+      where: { tagId },
+      include: [{ model: Card }],
+    });
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        error: "Card registration not found",
+      });
+    }
+
+    const hasStatus = Object.prototype.hasOwnProperty.call(req.body, "status");
+    const hasRedirectUrl = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "redirectUrl",
+    );
+    const hasTenantId = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "tenantId",
+    );
+
+    if (!hasStatus && !hasRedirectUrl && !hasTenantId) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "At least one field is required: status, redirectUrl, or tenantId",
+      });
+    }
+
+    if (hasStatus) {
+      const normalizedStatus = normalizeRegistrationStatus(req.body.status);
+      const allowedStatuses = ["registered", "unregistered", "blocked"];
+
+      if (!allowedStatuses.includes(normalizedStatus)) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "status must be active/inactive or registered/unregistered/blocked",
+        });
+      }
+
+      registration.status = normalizedStatus;
+
+      if (registration.Card) {
+        registration.Card.isActive = normalizedStatus === "registered";
+        await registration.Card.save();
+      }
+    }
+
+    if (hasRedirectUrl) {
+      const nextRedirect = String(req.body.redirectUrl || "").trim();
+      registration.redirectUrl = nextRedirect || null;
+    }
+
+    if (hasTenantId) {
+      const rawTenantId = String(req.body.tenantId || "").trim();
+
+      if (rawTenantId) {
+        const tenantWhere = /^\d+$/.test(rawTenantId)
+          ? {
+              isActive: true,
+              [Op.or]: [
+                { id: Number(rawTenantId) },
+                { tenantId: rawTenantId.toUpperCase() },
+              ],
+            }
+          : {
+              isActive: true,
+              tenantId: rawTenantId.toUpperCase(),
+            };
+
+        const tenant = await Tenant.findOne({ where: tenantWhere });
+        if (!tenant) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid tenantId",
+          });
+        }
+
+        registration.tenantId = tenant.tenantId;
+        if (registration.Card) {
+          registration.Card.tenantId = tenant.tenantId;
+          await registration.Card.save();
+        }
+      }
+    }
+
+    await registration.save();
+
+    const updatedRegistration = await CardRegister.findOne({
+      where: { tagId },
+      include: [
+        { model: User, attributes: ["id", "name", "email", "tenantId"] },
+        { model: Tenant, attributes: ["tenantId", "name", "type"] },
+        {
+          model: Card,
+          attributes: ["id", "tagId", "businessUrl", "publicUrl", "isActive"],
+        },
+      ],
+    });
+
+    const io = getIO();
+    if (io) {
+      io.emit("nfc_update", {
+        event: "card_updated",
+        tag_id: updatedRegistration.tagId,
+        status: updatedRegistration.status,
+        url: updatedRegistration.url,
+        redirect_url: updatedRegistration.redirectUrl,
+        tenant_id: updatedRegistration.tenantId,
+        user_id: updatedRegistration.userId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Card registration updated successfully",
+      data: updatedRegistration,
+    });
+  } catch (error) {
+    console.error("Error updating card registration:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update card registration",
+    });
+  }
+});
+
+/**
+ * DELETE /api/cards/registrations/:tagId
+ * Delete registration by tag ID (admin)
+ */
+router.delete("/registrations/:tagId", authorize("admin"), async (req, res) => {
+  try {
+    const tagId = String(req.params.tagId || "")
+      .trim()
+      .toUpperCase();
+
+    if (!tagId) {
+      return res.status(400).json({
+        success: false,
+        error: "tagId is required",
+      });
+    }
+
+    const registration = await CardRegister.findOne({
+      where: { tagId },
+      include: [{ model: Card }],
+    });
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        error: "Card registration not found",
+      });
+    }
+
+    if (registration.Card) {
+      registration.Card.isActive = false;
+      await registration.Card.save();
+    }
+
+    await registration.destroy();
+
+    const io = getIO();
+    if (io) {
+      io.emit("nfc_update", {
+        event: "card_deleted",
+        tag_id: tagId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Card registration deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting card registration:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to delete card registration",
+    });
+  }
+});
+
+/**
+ * POST /api/cards/registrations/scan
+ * Upsert registration on NFC scan, rotate short URL, and return editable row.
+ */
+router.post("/registrations/scan", authorize("admin"), async (req, res) => {
+  try {
+    const tagId = String(req.body.tagId || "")
+      .trim()
+      .toUpperCase();
+
+    if (!tagId) {
+      return res.status(400).json({
+        success: false,
+        error: "tagId is required",
+      });
+    }
+
+    const shortCode = await generateUniqueShortCode();
+    const requestedStatus = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "status",
+    )
+      ? normalizeRegistrationStatus(req.body.status)
+      : undefined;
+
+    if (requestedStatus) {
+      const allowedStatuses = ["registered", "unregistered", "blocked"];
+      if (!allowedStatuses.includes(requestedStatus)) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "status must be active/inactive/blocked or registered/unregistered/blocked",
+        });
+      }
+    }
+
+    let registration = await CardRegister.findOne({
+      where: { tagId },
+      include: [{ model: Card }],
+    });
+
+    if (!registration) {
+      const { card, cardRegister } = await registerNfcCard({
+        tagId,
+        tenantId: req.body.tenantId || req.user.tenantId,
+        businessUrl: buildBusinessUrl(tagId),
+        redirectUrl: Object.prototype.hasOwnProperty.call(
+          req.body,
+          "redirectUrl",
+        )
+          ? req.body.redirectUrl
+          : undefined,
+        status: requestedStatus || "registered",
+        actorUserId: req.user.id,
+        actorRole: req.user.role,
+        actorTenantId: req.user.tenantId,
+      });
+
+      cardRegister.url = shortCode;
+      registration = await cardRegister.save();
+
+      if (card) {
+        card.businessUrl = card.businessUrl || buildBusinessUrl(tagId);
+        await card.save();
+      }
+    } else {
+      registration.url = shortCode;
+
+      if (requestedStatus) {
+        registration.status = requestedStatus;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, "redirectUrl")) {
+        const nextRedirect = String(req.body.redirectUrl || "").trim();
+        registration.redirectUrl = nextRedirect || null;
+      }
+
+      await registration.save();
+
+      const existingCard =
+        registration.Card || (await Card.findOne({ where: { tagId } }));
+      if (existingCard) {
+        existingCard.businessUrl = buildBusinessUrl(tagId);
+        if (requestedStatus) {
+          existingCard.isActive = requestedStatus !== "blocked";
+        }
+        await existingCard.save();
+      }
+    }
+
+    const refreshed = await CardRegister.findOne({
+      where: { tagId },
+      include: [
+        { model: User, attributes: ["id", "name", "email", "tenantId"] },
+        { model: Tenant, attributes: ["tenantId", "name", "type"] },
+        {
+          model: Card,
+          attributes: ["id", "tagId", "businessUrl", "publicUrl", "isActive"],
+        },
+      ],
+    });
+
+    const io = getIO();
+    if (io) {
+      io.emit("nfc_update", {
+        event: "card_updated",
+        tag_id: refreshed.tagId,
+        status: refreshed.status,
+        url: refreshed.url,
+        redirect_url: refreshed.redirectUrl,
+        tenant_id: refreshed.tenantId,
+        user_id: refreshed.userId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Card scan synchronized",
+      data: refreshed,
+    });
+  } catch (error) {
+    console.error("Error syncing card on scan:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || "Failed to sync card on scan",
     });
   }
 });
@@ -102,26 +482,19 @@ router.get("/:tagId", async (req, res) => {
  */
 router.post("/", authorize("admin"), async (req, res) => {
   try {
-    const {
-      tagId,
-      tenantId,
-      userId,
-      businessUrl,
-      redirectUrl,
-      status,
-      metadata,
-    } = req.body;
+    const { tagId, tenantId, businessUrl, redirectUrl, status, metadata } =
+      req.body;
 
     const { card, cardRegister, shortCode } = await registerNfcCard({
       tagId,
       tenantId: tenantId || req.tenantId,
-      userId,
       businessUrl,
       redirectUrl,
       status,
       metadata,
       actorUserId: req.user.id,
       actorRole: req.user.role,
+      actorTenantId: req.user.tenantId,
     });
 
     res.status(201).json({

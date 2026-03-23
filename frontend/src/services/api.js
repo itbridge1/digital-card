@@ -20,14 +20,14 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
+
   // For FormData, remove Content-Type so axios sets it with proper boundary
   if (config.data instanceof FormData) {
     console.log("📡 Sending FormData request to:", config.url);
     console.log("📦 FormData contents:", Array.from(config.data.entries()));
-    delete config.headers['Content-Type'];
+    delete config.headers["Content-Type"];
   }
-  
+
   return config;
 });
 
@@ -66,6 +66,11 @@ export const cardAPI = {
   getAll: () => api.get("/cards"),
   getRegistrations: (tenantId) =>
     api.get("/cards/registrations", { params: tenantId ? { tenantId } : {} }),
+  upsertOnScan: (data) => api.post("/cards/registrations/scan", data),
+  updateRegistration: (tagId, data) =>
+    api.put(`/cards/registrations/${encodeURIComponent(tagId)}`, data),
+  deleteRegistration: (tagId) =>
+    api.delete(`/cards/registrations/${encodeURIComponent(tagId)}`),
   getById: (tagId) => api.get(`/cards/${encodeURIComponent(tagId)}`),
   create: (cardData) => api.post("/cards", cardData),
   update: (tagId, cardData) =>
@@ -80,6 +85,9 @@ export const tenantAPI = {
   getAll: () => api.get("/tenants"),
   create: (tenantData) => api.post("/tenants", tenantData),
 };
+export const managerApi = {
+  getAll: () => api.get("/tenants/managerList"),
+};
 
 // Manager role API methods
 export const useraccessAPI = {
@@ -93,7 +101,9 @@ export const useraccessAPI = {
   getOrganizationCards: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/cards`),
   getOrganizationCard: (tenantId, tagId) =>
-    api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/cards/${encodeURIComponent(tagId)}`),
+    api.get(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/cards/${encodeURIComponent(tagId)}`,
+    ),
   addCard: (tenantId, data) =>
     api.post(
       `/manager/organizations/${encodeURIComponent(tenantId)}/cards`,

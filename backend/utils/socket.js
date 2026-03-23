@@ -65,8 +65,8 @@ function getReaderBridgeUrl() {
 
   const apiPort = String(process.env.PORT || "5000");
   // If API is not on 3001, try legacy reader server at 3001.
-  if (apiPort !== "3001") {
-    return "http://localhost:3001";
+  if (apiPort !== process.env.READER_SOCKET_PORT && process.env.READER_SOCKET_PORT ) {
+    return "http://localhost:" + process.env.READER_SOCKET_PORT;
   }
 
   return null;

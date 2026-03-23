@@ -141,7 +141,7 @@ socket.on("connect_error", (err) => {
 });
 
 socket.on("nfc_update", async (payload = {}) => {
-  if (payload?.event !== "card_registered") return;
+  if (!["card_registered", "card_updated"].includes(payload?.event)) return;
 
   const tagId = String(payload.tag_id || payload.tagId || "")
     .trim()

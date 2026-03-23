@@ -35,8 +35,8 @@ app.use(
 );
 
 // Routes
-// Global redirector - must be first to catch /t/:tagId (no auth required)
-app.use("/t", require("./routes/redirect"));
+// Global redirector - must be first to catch /t/:tagId and /card/:identifier (no auth required)
+app.use("/", require("./routes/redirect"));
 
 // API routes
 app.use("/api/auth", require("./routes/auth"));
