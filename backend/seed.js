@@ -64,7 +64,7 @@ const sampleCards = [
   {
     tenantId: "SCHOOL_01",
     tagId: "STUDENT001",
-    businessUrl: "http://localhost:5000/t/STUDENT001",
+    businessUrl: publicUrl("STUDENT001"),
     publicUrl: publicUrl("STUDENT001"),
     profileImageUrl: null,
     tapCount: 5,
@@ -79,7 +79,7 @@ const sampleCards = [
   {
     tenantId: "SCHOOL_01",
     tagId: "TEACHER001",
-    businessUrl: "http://localhost:5000/t/TEACHER001",
+    businessUrl: publicUrl("TEACHER001"),
     publicUrl: publicUrl("TEACHER001"),
     profileImageUrl: null,
     tapCount: 12,
@@ -96,7 +96,7 @@ const sampleCards = [
   {
     tenantId: "HOSPITAL_01",
     tagId: "DOC001",
-    businessUrl: "http://localhost:5000/t/DOC001",
+    businessUrl: publicUrl("DOC001"),
     publicUrl: publicUrl("DOC001"),
     profileImageUrl: null,
     tapCount: 23,
@@ -111,7 +111,7 @@ const sampleCards = [
   {
     tenantId: "HOSPITAL_01",
     tagId: "NURSE001",
-    businessUrl: "http://localhost:5000/t/NURSE001",
+    businessUrl: publicUrl("NURSE001"),
     publicUrl: publicUrl("NURSE001"),
     profileImageUrl: null,
     tapCount: 18,
@@ -128,7 +128,7 @@ const sampleCards = [
   {
     tenantId: "BUSINESS_01",
     tagId: "BUS001",
-    businessUrl: "http://localhost:5000/t/BUS001",
+    businessUrl: publicUrl("BUS001"),
     publicUrl: publicUrl("BUS001"),
     profileImageUrl: null,
     tapCount: 45,
@@ -143,7 +143,7 @@ const sampleCards = [
   {
     tenantId: "BUSINESS_01",
     tagId: "BUS002",
-    businessUrl: "http://localhost:5000/t/BUS002",
+    businessUrl: publicUrl("BUS002"),
     publicUrl: publicUrl("BUS002"),
     profileImageUrl: null,
     tapCount: 32,
