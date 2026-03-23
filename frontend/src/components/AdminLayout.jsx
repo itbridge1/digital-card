@@ -58,7 +58,7 @@ function AdminLayout() {
       label: <NavLink to="/admin/card-registration">Card Registration</NavLink>,
     },
     {
-      key: "/manager/organizations",
+      key: "/admin/organizations",
       icon: <ApartmentOutlined />,
       label: <NavLink to="/admin/organizations">Organizations</NavLink>,
     },

@@ -120,6 +120,8 @@ export const useraccessAPI = {
     ),
   exportCards: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/export`),
+  getAvailableNfcTags: (tenantId) =>
+    api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/nfc-tags`),
 };
 
 // Public API — no auth token required, used for the read-only public card view
