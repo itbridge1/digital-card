@@ -80,6 +80,9 @@ export const tenantAPI = {
   getAll: () => api.get("/tenants"),
   create: (tenantData) => api.post("/tenants", tenantData),
 };
+export const managerApi ={
+  getAll: () => api.get("/tenants/managerList"),
+}
 
 // Manager role API methods
 export const useraccessAPI = {

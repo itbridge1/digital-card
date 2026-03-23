@@ -4,8 +4,9 @@
   "description": "Multi-tenant NFC business card platform backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "concurrently -k \"node server.js\" \"node readerBridge.js\"",
+    "dev": "concurrently -k \"nodemon server.js\" \"nodemon readerBridge.js\"",
+    "server": "node server.js",
     "reader": "node readerBridge.js",
     "create-db": "node create-db.js",
     "seed": "node seed.js",
@@ -39,6 +40,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "nodemon": "^3.0.1"
   }
 }

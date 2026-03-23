@@ -64,8 +64,8 @@ async function registerNfcCard({
     throw err;
   }
 
-  const tenant = await Tenant.findOne({
-    where: { tenantId: String(tenantId).toUpperCase(), isActive: true },
+  const tenant = await User.findOne({
+    where: { id: String(tenantId).toUpperCase(), isActive: true },
   });
   if (!tenant) {
     const err = new Error("Tenant not found or inactive");

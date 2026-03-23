@@ -96,6 +96,8 @@ router.get("/:tagId", async (req, res) => {
   }
 });
 
+
+
 /**
  * POST /api/cards
  * Register a new NFC card
@@ -105,7 +107,6 @@ router.post("/", authorize("admin"), async (req, res) => {
     const {
       tagId,
       tenantId,
-      userId,
       businessUrl,
       redirectUrl,
       status,
@@ -115,8 +116,7 @@ router.post("/", authorize("admin"), async (req, res) => {
     const { card, cardRegister, shortCode } = await registerNfcCard({
       tagId,
       tenantId: tenantId || req.tenantId,
-      userId,
-      businessUrl,
+       businessUrl,
       redirectUrl,
       status,
       metadata,

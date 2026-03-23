@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Tenant } = require('../models');
+const { Tenant, User } = require('../models');
 const { protect, authorize } = require('../middleware/auth');
 
 /**
@@ -28,6 +28,8 @@ router.get('/', async (req, res) => {
     });
   }
 });
+
+
 
 /**
  * POST /api/tenants
@@ -74,6 +76,31 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to create tenant'
+    });
+  }
+});
+
+
+
+router.get("/managerList", protect, authorize('admin'), async (req, res) => {
+  try {
+    const users = await User.findAll({
+      where: {
+        role: "manager",
+      },
+       order: [["createdAt", "DESC"]],
+    });
+
+    res.json({
+      success: true,
+      count: users.length,
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error fetching manager card list:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch card list for manager",
     });
   }
 });
