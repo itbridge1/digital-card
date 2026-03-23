@@ -27,7 +27,10 @@ function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="organizations" element={<Organizations />} />
-          <Route path="organizations/:tenantId" element={<OrganizationDetail />} />
+          <Route
+            path="organizations/:tenantId"
+            element={<OrganizationDetail />}
+          />
         </Route>
       </Route>
 
@@ -36,17 +39,19 @@ function App() {
         <Route path="/manager" element={<UserAccessLayout />}>
           <Route path="dashboard" element={<UserAccessDashboard />} />
           <Route path="organizations" element={<Organizations />} />
-          <Route path="organizations/:tenantId" element={<OrganizationDetail />} />
+          <Route
+            path="organizations/:tenantId"
+            element={<OrganizationDetail />}
+          />
         </Route>
       </Route>
 
       {/* Default authenticated route */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<AdminDashboard />} />
       </Route>
     </Routes>
   );
 }
 
 export default App;
-
