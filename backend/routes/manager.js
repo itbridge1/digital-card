@@ -364,7 +364,14 @@ router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
 
     const { profileImageUrl, metadata, isActive } = req.body;
     if (profileImageUrl !== undefined) card.profileImageUrl = profileImageUrl;
-    if (metadata) card.metadata = { ...card.metadata, ...metadata };
+    if (metadata) {
+      const existing = card.metadata;
+      const existingObj =
+        typeof existing === "string"
+          ? (() => { try { return JSON.parse(existing); } catch { return {}; } })()
+          : (existing || {});
+      card.metadata = { ...existingObj, ...metadata };
+    }
     if (typeof isActive !== "undefined") card.isActive = isActive;
 
     // Backfill publicUrl for cards created before the column was added

@@ -64,6 +64,7 @@ function CardView() {
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isOwner, setIsOwner] = useState(false);
   const [selectedDesign, setSelectedDesign] = useState("one");
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem("cardTheme");
@@ -86,6 +87,16 @@ function CardView() {
   }, [theme]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = localStorage.getItem("token");
+
+    // Unauthenticated users accessing a manager-scoped card URL
+    // should be redirected to the public read-only view.
+    if (params.has("tenantId") && !token) {
+      navigate(`/view/${tagId}`, { replace: true });
+      return;
+    }
+
     fetchCard();
   }, [tagId]);
 
@@ -112,7 +123,15 @@ function CardView() {
         // Fetch from organization context
         cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
         setCard(cardRes.data.data);
-        setTenant(cardRes.data.tenant);
+        const fetchedTenant = cardRes.data.tenant;
+        setTenant(fetchedTenant);
+
+        // Only the owning manager (or an admin) may use the customization sidebar
+        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+        const owned =
+          currentUser.role === "admin" ||
+          fetchedTenant?.createdBy === currentUser.id;
+        setIsOwner(owned);
       } else {
         // Fetch from public context
         cardRes = await cardAPI.getById(tagId);
@@ -384,18 +403,20 @@ function CardView() {
       }`}
     >
       <div className="mx-auto mb-5 flex w-full max-w-5xl justify-end">
-        <Button
-          size="large"
-          icon={<FaSlidersH />}
-          onClick={() => setSidebarOpen(true)}
-          style={{
-            background: theme.primaryColor,
-            borderColor: theme.primaryColor,
-            color: "white",
-          }}
-        >
-          Open Sidebar
-        </Button>
+        {isOwner && (
+          <Button
+            size="large"
+            icon={<FaSlidersH />}
+            onClick={() => setSidebarOpen(true)}
+            style={{
+              background: theme.primaryColor,
+              borderColor: theme.primaryColor,
+              color: "white",
+            }}
+          >
+            Open Sidebar
+          </Button>
+        )}
       </div>
 
       <div className="mx-auto flex w-full max-w-5xl justify-center">
@@ -408,20 +429,22 @@ function CardView() {
         />
       </div>
 
-      <Drawer
-        title={
-          <div className="flex items-center gap-2">
-            <FaPalette style={{ color: theme.primaryColor }} />
-            <span>Card Panel</span>
-          </div>
-        }
-        placement="right"
-        width={390}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      >
-        {sidebarContent}
-      </Drawer>
+      {isOwner && (
+        <Drawer
+          title={
+            <div className="flex items-center gap-2">
+              <FaPalette style={{ color: theme.primaryColor }} />
+              <span>Card Panel</span>
+            </div>
+          }
+          placement="right"
+          width={390}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        >
+          {sidebarContent}
+        </Drawer>
+      )}
     </div>
   );
 }
