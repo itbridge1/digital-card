@@ -40,6 +40,11 @@ const Tenant = sequelize.define('Tenant', {
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  createdBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID of the manager who created this organization'
   }
 }, {
   tableName: 'tenants',

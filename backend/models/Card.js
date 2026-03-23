@@ -51,6 +51,11 @@ const Card = sequelize.define('Card', {
     type: DataTypes.STRING(500),
     allowNull: true
   },
+  // Read-only public card view URL — stored for easy sharing / export
+  publicUrl: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
