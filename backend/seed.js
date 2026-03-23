@@ -55,12 +55,17 @@ const sampleUsers = [
   },
 ];
 
+// Derive the frontend base URL from env (same logic as nfcRegistrationService)
+const FRONTEND_BASE = (process.env.FRONTEND_URL || "http://localhost:3030").replace(/\/$/, "");
+const publicUrl = (tagId) => `${FRONTEND_BASE}/view/${tagId}`;
+
 const sampleCards = [
   // School Cards
   {
     tenantId: "SCHOOL_01",
     tagId: "STUDENT001",
     businessUrl: "http://localhost:5000/t/STUDENT001",
+    publicUrl: publicUrl("STUDENT001"),
     profileImageUrl: null,
     tapCount: 5,
     metadata: {
@@ -75,6 +80,7 @@ const sampleCards = [
     tenantId: "SCHOOL_01",
     tagId: "TEACHER001",
     businessUrl: "http://localhost:5000/t/TEACHER001",
+    publicUrl: publicUrl("TEACHER001"),
     profileImageUrl: null,
     tapCount: 12,
     metadata: {
@@ -91,6 +97,7 @@ const sampleCards = [
     tenantId: "HOSPITAL_01",
     tagId: "DOC001",
     businessUrl: "http://localhost:5000/t/DOC001",
+    publicUrl: publicUrl("DOC001"),
     profileImageUrl: null,
     tapCount: 23,
     metadata: {
@@ -105,6 +112,7 @@ const sampleCards = [
     tenantId: "HOSPITAL_01",
     tagId: "NURSE001",
     businessUrl: "http://localhost:5000/t/NURSE001",
+    publicUrl: publicUrl("NURSE001"),
     profileImageUrl: null,
     tapCount: 18,
     metadata: {
@@ -121,6 +129,7 @@ const sampleCards = [
     tenantId: "BUSINESS_01",
     tagId: "BUS001",
     businessUrl: "http://localhost:5000/t/BUS001",
+    publicUrl: publicUrl("BUS001"),
     profileImageUrl: null,
     tapCount: 45,
     metadata: {
@@ -135,6 +144,7 @@ const sampleCards = [
     tenantId: "BUSINESS_01",
     tagId: "BUS002",
     businessUrl: "http://localhost:5000/t/BUS002",
+    publicUrl: publicUrl("BUS002"),
     profileImageUrl: null,
     tapCount: 32,
     metadata: {

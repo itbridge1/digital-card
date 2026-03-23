@@ -115,6 +115,13 @@ export const useraccessAPI = {
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/export`),
 };
 
+// Public API — no auth token required, used for the read-only public card view
+const publicApi = axios.create({ baseURL: API_BASE_URL });
+export const publicAPI = {
+  getCard: (tagId) =>
+    publicApi.get(`/public/card/${encodeURIComponent(tagId)}`),
+};
+
 // Upload API methods — uses multipart/form-data
 export const uploadAPI = {
   uploadProfile: (file) => {

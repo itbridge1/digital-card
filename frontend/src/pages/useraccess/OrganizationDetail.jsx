@@ -6,13 +6,35 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
   DownloadOutlined, ArrowLeftOutlined, UserOutlined, EyeOutlined,
+  CopyOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import { useraccessAPI, uploadAPI } from '../../services/api';
-import CardExportTemplate from '../../components/CardExportTemplate';
+import SelectCard from '../cardView/components/SelectCard';
+
+const EXPORT_THEME = {
+  primaryColor: "#1890ff",
+  secondaryColor: "#52c41a",
+  accentColor: "#ff6b6b",
+  surfaceColor: "#f0f2f5",
+  isDark: false,
+  contrast: 100,
+  hexToRgba: (hex, opacity) => {
+    if (!hex) return `rgba(0,0,0,${opacity})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${opacity})`;
+  },
+};
+
+const formatFieldName = (fieldName) =>
+  fieldName
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
 
 const { Title, Text } = Typography;
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -256,6 +278,31 @@ function OrganizationDetail() {
       render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
     },
     {
+      title: 'Public URL',
+      key: 'publicUrl',
+      render: (_, record) => {
+        const url = `${window.location.origin}/view/${record.tagId}`;
+        return (
+          <Space size={4}>
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>
+              /view/{record.tagId}
+            </a>
+            <Tooltip title="Copy public URL">
+              <Button
+                size="small"
+                type="text"
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  navigator.clipboard.writeText(url);
+                  message.success('Public URL copied!');
+                }}
+              />
+            </Tooltip>
+          </Space>
+        );
+      },
+    },
+    {
       title: 'Status',
       dataIndex: 'isActive',
       render: (v) => (
@@ -267,11 +314,18 @@ function OrganizationDetail() {
       key: 'actions',
       render: (_, record) => (
         <Space>
-          <Tooltip title="View Card">
+          <Tooltip title="View Card (internal)">
             <Button 
               size="small" 
               icon={<EyeOutlined />} 
               onClick={() => navigate(`/card/${record.tagId}?tenantId=${tenantId}`)}
+            />
+          </Tooltip>
+          <Tooltip title="View Public Card">
+            <Button
+              size="small"
+              icon={<ShareAltOutlined />}
+              onClick={() => window.open(`/view/${record.tagId}`, '_blank')}
             />
           </Tooltip>
           <Tooltip title="Edit">
@@ -357,7 +411,13 @@ function OrganizationDetail() {
       >
         {cards.map((card) => (
           <div key={card.id} id={`card-export-${card.id}`} style={{ marginBottom: 8 }}>
-            <CardExportTemplate card={card} organization={organization} />
+            <SelectCard
+              design="one"
+              card={card}
+              tenant={organization}
+              formatFieldName={formatFieldName}
+              theme={EXPORT_THEME}
+            />
           </div>
         ))}
       </div>

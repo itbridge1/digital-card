@@ -306,6 +306,12 @@ router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
     if (metadata) card.metadata = { ...card.metadata, ...metadata };
     if (typeof isActive !== "undefined") card.isActive = isActive;
 
+    // Backfill publicUrl for cards created before the column was added
+    if (!card.publicUrl) {
+      const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:3030').replace(/\/$/, '');
+      card.publicUrl = `${frontendBase}/view/${encodeURIComponent(card.tagId)}`;
+    }
+
     await card.save();
     res.json({
       success: true,

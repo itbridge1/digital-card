@@ -44,6 +44,7 @@ app.use("/api/tenants", require("./routes/tenants"));
 app.use("/api/cards", require("./routes/cards"));
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/manager", require("./routes/manager"));
+app.use("/api/public", require("./routes/public"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
