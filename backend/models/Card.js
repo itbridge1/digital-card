@@ -44,7 +44,11 @@ const Card = sequelize.define('Card', {
     defaultValue: {},
     get() {
       const rawValue = this.getDataValue('metadata');
-      return rawValue || {};
+      if (!rawValue) return {};
+      if (typeof rawValue === 'string') {
+        try { return JSON.parse(rawValue); } catch { return {}; }
+      }
+      return rawValue;
     }
   },
   profileImageUrl: {

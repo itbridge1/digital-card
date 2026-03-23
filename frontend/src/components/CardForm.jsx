@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Form, Input, Button, Row, Col, Typography, message } from "antd";
 import { cardAPI } from "../services/api";
 
@@ -11,6 +12,20 @@ export default function CardForm({
   tenantType,
 }) {
   const [form] = Form.useForm();
+
+  useEffect(() => {
+    if (card) {
+      form.setFieldsValue({
+        tagId: card.tagId,
+        businessUrl: card.businessUrl,
+        ...(typeof card.metadata === "object" && card.metadata !== null
+          ? card.metadata
+          : {}),
+      });
+    } else {
+      form.resetFields();
+    }
+  }, [card, form]);
 
   const onFinish = async (values) => {
     try {
@@ -87,7 +102,9 @@ export default function CardForm({
       initialValues={{
         tagId: card?.tagId,
         businessUrl: card?.businessUrl,
-        ...card?.metadata,
+        ...(typeof card?.metadata === "object" && card?.metadata !== null
+          ? card.metadata
+          : {}),
       }}
       className="p-4"
     >

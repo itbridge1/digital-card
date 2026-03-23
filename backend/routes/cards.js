@@ -527,7 +527,13 @@ router.put("/:tagId", async (req, res) => {
 
     // Update fields
     if (businessUrl) card.businessUrl = businessUrl;
-    if (metadata) card.metadata = { ...card.metadata, ...metadata };
+    if (metadata) {
+      const existing = card.metadata;
+      const existingObj = typeof existing === 'string'
+        ? (() => { try { return JSON.parse(existing); } catch { return {}; } })()
+        : (existing || {});
+      card.metadata = { ...existingObj, ...metadata };
+    }
     if (typeof isActive !== "undefined") card.isActive = isActive;
 
     await card.save();
