@@ -59,6 +59,13 @@ router.get("/", async (req, res) => {
  */
 router.get("/registrations", authorize("admin"), async (req, res) => {
   try {
+    res.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+
     const where = {};
     if (req.query.tenantId) {
       where.tenantId = String(req.query.tenantId).toUpperCase();

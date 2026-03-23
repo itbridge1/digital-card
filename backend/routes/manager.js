@@ -259,7 +259,11 @@ router.post(
       const tag = await CardRegister.findOne({
         where: {
           tagId: tagIdUpper,
-          // tenantId: req.user.id,
+          ...(req.user.role === "manager"
+            ? {
+                [Op.or]: [{ tenantId: null }, { tenantId: req.user.id }],
+              }
+            : {}),
         },
       });
 
@@ -283,15 +287,17 @@ router.post(
         });
       }
 
-      // 5. Register NFC card
       const { card, shortCode, redirectUrl } = await registerNfcCard({
         tagId: tagIdUpper,
         tenantId,
+        userId: req.user.id,
         businessUrl,
         metadata: {
           ...(metadata || {}),
         },
+        actorUserId: req.user.id,
         actorRole: req.user.role,
+        actorTenantId: req.user.tenantId,
       });
 
       // 6. Update CardRegister with redirectUrl
@@ -303,6 +309,8 @@ router.post(
       }
 
       tag.redirectUrl = card.publicUrl;
+      tag.userId = req.user.id;
+      tag.tenantId = tenantId;
       await tag.save();
 
       // 8. Response - only include necessary fields to avoid packet size issues

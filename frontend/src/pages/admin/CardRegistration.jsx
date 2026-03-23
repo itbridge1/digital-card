@@ -68,7 +68,6 @@ function CardRegistration() {
       if (preferredTenant) {
         setSelectedTenant(preferredTenant.tenantId);
         selectedTenantRef.current = preferredTenant.tenantId;
-        form.setFieldValue('tenantId', preferredTenant.tenantId);
         await loadRegistrations(preferredTenant.tenantId);
       }
     } catch {
@@ -173,8 +172,10 @@ function CardRegistration() {
   }, []);
 
   const tenantDropdownOptions = useMemo(() => {
-    return tenants
-      .map((t) => ({ value: t.tenantId, label: `${t.name} (${t.tenantId})` }));
+    return [
+      { value: '__SELECT_TENANT__', label: 'Select tenant', disabled: true },
+      ...tenants.map((t) => ({ value: t.id, label: `${t.name} ` })),
+    ];
   }, [tenants]);
 
   const autoBusinessUrl = useMemo(() => {

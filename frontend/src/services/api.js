@@ -65,7 +65,17 @@ export const managerAPI = {
 export const cardAPI = {
   getAll: () => api.get("/cards"),
   getRegistrations: (tenantId) =>
-    api.get("/cards/registrations", { params: tenantId ? { tenantId } : {} }),
+    api.get("/cards/registrations", {
+      params: {
+        ...(tenantId ? { tenantId } : {}),
+        _ts: Date.now(),
+      },
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    }),
   upsertOnScan: (data) => api.post("/cards/registrations/scan", data),
   updateRegistration: (tagId, data) =>
     api.put(`/cards/registrations/${encodeURIComponent(tagId)}`, data),
