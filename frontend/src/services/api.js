@@ -55,6 +55,7 @@ export const authAPI = {
 
 // Manager account management (admin only)
 export const managerAPI = {
+  getManagerInfo: () => api.get("/tenants/managerList"),
   getAll: () => api.get("/auth/managers"),
   deactivate: (id) => api.patch(`/auth/managers/${id}/deactivate`),
   activate: (id) => api.patch(`/auth/managers/${id}/activate`),
@@ -65,7 +66,17 @@ export const managerAPI = {
 export const cardAPI = {
   getAll: () => api.get("/cards"),
   getRegistrations: (tenantId) =>
-    api.get("/cards/registrations", { params: tenantId ? { tenantId } : {} }),
+    api.get("/cards/registrations", {
+      params: {
+        ...(tenantId ? { tenantId } : {}),
+        _ts: Date.now(),
+      },
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    }),
   upsertOnScan: (data) => api.post("/cards/registrations/scan", data),
   updateRegistration: (tagId, data) =>
     api.put(`/cards/registrations/${encodeURIComponent(tagId)}`, data),
@@ -128,7 +139,7 @@ export const useraccessAPI = {
 const publicApi = axios.create({ baseURL: API_BASE_URL });
 export const publicAPI = {
   getCard: (tagId) =>
-    publicApi.get(`/public/card/${encodeURIComponent(tagId)}`),
+    publicApi.get(`/public/cardInfo/${encodeURIComponent(tagId)}`),
 };
 
 // Upload API methods — uses multipart/form-data

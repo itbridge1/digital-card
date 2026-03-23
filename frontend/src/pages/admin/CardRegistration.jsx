@@ -58,7 +58,7 @@ function CardRegistration() {
 
   const loadTenants = async () => {
     try {
-      const res = await managerAPI.getAll();
+      const res = await managerAPI.getManagerInfo();
       const tenantList = res.data.data || [];
       setTenants(tenantList);
 
@@ -68,7 +68,6 @@ function CardRegistration() {
       if (preferredTenant) {
         setSelectedTenant(preferredTenant.tenantId);
         selectedTenantRef.current = preferredTenant.tenantId;
-        form.setFieldValue('tenantId', preferredTenant.tenantId);
         await loadRegistrations(preferredTenant.tenantId);
       }
     } catch {
@@ -148,8 +147,16 @@ function CardRegistration() {
     });
 
     socket.on('nfc_update', (payload) => {
-      if (payload?.event === 'card_registered' || payload?.event === 'card_updated') {
+      const eventName = String(payload?.event || '').trim();
+
+      if (eventName === 'card_registered' || eventName === 'card_updated' || eventName === 'card_deleted') {
         loadRegistrations(selectedTenantRef.current || undefined);
+        return;
+      }
+
+      // Only trigger auto-sync from actual scan-like events.
+      const scanLikeEvents = new Set(['nfc_scanned', 'nfc_scan', 'scan', 'card_detected']);
+      if (eventName && !scanLikeEvents.has(eventName)) {
         return;
       }
 
@@ -165,8 +172,10 @@ function CardRegistration() {
   }, []);
 
   const tenantDropdownOptions = useMemo(() => {
-    return tenants
-      .map((t) => ({ value: t.tenantId, label: `${t.name} (${t.tenantId})` }));
+    return [
+      { value: '__SELECT_TENANT__', label: 'Select tenant', disabled: true },
+      ...tenants.map((t) => ({ value: t.id, label: `${t.name} ` })),
+    ];
   }, [tenants]);
 
   const autoBusinessUrl = useMemo(() => {
@@ -450,9 +459,7 @@ function CardRegistration() {
             <Input placeholder="t/STUDENT001 (leave empty to auto-generate)" />
           </Form.Item>
 
-          <Form.Item label="Auto register on websocket scan">
-            <Switch checked={autoRegisterOnScan} onChange={setAutoRegisterOnScan} />
-          </Form.Item>
+        
         </Form>
       </Modal>
 

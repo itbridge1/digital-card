@@ -41,8 +41,8 @@ const CardRegister = sequelize.define(
       allowNull: false,
       field: "tenant_id",
       references: {
-        model: "tenants",
-        key: "tenantId",
+        model: "users",
+        key: "id",
       },
     },
     userId: {

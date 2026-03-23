@@ -7,7 +7,7 @@ const { Card, Tenant } = require("../models");
  * Public endpoint — no auth required.
  * Returns card data + tenant info for the read-only public card view.
  */
-router.get("/card/:tagId", async (req, res) => {
+router.get("/cardInfo/:tagId", async (req, res) => {
   try {
     const tagId = req.params.tagId.toUpperCase();
 
