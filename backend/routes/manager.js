@@ -28,6 +28,7 @@ router.get("/organizations", async (req, res) => {
   try {
     const where = req.user.role === 'manager' ? { createdBy: req.user.id } : {};
     const tenants = await Tenant.findAll({
+      where,
       order: [["createdAt", "DESC"]],
     });
     res.json({ success: true, count: tenants.length, data: tenants });
@@ -69,6 +70,7 @@ router.post("/organizations", async (req, res) => {
       type,
       contactEmail,
       logoUrl: logoUrl || null,
+      createdBy: req.user.id,
     });
 
     res
