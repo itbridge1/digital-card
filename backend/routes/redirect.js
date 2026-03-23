@@ -58,7 +58,7 @@ async function findRegistrationByTagOrCode(rawIdentifier) {
  * This is the most important endpoint - the short URL encoded on NFC chips
  * Example: https://tap.io/t/A1B2C3D4
  */
-router.get("/card/:tagId", async (req, res) => {
+router.get("/cardData/:tagId", async (req, res) => {
   try {
     const tagId = req.params.tagId.toUpperCase();
 
@@ -163,7 +163,7 @@ router.get("/card/:tagId", async (req, res) => {
  * - if redirect_url exists -> redirect
  * - if redirect_url is null -> show unassigned page
  */
-router.get("/card/:identifier", async (req, res) => {
+router.get("/cardData/:identifier", async (req, res) => {
   try {
     const identifier = String(req.params.identifier || "").trim();
     if (!identifier) {
