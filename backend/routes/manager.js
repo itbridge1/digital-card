@@ -424,6 +424,45 @@ router.delete("/organizations/:tenantId/cards/:cardId", async (req, res) => {
 });
 
 /**
+ * GET /api/manager/organizations/:tenantId/nfc-tags
+ * Return registered NFC tags for this tenant that are not yet assigned to a card holder
+ */
+router.get("/organizations/:tenantId/nfc-tags", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    // All registered tags in the system
+    const registrations = await CardRegister.findAll({
+      where: { status: "registered" },
+      attributes: ["tagId", "url", "redirectUrl", "tenantId"],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Tags already assigned to a card holder (have a name in metadata)
+    const assignedCards = await Card.findAll({
+      attributes: ["tagId", "metadata"],
+    });
+    const assignedSet = new Set(
+      assignedCards
+        .filter((c) => c.metadata && c.metadata.name)
+        .map((c) => c.tagId.toUpperCase())
+    );
+
+    const available = registrations.filter((r) => !assignedSet.has(r.tagId.toUpperCase()));
+
+    res.json({ success: true, data: available });
+  } catch (error) {
+    console.error("Error fetching NFC tags:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch NFC tags" });
+  }
+});
+
+/**
  * GET /api/manager/organizations/:tenantId/export
  * Get all card data for export (used by frontend for ZIP generation)
  */

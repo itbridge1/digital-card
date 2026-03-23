@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -13,6 +13,13 @@ import UserAccessLayout from "./components/UserAccessLayout";
 import UserAccessDashboard from "./pages/useraccess/Dashboard";
 import Organizations from "./pages/useraccess/Organizations";
 import OrganizationDetail from "./pages/useraccess/OrganizationDetail";
+
+function RoleRedirect() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
+  if (user.role === "manager") return <Navigate to="/manager/dashboard" replace />;
+  return <Navigate to="/login" replace />;
+}
 
 function App() {
   return (
@@ -32,6 +39,8 @@ function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="card-registration" element={<CardRegistration />} />
+          <Route path="organizations" element={<Organizations />} />
+          <Route path="organizations/:tenantId" element={<OrganizationDetail />} />
         </Route>
       </Route>
 
@@ -47,9 +56,9 @@ function App() {
         </Route>
       </Route>
 
-      {/* Default authenticated route */}
+      {/* Default authenticated route — redirect to role-specific home */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<AdminDashboard />} />
+        <Route path="/" element={<RoleRedirect />} />
       </Route>
     </Routes>
   );

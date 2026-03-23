@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Table, Button, Modal, Form, Input, Space, Typography,
+  Table, Button, Modal, Form, Input, Select, Space, Typography,
   message, Popconfirm, Avatar, Upload, Tag, Breadcrumb, Spin, Tooltip,
 } from 'antd';
 import {
@@ -54,6 +54,8 @@ function OrganizationDetail() {
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUrl, setProfileUrl] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [nfcTags, setNfcTags] = useState([]);
+  const [nfcTagsLoading, setNfcTagsLoading] = useState(false);
   const [form] = Form.useForm();
 
   // Hidden container for card export rendering
@@ -74,10 +76,19 @@ function OrganizationDetail() {
 
   useEffect(() => { fetchData(); }, [tenantId]);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditingCard(null);
     setProfileUrl('');
     form.resetFields();
+    setNfcTagsLoading(true);
+    try {
+      const res = await useraccessAPI.getAvailableNfcTags(tenantId);
+      setNfcTags(res.data.data || []);
+    } catch {
+      message.error('Failed to load NFC tags');
+    } finally {
+      setNfcTagsLoading(false);
+    }
     setModalOpen(true);
   };
 
@@ -438,9 +449,16 @@ function OrganizationDetail() {
               label="NFC Tag ID"
               name="tagId"
               rules={[{ required: true, message: 'Tag ID is required' }]}
-              tooltip="The unique ID printed on the NFC chip"
+              tooltip="Select a registered NFC tag to assign to this card holder"
             >
-              <Input placeholder="e.g. A1B2C3D4" style={{ textTransform: 'uppercase' }} />
+              <Select
+                showSearch
+                loading={nfcTagsLoading}
+                placeholder={nfcTagsLoading ? 'Loading tags...' : nfcTags.length === 0 ? 'No available tags' : 'Select an NFC tag'}
+                optionFilterProp="label"
+                notFoundContent={nfcTagsLoading ? <Spin size="small" /> : 'No registered NFC tags available'}
+                options={nfcTags.map((t) => ({ value: t.tagId, label: t.tagId }))}
+              />
             </Form.Item>
           )}
 
