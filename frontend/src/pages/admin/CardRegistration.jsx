@@ -148,8 +148,16 @@ function CardRegistration() {
     });
 
     socket.on('nfc_update', (payload) => {
-      if (payload?.event === 'card_registered' || payload?.event === 'card_updated') {
+      const eventName = String(payload?.event || '').trim();
+
+      if (eventName === 'card_registered' || eventName === 'card_updated' || eventName === 'card_deleted') {
         loadRegistrations(selectedTenantRef.current || undefined);
+        return;
+      }
+
+      // Only trigger auto-sync from actual scan-like events.
+      const scanLikeEvents = new Set(['nfc_scanned', 'nfc_scan', 'scan', 'card_detected']);
+      if (eventName && !scanLikeEvents.has(eventName)) {
         return;
       }
 

@@ -126,7 +126,7 @@ export const useraccessAPI = {
 const publicApi = axios.create({ baseURL: API_BASE_URL });
 export const publicAPI = {
   getCard: (tagId) =>
-    publicApi.get(`/public/card/${encodeURIComponent(tagId)}`),
+    publicApi.get(`/public/cardInfo/${encodeURIComponent(tagId)}`),
 };
 
 // Upload API methods — uses multipart/form-data

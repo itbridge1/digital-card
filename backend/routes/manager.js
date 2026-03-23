@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { Card, Tenant } = require("../models");
+const { Card, Tenant, CardRegister } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const { registerNfcCard } = require("../utils/nfcRegistration");
-
+const { Op } = require("sequelize");
 // All routes require authentication and admin or manager role
 router.use(protect, authorize("admin", "manager"));
 
@@ -12,9 +12,12 @@ router.use(protect, authorize("admin", "manager"));
  * Admins always pass. Returns true if access is denied (response already sent).
  */
 const denyIfNotOwner = (req, res, tenant) => {
-  if (req.user.role === 'admin') return false;
+  if (req.user.role === "admin") return false;
   if (tenant.createdBy !== req.user.id) {
-    res.status(403).json({ success: false, error: 'Access denied: you do not own this organization' });
+    res.status(403).json({
+      success: false,
+      error: "Access denied: you do not own this organization",
+    });
     return true;
   }
   return false;
@@ -26,7 +29,7 @@ const denyIfNotOwner = (req, res, tenant) => {
  */
 router.get("/organizations", async (req, res) => {
   try {
-    const where = req.user.role === 'manager' ? { createdBy: req.user.id } : {};
+    const where = req.user.role === "manager" ? { createdBy: req.user.id } : {};
     const tenants = await Tenant.findAll({
       where,
       order: [["createdAt", "DESC"]],
@@ -73,13 +76,11 @@ router.post("/organizations", async (req, res) => {
       createdBy: req.user.id,
     });
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Organization created successfully",
-        data: tenant,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Organization created successfully",
+      data: tenant,
+    });
   } catch (error) {
     console.error("Error creating organization:", error);
     res
@@ -191,28 +192,30 @@ router.get("/organizations/:tenantId/cards", async (req, res) => {
  * GET /api/manager/organizations/:tenantId/cards/:tagId
  * Get a specific card holder by tag ID within an organization
  */
-router.get('/organizations/:tenantId/cards/:tagId', async (req, res) => {
+router.get("/organizations/:tenantId/cards/:tagId", async (req, res) => {
   try {
     const tenantId = req.params.tenantId.toUpperCase();
     const tagId = req.params.tagId.toUpperCase();
-    
+
     const tenant = await Tenant.findOne({ where: { tenantId } });
     if (!tenant) {
-      return res.status(404).json({ success: false, error: 'Organization not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Organization not found" });
     }
     if (denyIfNotOwner(req, res, tenant)) return;
 
     const card = await Card.findOne({
-      where: { tenantId, tagId }
+      where: { tenantId, tagId },
     });
     if (!card) {
-      return res.status(404).json({ success: false, error: 'Card not found' });
+      return res.status(404).json({ success: false, error: "Card not found" });
     }
 
     res.json({ success: true, data: card, tenant });
   } catch (error) {
-    console.error('Error fetching card:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch card' });
+    console.error("Error fetching card:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch card" });
   }
 });
 
@@ -220,33 +223,69 @@ router.get('/organizations/:tenantId/cards/:tagId', async (req, res) => {
  * POST /api/manager/organizations/:tenantId/cards
  * Add a new card holder to an organization
  */
+
 router.post(
   "/organizations/:tenantId/cards",
-  authorize("admin"),
+  authorize("manager"),
   async (req, res) => {
     try {
       const tenantId = req.params.tenantId.toUpperCase();
+
+      // 1. Validate tenant
       const tenant = await Tenant.findOne({
         where: { tenantId, isActive: true },
       });
+
       if (!tenant) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            error: "Organization not found or inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          error: "Organization not found or inactive",
+        });
       }
 
+      // 2. Extract body
       const { tagId, profileImageUrl, metadata, businessUrl } = req.body;
+
       if (!tagId) {
-        return res
-          .status(400)
-          .json({ success: false, error: "tagId is required" });
+        return res.status(400).json({
+          success: false,
+          error: "tagId is required",
+        });
       }
 
+      const tagIdUpper = tagId.toUpperCase();
+      // return res.send([req.user.id]);
+      // 3. Check CardRegister (ownership + existence)
+      const tag = await CardRegister.findOne({
+        where: {
+          tagId: tagIdUpper,
+          // tenantId: req.user.id,
+        },
+      });
+
+      if (!tag) {
+        return res.status(403).json({
+          success: false,
+          error: "  Card not registered. Please contact administration.",
+        });
+      }
+
+      // 4. Prevent duplicate usage (optional but recommended)
+      const existingCard = await Card.findOne({
+        where: {
+          tagId: tagIdUpper,
+        },
+      });
+      if (existingCard) {
+        return res.status(400).json({
+          success: false,
+          error: "This card is already assigned to a user.",
+        });
+      }
+
+      // 5. Register NFC card
       const { card, shortCode, redirectUrl } = await registerNfcCard({
-        tagId,
+        tagId: tagIdUpper,
         tenantId,
         businessUrl,
         metadata: {
@@ -255,32 +294,42 @@ router.post(
         actorRole: req.user.role,
       });
 
+      // 6. Update CardRegister with redirectUrl
+
+      // 7. Optional profile image
       if (profileImageUrl) {
         card.profileImageUrl = profileImageUrl;
         await card.save();
       }
 
-      res.status(201).json({
+      tag.redirectUrl = card.publicUrl;
+      await tag.save();
+
+      // 8. Response - only include necessary fields to avoid packet size issues
+      return res.status(201).json({
         success: true,
         message: "Card holder added successfully",
-        data: card,
+        data: {
+          id: card.id,
+          tagId: card.tagId,
+          tenantId: card.tenantId,
+          publicUrl: card.publicUrl,
+          profileImageUrl: card.profileImageUrl,
+        },
         url: shortCode,
         tag_id: card.tagId,
         redirect_url: redirectUrl,
-        redirectUrl,
       });
     } catch (error) {
       console.error("Error adding card holder:", error);
-      res
-        .status(error.statusCode || 500)
-        .json({
-          success: false,
-          error: error.message || "Failed to add card holder",
-        });
+
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || "Failed to add card holder",
+      });
     }
   },
 );
-
 /**
  * PUT /api/manager/organizations/:tenantId/cards/:cardId
  * Update a card holder
@@ -290,7 +339,9 @@ router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
     const tenantId = req.params.tenantId.toUpperCase();
     const tenant = await Tenant.findOne({ where: { tenantId } });
     if (!tenant) {
-      return res.status(404).json({ success: false, error: 'Organization not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Organization not found" });
     }
     if (denyIfNotOwner(req, res, tenant)) return;
 
@@ -310,7 +361,9 @@ router.put("/organizations/:tenantId/cards/:cardId", async (req, res) => {
 
     // Backfill publicUrl for cards created before the column was added
     if (!card.publicUrl) {
-      const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:3030').replace(/\/$/, '');
+      const frontendBase = (
+        process.env.FRONTEND_URL || "http://localhost:3030"
+      ).replace(/\/$/, "");
       card.publicUrl = `${frontendBase}/view/${encodeURIComponent(card.tagId)}`;
     }
 
@@ -337,7 +390,9 @@ router.delete("/organizations/:tenantId/cards/:cardId", async (req, res) => {
     const tenantId = req.params.tenantId.toUpperCase();
     const tenant = await Tenant.findOne({ where: { tenantId } });
     if (!tenant) {
-      return res.status(404).json({ success: false, error: 'Organization not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Organization not found" });
     }
     if (denyIfNotOwner(req, res, tenant)) return;
 

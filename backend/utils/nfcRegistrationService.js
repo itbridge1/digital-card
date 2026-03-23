@@ -96,7 +96,7 @@ async function registerNfcCard({
   actorRole,
   actorTenantId,
 }) {
-  if (actorRole !== "admin") {
+  if (actorRole !== "admin" && actorRole !== "manager") {
     const err = new Error("Only admin users can register NFC cards");
     err.statusCode = 403;
     throw err;

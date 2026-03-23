@@ -25,27 +25,6 @@ function buildBusinessUrl(tagId) {
   return `${base}/${encodeURIComponent(tagId)}`;
 }
 
-function generateRandomString(length = 4) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "";
-  for (let i = 0; i < length; i += 1) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-async function generateUniqueShortCode(maxAttempts = 20) {
-  for (let i = 0; i < maxAttempts; i += 1) {
-    const candidate = generateRandomString(4);
-    const exists = await CardRegister.findOne({ where: { url: candidate } });
-    if (!exists) return candidate;
-  }
-
-  const err = new Error("Unable to generate unique short URL. Retry.");
-  err.statusCode = 500;
-  throw err;
-}
-
 // Protect all routes - require authentication
 router.use(protect);
 
@@ -315,7 +294,8 @@ router.delete("/registrations/:tagId", authorize("admin"), async (req, res) => {
 
 /**
  * POST /api/cards/registrations/scan
- * Upsert registration on NFC scan, rotate short URL, and return editable row.
+ * Upsert registration on NFC scan and return editable row.
+ * IMPORTANT: Existing tags keep their current short URL.
  */
 router.post("/registrations/scan", authorize("admin"), async (req, res) => {
   try {
@@ -330,7 +310,6 @@ router.post("/registrations/scan", authorize("admin"), async (req, res) => {
       });
     }
 
-    const shortCode = await generateUniqueShortCode();
     const requestedStatus = Object.prototype.hasOwnProperty.call(
       req.body,
       "status",
@@ -371,16 +350,13 @@ router.post("/registrations/scan", authorize("admin"), async (req, res) => {
         actorTenantId: req.user.tenantId,
       });
 
-      cardRegister.url = shortCode;
-      registration = await cardRegister.save();
+      registration = cardRegister;
 
       if (card) {
         card.businessUrl = card.businessUrl || buildBusinessUrl(tagId);
         await card.save();
       }
     } else {
-      registration.url = shortCode;
-
       if (requestedStatus) {
         registration.status = requestedStatus;
       }
