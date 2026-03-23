@@ -8,6 +8,7 @@ import ErrorPage from "./pages/ErrorPage";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CardView from "./pages/cardView/CardView";
+import PublicCardView from "./pages/cardView/PublicCardView";
 import UserAccessLayout from "./components/UserAccessLayout";
 import UserAccessDashboard from "./pages/useraccess/Dashboard";
 import Organizations from "./pages/useraccess/Organizations";
@@ -21,6 +22,9 @@ function App() {
 
       {/* Public card view — NFC scan redirects here */}
       <Route path="/card/:tagId" element={<CardView />} />
+
+      {/* Public read-only card view — accessible without login */}
+      <Route path="/view/:tagId" element={<PublicCardView />} />
 
       {/* Admin routes */}
       <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>

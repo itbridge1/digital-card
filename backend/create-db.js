@@ -2,6 +2,14 @@
  * Database Creation Script
  * Creates the nfc_platform database if it doesn't exist
  * Run this before running seed.js for the first time
+ *
+ * Tables created by sequelize.sync() in seed.js:
+ *   tenants       — organizations (SCHOOL / HOSPITAL / BUSINESS)
+ *   users         — admin + manager accounts
+ *   cards         — NFC card holders
+ *                   includes: tagId, businessUrl, publicUrl (/view/:tagId),
+ *                             profileImageUrl, metadata (JSON), tapCount
+ *   card_registers — NFC chip registration records
  */
 
 require('dotenv').config();

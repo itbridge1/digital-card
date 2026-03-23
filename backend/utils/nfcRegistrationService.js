@@ -29,9 +29,9 @@ function buildRedirectUrl(tagId) {
 
 function buildDefaultBusinessUrl(tagId) {
   const frontendBase = (
-    process.env.FRONTEND_URL || "http://localhost:3030/card/"
+    process.env.FRONTEND_URL || "http://localhost:3030"
   ).replace(/\/$/, "");
-  return `${frontendBase}/${encodeURIComponent(tagId)}`;
+  return `${frontendBase}/view/${encodeURIComponent(tagId)}`;
 }
 
 async function registerNfcCard({
@@ -106,12 +106,15 @@ async function registerNfcCard({
   // IMPORTANT: If already registered, keep same URL (do not recreate).
   const shortCode = existingRegister?.url || (await generateUniqueShortCode());
 
+  const resolvedPublicUrl = `${(process.env.FRONTEND_URL || 'http://localhost:3030').replace(/\/$/, '')}/view/${encodeURIComponent(normalizedTagId)}`;
+
   let card = await Card.findOne({ where: { tagId: normalizedTagId } });
   if (!card) {
     card = await Card.create({
       tenantId: tenant.tenantId,
       tagId: normalizedTagId,
       businessUrl: businessUrl || buildDefaultBusinessUrl(normalizedTagId),
+      publicUrl: resolvedPublicUrl,
       metadata: {
         ...(metadata || {}),
         shortCode,
@@ -124,6 +127,7 @@ async function registerNfcCard({
       businessUrl ||
       card.businessUrl ||
       buildDefaultBusinessUrl(normalizedTagId);
+    card.publicUrl = card.publicUrl || resolvedPublicUrl;
     card.metadata = {
       ...(card.metadata || {}),
       ...(metadata || {}),
