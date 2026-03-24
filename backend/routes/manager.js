@@ -301,7 +301,6 @@ router.post(
         const result = await registerNfcCard({
           tagId: tagIdUpper,
           tenantId,
-          userId: req.user.id,
           businessUrl,
           metadata: { ...(metadata || {}) },
           actorUserId: req.user.id,
