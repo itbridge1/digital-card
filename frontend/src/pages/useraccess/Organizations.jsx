@@ -206,6 +206,23 @@ function Organizations() {
       render: (v) => <Tag>{v}</Tag>,
     },
     { title: "Contact Email", dataIndex: "contactEmail", ellipsis: true },
+    ...(isAdmin
+      ? [
+          {
+            title: "Manager",
+            key: "manager",
+            ellipsis: true,
+            render: (_, record) =>
+              record.creator ? (
+                <Tooltip title={record.creator.email}>
+                  <span>{record.creator.name}</span>
+                </Tooltip>
+              ) : (
+                <span style={{ color: "#aaa" }}>—</span>
+              ),
+          },
+        ]
+      : []),
     {
       title: "Status",
       dataIndex: "isActive",

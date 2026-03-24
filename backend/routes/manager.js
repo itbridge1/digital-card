@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Card, Tenant, CardRegister } = require("../models");
+const { Card, Tenant, CardRegister, User } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const { registerNfcCard } = require("../utils/nfcRegistration");
 const { Op } = require("sequelize");
@@ -30,8 +30,12 @@ const denyIfNotOwner = (req, res, tenant) => {
 router.get("/organizations", async (req, res) => {
   try {
     const where = req.user.role === "manager" ? { createdBy: req.user.id } : {};
+    const includeCreator = req.user.role === "admin"
+      ? [{ model: User, as: "creator", attributes: ["id", "name", "email"] }]
+      : [];
     const tenants = await Tenant.findAll({
       where,
+      include: includeCreator,
       order: [["createdAt", "DESC"]],
     });
     res.json({ success: true, count: tenants.length, data: tenants });

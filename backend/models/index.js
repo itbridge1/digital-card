@@ -52,6 +52,12 @@ CardRegister.belongsTo(Card, {
   foreignKey: "cardId",
 });
 
+// Tenant creator (manager who owns the organization)
+Tenant.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+});
+
 module.exports = {
   sequelize,
   User,
