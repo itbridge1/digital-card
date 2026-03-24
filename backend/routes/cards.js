@@ -7,6 +7,7 @@ const { registerNfcCard } = require("../utils/nfcRegistration");
 const { getIO } = require("../utils/socket");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const { v4: uuidv4 } = require("uuid");
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -483,7 +484,8 @@ router.post(
       }
 
       // Normalise a header key for flexible matching
-      const norm = (v) => String(v || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+      // Strip ALL non-alphanumeric characters so "Roll No.", "Roll No", "RollNo", "roll_no" all match
+      const norm = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 
       // Build a lookup from normalised header -> actual key in the row object
       const headers = Object.keys(rows[0]);
@@ -509,11 +511,9 @@ router.post(
         const row = rows[i];
         const rowNum = i + 2; // 1-based, row 1 is header
 
-        const tagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
-        if (!tagId) {
-          skipped.push({ row: rowNum, reason: "Missing Tag ID" });
-          continue;
-        }
+        const rawTagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
+        // Tag ID is optional — auto-generate a PENDING placeholder when absent
+        const tagId = rawTagId || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
 
         const metadata = {
           name: pick(row, "Name", "Full Name", "fullname"),
@@ -557,7 +557,7 @@ router.post(
             actorRole: req.user.role,
             actorTenantId: req.user.tenantId,
           });
-          created.push({ row: rowNum, tagId: card.tagId });
+          created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId });
         } catch (err) {
           if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
             skipped.push({ row: rowNum, tagId, reason: "Tag ID already registered" });

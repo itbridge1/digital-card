@@ -2,16 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Space, Typography,
   message, Popconfirm, Avatar, Upload, Tag, Breadcrumb, Spin, Tooltip,
+  Alert, Descriptions,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
   DownloadOutlined, ArrowLeftOutlined, UserOutlined, EyeOutlined,
-  CopyOutlined, ShareAltOutlined,
+  CopyOutlined, ShareAltOutlined, InboxOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
-import { useraccessAPI, uploadAPI } from '../../services/api';
+import { useraccessAPI, uploadAPI, cardAPI } from '../../services/api';
 import SelectCard from '../cardView/components/SelectCard';
 
 const EXPORT_THEME = {
@@ -54,6 +55,10 @@ function OrganizationDetail() {
   const [exporting, setExporting] = useState(false);
   const [nfcTags, setNfcTags] = useState([]);
   const [nfcTagsLoading, setNfcTagsLoading] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   const [form] = Form.useForm();
 
   // Hidden container for card export rendering
@@ -261,7 +266,6 @@ function OrganizationDetail() {
     }
   };
 
-  // Export all cards as images bundled in a ZIP file
   const handleExport = async () => {
     if (cards.length === 0) {
       message.warning('No card holders to export');
@@ -307,6 +311,26 @@ function OrganizationDetail() {
       message.error('Export failed');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleImportOpen = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setImportModalOpen(true);
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importFile) { message.warning('Please select a file first'); return; }
+    setImporting(true);
+    try {
+      const res = await cardAPI.importCards(tenantId, importFile);
+      setImportResult(res.data);
+      fetchData();
+    } catch (err) {
+      message.error(err.response?.data?.error || 'Import failed');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -462,6 +486,12 @@ function OrganizationDetail() {
             loading={exporting}
           >
             Export as ZIP
+          </Button>
+          <Button
+            icon={<UploadOutlined />}
+            onClick={handleImportOpen}
+          >
+            Import from Excel
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             Add Card Holder
@@ -660,6 +690,89 @@ function OrganizationDetail() {
             </>
           )}
         </Form>
+      </Modal>
+
+      {/* Import from Excel modal */}
+      <Modal
+        title="Import Card Holders from Excel"
+        open={importModalOpen}
+        onCancel={() => { if (!importing) setImportModalOpen(false); }}
+        width={520}
+        footer={
+          importResult ? (
+            <Button type="primary" onClick={() => setImportModalOpen(false)}>Close</Button>
+          ) : (
+            <Space>
+              <Button onClick={() => setImportModalOpen(false)} disabled={importing}>Cancel</Button>
+              <Button type="primary" loading={importing} onClick={handleImportConfirm}>Import</Button>
+            </Space>
+          )
+        }
+      >
+        {importResult ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Alert
+              type={importResult.summary.failed > 0 ? 'warning' : 'success'}
+              message={importResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Created">{importResult.summary.created}</Descriptions.Item>
+              <Descriptions.Item label="Skipped">{importResult.summary.skipped}</Descriptions.Item>
+              <Descriptions.Item label="Failed">{importResult.summary.failed}</Descriptions.Item>
+            </Descriptions>
+            {importResult.details.failed.length > 0 && (
+              <div style={{ fontSize: 12, color: '#cf1322' }}>
+                <strong>Failed rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {importResult.details.failed.map((f, i) => (
+                    <li key={i}>Row {f.row}{f.tagId ? ` (${f.tagId})` : ''}: {f.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importResult.details.skipped.length > 0 && (
+              <div style={{ fontSize: 12, color: '#d46b08' }}>
+                <strong>Skipped rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {importResult.details.skipped.map((s, i) => (
+                    <li key={i}>Row {s.row}{s.tagId ? ` (${s.tagId})` : ''}: {s.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ margin: 0, color: '#555', fontSize: 13 }}>
+              Upload an <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong> file.
+              The first row must be a header row.
+              {orgType && <> Columns for <strong>{orgType}</strong>:</>}
+            </p>
+            <div style={{ fontSize: 12, background: '#f5f5f5', borderRadius: 6, padding: '8px 12px', lineHeight: 1.8 }}>
+              {orgType === 'SCHOOL' && (
+                <><strong>Tag ID:</strong> Optional (auto-assigned if missing)<br /><strong>Columns:</strong> Roll No, Name, Class, Section (optional), House, Guardian, Address, Contact</>
+              )}
+              {orgType === 'HOSPITAL' && (
+                <><strong>Tag ID:</strong> Optional (auto-assigned if missing)<br /><strong>Columns:</strong> Name, Employee ID, Department, Specialization, License Number, Emergency Contact, Address, Email, Phone</>
+              )}
+              {orgType !== 'SCHOOL' && orgType !== 'HOSPITAL' && (
+                <><strong>Tag ID:</strong> Optional (auto-assigned if missing)<br /><strong>Columns:</strong> Name, Position / Designation, Company, LinkedIn, Website, Address, Email, Phone</>
+              )}
+            </div>
+            <Upload.Dragger
+              accept=".xlsx,.xls,.csv"
+              beforeUpload={(file) => { setImportFile(file); return false; }}
+              onRemove={() => setImportFile(null)}
+              maxCount={1}
+              fileList={importFile ? [importFile] : []}
+            >
+              <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+              <p className="ant-upload-text">Click or drag file here to upload</p>
+              <p className="ant-upload-hint">.xlsx / .xls / .csv — max 10 MB</p>
+            </Upload.Dragger>
+          </div>
+        )}
       </Modal>
     </div>
   );
