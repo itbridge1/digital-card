@@ -18,7 +18,7 @@ import {
 } from 'antd';
 import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined } from '@ant-design/icons';
 import { io } from 'socket.io-client';
-import { cardAPI, tenantAPI, SOCKET_BASE_URL, managerAPI } from '../../services/api';
+import { cardAPI, tenantAPI, SOCKET_BASE_URL } from '../../services/api';
 
 const { Title, Text } = Typography;
 
@@ -58,18 +58,9 @@ function CardRegistration() {
 
   const loadTenants = async () => {
     try {
-      const res = await managerAPI.getManagerInfo();
+      const res = await tenantAPI.getAll();
       const tenantList = res.data.data || [];
       setTenants(tenantList);
-
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const preferredTenant = tenantList.find((t) => t.tenantId === currentUser.tenantId) || tenantList[0];
-
-      if (preferredTenant) {
-        setSelectedTenant(preferredTenant.tenantId);
-        selectedTenantRef.current = preferredTenant.tenantId;
-        await loadRegistrations(preferredTenant.tenantId);
-      }
     } catch {
       message.error('Failed to load tenants');
     }
@@ -86,7 +77,7 @@ function CardRegistration() {
 
   useEffect(() => {
     loadTenants();
-    loadRegistrations();
+    loadRegistrations(undefined);
   }, []);
 
   useEffect(() => {
@@ -173,8 +164,8 @@ function CardRegistration() {
 
   const tenantDropdownOptions = useMemo(() => {
     return [
-      { value: '__SELECT_TENANT__', label: 'Select tenant', disabled: true },
-      ...tenants.map((t) => ({ value: t.id, label: `${t.name} ` })),
+      { value: '', label: 'All Tenants' },
+      ...tenants.map((t) => ({ value: t.tenantId, label: `${t.name} (${t.tenantId})` })),
     ];
   }, [tenants]);
 
@@ -190,10 +181,11 @@ function CardRegistration() {
   }, [watchedTagId, lastScan]);
 
   const onTenantChange = async (tenantId) => {
-    setSelectedTenant(tenantId || null);
-    selectedTenantRef.current = tenantId || null;
-    form.setFieldValue('tenantId', tenantId || undefined);
-    await loadRegistrations(tenantId || undefined);
+    const effectiveTenantId = tenantId || null;
+    setSelectedTenant(effectiveTenantId);
+    selectedTenantRef.current = effectiveTenantId;
+    form.setFieldValue('tenantId', effectiveTenantId || undefined);
+    await loadRegistrations(effectiveTenantId || undefined);
   };
 
   const registerCard = async (forcedTagId, options = {}) => {

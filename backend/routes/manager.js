@@ -254,66 +254,77 @@ router.post(
       }
 
       const tagIdUpper = tagId.toUpperCase();
-      // return res.send([req.user.id]);
-      // 3. Check CardRegister (ownership + existence)
+
+      // 3. Check CardRegister — must exist and belong to this organization (or be unassigned)
       const tag = await CardRegister.findOne({
         where: {
           tagId: tagIdUpper,
-          ...(req.user.role === "manager"
-            ? {
-                [Op.or]: [{ tenantId: null }, { tenantId: req.user.id }],
-              }
-            : {}),
+          status: "registered",
+          [Op.or]: [{ tenantId: null }, { tenantId: tenantId }],
         },
       });
 
       if (!tag) {
         return res.status(403).json({
           success: false,
-          error: "  Card not registered. Please contact administration.",
+          error: "Card not registered for this organization. Please contact administration.",
         });
       }
 
-      // 4. Prevent duplicate usage (optional but recommended)
+      // 4. Prevent duplicate assignment — only block if a card holder name is already set
       const existingCard = await Card.findOne({
-        where: {
-          tagId: tagIdUpper,
-        },
+        where: { tagId: tagIdUpper },
       });
-      if (existingCard) {
+      if (existingCard && existingCard.metadata && existingCard.metadata.name) {
         return res.status(400).json({
           success: false,
           error: "This card is already assigned to a user.",
         });
       }
 
-      const { card, shortCode, redirectUrl } = await registerNfcCard({
-        tagId: tagIdUpper,
-        tenantId,
-        userId: req.user.id,
-        businessUrl,
-        metadata: {
-          ...(metadata || {}),
-        },
-        actorUserId: req.user.id,
-        actorRole: req.user.role,
-        actorTenantId: req.user.tenantId,
-      });
+      // 5. Update existing Card (created during admin NFC registration) or create if missing
+      const shortCode = tag.url;
+      let card;
+      if (existingCard) {
+        // Card was pre-created during admin scan registration — just update it with holder data
+        existingCard.tenantId = tenantId;
+        existingCard.metadata = { ...(existingCard.metadata || {}), ...(metadata || {}) };
+        if (businessUrl) existingCard.businessUrl = businessUrl;
+        if (!existingCard.publicUrl) {
+          const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3030").replace(/\/$/, "");
+          existingCard.publicUrl = `${frontendBase}/view/${encodeURIComponent(tagIdUpper)}`;
+        }
+        await existingCard.save();
+        card = existingCard;
+      } else {
+        // Fallback: Card doesn't exist yet — register via utility
+        const result = await registerNfcCard({
+          tagId: tagIdUpper,
+          tenantId,
+          userId: req.user.id,
+          businessUrl,
+          metadata: { ...(metadata || {}) },
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          actorTenantId: req.user.tenantId,
+        });
+        card = result.card;
+      }
 
-      // 6. Update CardRegister with redirectUrl
-
-      // 7. Optional profile image
+      // 6. Optional profile image
       if (profileImageUrl) {
         card.profileImageUrl = profileImageUrl;
         await card.save();
       }
 
+      // 7. Update CardRegister to point to this card holder's public URL
       tag.redirectUrl = card.publicUrl;
       tag.userId = req.user.id;
       tag.tenantId = tenantId;
+      tag.cardId = card.id;
       await tag.save();
 
-      // 8. Response - only include necessary fields to avoid packet size issues
+      // 8. Response
       return res.status(201).json({
         success: true,
         message: "Card holder added successfully",
@@ -326,7 +337,7 @@ router.post(
         },
         url: shortCode,
         tag_id: card.tagId,
-        redirect_url: redirectUrl,
+        redirect_url: card.publicUrl,
       });
     } catch (error) {
       console.error("Error adding card holder:", error);
@@ -443,15 +454,16 @@ router.get("/organizations/:tenantId/nfc-tags", async (req, res) => {
     }
     if (denyIfNotOwner(req, res, tenant)) return;
 
-    // All registered tags in the system
+    // Registered tags that belong to THIS organization
     const registrations = await CardRegister.findAll({
-      where: { status: "registered" },
+      where: { status: "registered", tenantId },
       attributes: ["tagId", "url", "redirectUrl", "tenantId"],
       order: [["createdAt", "DESC"]],
     });
 
     // Tags already assigned to a card holder (have a name in metadata)
     const assignedCards = await Card.findAll({
+      where: { tenantId },
       attributes: ["tagId", "metadata"],
     });
     const assignedSet = new Set(
