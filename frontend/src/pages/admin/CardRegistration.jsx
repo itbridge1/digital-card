@@ -110,7 +110,7 @@ function CardRegistration() {
 
       if (autoRegisterRef.current) {
         await registerCard(incomingTag, {
-          openEditOnSuccess: true,
+          openEditOnSuccess: false,
           closeRegistrationModal: true,
         });
         return;
@@ -180,16 +180,16 @@ function CardRegistration() {
     return `${base}/${encodeURIComponent(tag)}`;
   }, [watchedTagId, lastScan]);
 
-  const onTenantChange = async (tenantId) => {
-    const effectiveTenantId = tenantId || null;
-    setSelectedTenant(effectiveTenantId);
-    selectedTenantRef.current = effectiveTenantId;
-    form.setFieldValue('tenantId', effectiveTenantId || undefined);
-    await loadRegistrations(effectiveTenantId || undefined);
-  };
+  // const onTenantChange = async (tenantId) => {
+  //   const effectiveTenantId = tenantId || null;
+  //   setSelectedTenant(effectiveTenantId);
+  //   selectedTenantRef.current = effectiveTenantId;
+  //   form.setFieldValue('tenantId', effectiveTenantId || undefined);
+  //   await loadRegistrations(effectiveTenantId || undefined);
+  // };
 
   const registerCard = async (forcedTagId, options = {}) => {
-    const { openEditOnSuccess = true, closeRegistrationModal = true } = options;
+    const { openEditOnSuccess = false, closeRegistrationModal = true } = options;
 
     try {
       const values = await form.validateFields(['tagId']);
@@ -212,7 +212,7 @@ function CardRegistration() {
       const updatedRow = res?.data?.data;
       message.success(`Synced: ${updatedRow?.tagId || tagId} → ${updatedRow?.url || ''}`);
 
-      await loadRegistrations(allValues.tenantId || selectedTenantRef.current || undefined);
+      await loadRegistrations(undefined);
 
       if (updatedRow && openEditOnSuccess) {
         openEditModal(updatedRow);
@@ -434,7 +434,7 @@ function CardRegistration() {
             <Select
               allowClear
               placeholder="Select tenant (optional)"
-              onChange={onTenantChange}
+              // onChange={onTenantChange}
               options={tenantDropdownOptions}
             />
           </Form.Item>
