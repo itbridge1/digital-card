@@ -1,8 +1,21 @@
 /**
- * Database Seeder Script for MySQL
- * Populates the database with sample tenants, users, and cards for testing
+ * Database Creation Script
+ * Creates the nfc_platform database if it doesn't exist
+ * Run this before running seed.js for the first time
  *
- * Usage: node seed.js
+ * Tables created by sequelize.sync() in seed.js:
+ *   tenants        — organizations (SCHOOL / HOSPITAL / BUSINESS)
+ *   users          — admin + manager accounts
+ *   cards          — NFC card holders
+ *                    metadata shape varies by tenant type:
+ *                    SCHOOL   : name, studentId (Roll No), grade (Class or "Class(Section)"),
+ *                               house, guardianName, address, phone
+ *                    HOSPITAL : name, employeeId, department, specialization,
+ *                               licenseNumber, emergencyContact, address, email, phone
+ *                    BUSINESS : name, company, position, linkedIn, website, address, email, phone
+ *                    tagId may be a real NFC UID or a PENDING-<hex> placeholder until a
+ *                    physical tag is assigned.
+ *   card_registers — NFC chip registration records (links tagId → card → tenant)
  */
 
 require("dotenv").config();
@@ -60,7 +73,7 @@ const FRONTEND_BASE = (process.env.FRONTEND_URL || "http://localhost:3030").repl
 const publicUrl = (tagId) => `${FRONTEND_BASE}/view/${tagId}`;
 
 const sampleCards = [
-  // School Cards
+  // ── SCHOOL cards ──────────────────────────────────────────────────────────
   {
     tenantId: "SCHOOL_01",
     tagId: "STUDENT001",
@@ -69,30 +82,34 @@ const sampleCards = [
     profileImageUrl: null,
     tapCount: 5,
     metadata: {
-      name: "John Doe",
-      position: "Student",
-      department: "Grade 12 - Section A",
-      email: "john@lincoln.edu",
-      phone: "+1234567890",
+      name: "Asmita Tamang",
+      studentId: "2",          // Roll No
+      grade: "Two(A)",         // Class(Section)
+      house: "Blue",
+      guardianName: "Rojan Ghising",
+      address: "Nayabasti",
+      phone: "9863198885",
     },
   },
   {
     tenantId: "SCHOOL_01",
-    tagId: "TEACHER001",
-    businessUrl: publicUrl("TEACHER001"),
-    publicUrl: publicUrl("TEACHER001"),
+    tagId: "STUDENT002",
+    businessUrl: publicUrl("STUDENT002"),
+    publicUrl: publicUrl("STUDENT002"),
     profileImageUrl: null,
-    tapCount: 12,
+    tapCount: 3,
     metadata: {
-      name: "Prof. Robert Smith",
-      position: "Mathematics Teacher",
-      department: "Mathematics Department",
-      email: "robert.smith@lincoln.edu",
-      phone: "+1234567892",
+      name: "Bibek Tamang",
+      studentId: "3",
+      grade: "Two",            // No section
+      house: "Green",
+      guardianName: "Surya Bahadur Tamang",
+      address: "Nayabasti",
+      phone: "9845997709",
     },
   },
 
-  // Hospital Cards
+  // ── HOSPITAL cards ────────────────────────────────────────────────────────
   {
     tenantId: "HOSPITAL_01",
     tagId: "DOC001",
@@ -102,8 +119,12 @@ const sampleCards = [
     tapCount: 23,
     metadata: {
       name: "Dr. Sarah Smith",
-      position: "Cardiologist",
+      employeeId: "EMP-001",
       department: "Cardiology",
+      specialization: "Cardiologist",
+      licenseNumber: "NMC-12345",
+      emergencyContact: "+1234567800",
+      address: "Kathmandu",
       email: "sarah.smith@citymedical.com",
       phone: "+1234567893",
     },
@@ -117,14 +138,18 @@ const sampleCards = [
     tapCount: 18,
     metadata: {
       name: "Emily Johnson",
-      position: "Registered Nurse",
+      employeeId: "EMP-002",
       department: "Emergency",
+      specialization: "Registered Nurse",
+      licenseNumber: "NMC-67890",
+      emergencyContact: "+1234567801",
+      address: "Lalitpur",
       email: "emily.johnson@citymedical.com",
       phone: "+1234567895",
     },
   },
 
-  // Business Cards
+  // ── BUSINESS cards ────────────────────────────────────────────────────────
   {
     tenantId: "BUSINESS_01",
     tagId: "BUS001",
@@ -134,8 +159,11 @@ const sampleCards = [
     tapCount: 45,
     metadata: {
       name: "Mike Johnson",
+      company: "TechCorp Inc.",
       position: "Senior Developer",
-      department: "Engineering",
+      linkedIn: "linkedin.com/in/mikejohnson",
+      website: "https://techcorp.com",
+      address: "San Francisco, CA",
       email: "mike@techcorp.com",
       phone: "+1234567897",
     },
@@ -149,8 +177,11 @@ const sampleCards = [
     tapCount: 32,
     metadata: {
       name: "Lisa Brown",
+      company: "TechCorp Inc.",
       position: "Senior Product Manager",
-      department: "Product",
+      linkedIn: "linkedin.com/in/lisabrown",
+      website: "https://techcorp.com",
+      address: "New York, NY",
       email: "lisa@techcorp.com",
       phone: "+1234567898",
     },
