@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Row, Col, Card, Statistic, Button, Modal, Form,
   Input, Select, Typography, message, Table, Tag, Space, Popconfirm, Tooltip, Avatar, Grid,
 } from 'antd';
 import {
   PlusOutlined, UserOutlined, ApartmentOutlined,
-  DeleteOutlined, StopOutlined, CheckCircleOutlined,
+  DeleteOutlined, StopOutlined, CheckCircleOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useraccessAPI, authAPI, managerAPI } from '../../services/api';
 
@@ -24,6 +24,14 @@ function AdminDashboard() {
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+
+  // Search / filter state
+  const [managerSearch, setManagerSearch] = useState('');
+  const [managerRoleFilter, setManagerRoleFilter] = useState('');
+  const [managerStatusFilter, setManagerStatusFilter] = useState('');
+  const [orgSearch, setOrgSearch] = useState('');
+  const [orgTypeFilter, setOrgTypeFilter] = useState('');
+  const [orgStatusFilter, setOrgStatusFilter] = useState('');
 
   const fetchOrgs = async () => {
     setLoadingOrgs(true);
@@ -107,14 +115,61 @@ function AdminDashboard() {
     }
   };
 
+  const filteredManagers = useMemo(() => {
+    let data = managers;
+    if (managerSearch) {
+      const q = managerSearch.toLowerCase();
+      data = data.filter(
+        (m) =>
+          m.name?.toLowerCase().includes(q) ||
+          m.email?.toLowerCase().includes(q) ||
+          m.Tenant?.name?.toLowerCase().includes(q),
+      );
+    }
+    if (managerRoleFilter) data = data.filter((m) => m.role === managerRoleFilter);
+    if (managerStatusFilter !== '') data = data.filter((m) => String(m.isActive) === managerStatusFilter);
+    return data;
+  }, [managers, managerSearch, managerRoleFilter, managerStatusFilter]);
+
+  const filteredOrgs = useMemo(() => {
+    let data = orgs;
+    if (orgSearch) {
+      const q = orgSearch.toLowerCase();
+      data = data.filter(
+        (o) =>
+          o.name?.toLowerCase().includes(q) ||
+          o.tenantId?.toLowerCase().includes(q) ||
+          o.contactEmail?.toLowerCase().includes(q),
+      );
+    }
+    if (orgTypeFilter) data = data.filter((o) => o.type === orgTypeFilter);
+    if (orgStatusFilter !== '') data = data.filter((o) => String(o.isActive) === orgStatusFilter);
+    return data;
+  }, [orgs, orgSearch, orgTypeFilter, orgStatusFilter]);
+
   const orgColumns = [
-    { title: 'ID', dataIndex: 'tenantId', render: (v) => <code>{v}</code> },
-    { title: 'Name', dataIndex: 'name' },
-    { title: 'Type', dataIndex: 'type', render: (v) => <Tag>{v}</Tag> },
+    {
+      title: 'ID',
+      dataIndex: 'tenantId',
+      render: (v) => <code>{v}</code>,
+      sorter: (a, b) => a.tenantId.localeCompare(b.tenantId),
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      sorter: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      render: (v) => <Tag>{v}</Tag>,
+      sorter: (a, b) => (a.type || '').localeCompare(b.type || ''),
+    },
     {
       title: 'Status',
       dataIndex: 'isActive',
       render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
   ];
 
@@ -124,23 +179,35 @@ function AdminDashboard() {
       width: 40,
       render: () => <Avatar size={28} icon={<UserOutlined />} />,
     },
-    { title: 'Name', dataIndex: 'name' },
-    { title: 'Email', dataIndex: 'email', ellipsis: true },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      sorter: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      ellipsis: true,
+      sorter: (a, b) => a.email.localeCompare(b.email),
+    },
     {
       title: 'Role',
       dataIndex: 'role',
       render: (v) => (
         <Tag color={v === 'admin' ? 'gold' : 'blue'}>{v.charAt(0).toUpperCase() + v.slice(1)}</Tag>
       ),
+      sorter: (a, b) => a.role.localeCompare(b.role),
     },
     {
       title: 'Organization',
       render: (_, r) => r.Tenant?.name || <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.Tenant?.name || '').localeCompare(b.Tenant?.name || ''),
     },
     {
       title: 'Status',
       dataIndex: 'isActive',
       render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
     {
       title: 'Actions',
@@ -232,9 +299,38 @@ function AdminDashboard() {
         }
         loading={loadingManagers}
       >
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Search name, email, org…"
+            prefix={<SearchOutlined />}
+            allowClear
+            style={{ width: 220 }}
+            onChange={(e) => setManagerSearch(e.target.value)}
+          />
+          <Select
+            placeholder="All roles"
+            allowClear
+            style={{ width: 130 }}
+            onChange={(v) => setManagerRoleFilter(v || '')}
+            options={[
+              { value: 'admin', label: 'Admin' },
+              { value: 'manager', label: 'Manager' },
+            ]}
+          />
+          <Select
+            placeholder="All statuses"
+            allowClear
+            style={{ width: 140 }}
+            onChange={(v) => setManagerStatusFilter(v ?? '')}
+            options={[
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ]}
+          />
+        </Space>
         <Table
           columns={managerColumns}
-          dataSource={managers}
+          dataSource={filteredManagers}
           rowKey="id"
           pagination={{ pageSize: 8 }}
           size="small"
@@ -244,9 +340,39 @@ function AdminDashboard() {
 
       {/* Organizations table */}
       <Card title="Organizations" loading={loadingOrgs}>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Search name, ID, email…"
+            prefix={<SearchOutlined />}
+            allowClear
+            style={{ width: 220 }}
+            onChange={(e) => setOrgSearch(e.target.value)}
+          />
+          <Select
+            placeholder="All types"
+            allowClear
+            style={{ width: 140 }}
+            onChange={(v) => setOrgTypeFilter(v || '')}
+            options={[
+              { value: 'SCHOOL', label: 'School' },
+              { value: 'HOSPITAL', label: 'Hospital' },
+              { value: 'BUSINESS', label: 'Business' },
+            ]}
+          />
+          <Select
+            placeholder="All statuses"
+            allowClear
+            style={{ width: 140 }}
+            onChange={(v) => setOrgStatusFilter(v ?? '')}
+            options={[
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ]}
+          />
+        </Space>
         <Table
           columns={orgColumns}
-          dataSource={orgs}
+          dataSource={filteredOrgs}
           rowKey="tenantId"
           pagination={{ pageSize: 5 }}
           size="small"

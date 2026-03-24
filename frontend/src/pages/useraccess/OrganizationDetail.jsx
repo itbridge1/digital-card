@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Space, Typography,
   message, Popconfirm, Avatar, Upload, Tag, Breadcrumb, Spin, Tooltip,
@@ -7,7 +7,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
   DownloadOutlined, ArrowLeftOutlined, UserOutlined, EyeOutlined,
-  CopyOutlined, ShareAltOutlined, InboxOutlined, FolderOpenOutlined,
+  CopyOutlined, ShareAltOutlined, InboxOutlined, FolderOpenOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import html2canvas from 'html2canvas';
@@ -66,6 +66,10 @@ function OrganizationDetail() {
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+
+  // Search / filter state
+  const [cardSearch, setCardSearch] = useState('');
+  const [cardStatusFilter, setCardStatusFilter] = useState('');
 
   // Hidden container for card export rendering
   const exportContainerRef = useRef(null);
@@ -362,6 +366,32 @@ function OrganizationDetail() {
 
   const orgType = organization?.type;
 
+  const filteredCards = useMemo(() => {
+    let data = cards;
+    if (cardSearch) {
+      const q = cardSearch.toLowerCase();
+      data = data.filter((c) => {
+        const m = c.metadata || {};
+        return (
+          c.tagId?.toLowerCase().includes(q) ||
+          m.name?.toLowerCase().includes(q) ||
+          m.studentId?.toLowerCase().includes(q) ||
+          m.employeeId?.toLowerCase().includes(q) ||
+          m.department?.toLowerCase().includes(q) ||
+          m.specialization?.toLowerCase().includes(q) ||
+          m.grade?.toLowerCase().includes(q) ||
+          m.house?.toLowerCase().includes(q) ||
+          m.position?.toLowerCase().includes(q) ||
+          m.company?.toLowerCase().includes(q) ||
+          m.email?.toLowerCase().includes(q) ||
+          m.phone?.toLowerCase().includes(q)
+        );
+      });
+    }
+    if (cardStatusFilter !== '') data = data.filter((c) => String(c.isActive) === cardStatusFilter);
+    return data;
+  }, [cards, cardSearch, cardStatusFilter]);
+
   const columns = [
     {
       title: 'Photo',
@@ -376,27 +406,60 @@ function OrganizationDetail() {
     {
       title: 'Name',
       render: (_, r) => r.metadata?.name || <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.metadata?.name || '').localeCompare(b.metadata?.name || ''),
     },
     // SCHOOL columns
     ...(orgType === 'SCHOOL' ? [
-      { title: 'Roll No', render: (_, r) => r.metadata?.studentId || <Text type="secondary">—</Text> },
-      { title: 'Class', render: (_, r) => r.metadata?.grade || <Text type="secondary">—</Text> },
-      { title: 'House', render: (_, r) => r.metadata?.house || <Text type="secondary">—</Text> },
+      {
+        title: 'Roll No',
+        render: (_, r) => r.metadata?.studentId || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.studentId || '').localeCompare(b.metadata?.studentId || ''),
+      },
+      {
+        title: 'Class',
+        render: (_, r) => r.metadata?.grade || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.grade || '').localeCompare(b.metadata?.grade || ''),
+      },
+      {
+        title: 'House',
+        render: (_, r) => r.metadata?.house || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.house || '').localeCompare(b.metadata?.house || ''),
+      },
       { title: 'Guardian', render: (_, r) => r.metadata?.guardianName || <Text type="secondary">—</Text> },
       { title: 'Address', render: (_, r) => r.metadata?.address || <Text type="secondary">—</Text> },
       { title: 'Contact', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
     ] : []),
     // HOSPITAL columns
     ...(orgType === 'HOSPITAL' ? [
-      { title: 'Employee ID', render: (_, r) => r.metadata?.employeeId || <Text type="secondary">—</Text> },
-      { title: 'Department', render: (_, r) => r.metadata?.department || <Text type="secondary">—</Text> },
-      { title: 'Specialization', render: (_, r) => r.metadata?.specialization || <Text type="secondary">—</Text> },
+      {
+        title: 'Employee ID',
+        render: (_, r) => r.metadata?.employeeId || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.employeeId || '').localeCompare(b.metadata?.employeeId || ''),
+      },
+      {
+        title: 'Department',
+        render: (_, r) => r.metadata?.department || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.department || '').localeCompare(b.metadata?.department || ''),
+      },
+      {
+        title: 'Specialization',
+        render: (_, r) => r.metadata?.specialization || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.specialization || '').localeCompare(b.metadata?.specialization || ''),
+      },
       { title: 'Phone', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
     ] : []),
     // BUSINESS & default columns
     ...(orgType !== 'SCHOOL' && orgType !== 'HOSPITAL' ? [
-      { title: 'Position', render: (_, r) => r.metadata?.position || <Text type="secondary">—</Text> },
-      { title: 'Company', render: (_, r) => r.metadata?.company || <Text type="secondary">—</Text> },
+      {
+        title: 'Position',
+        render: (_, r) => r.metadata?.position || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.position || '').localeCompare(b.metadata?.position || ''),
+      },
+      {
+        title: 'Company',
+        render: (_, r) => r.metadata?.company || <Text type="secondary">—</Text>,
+        sorter: (a, b) => (a.metadata?.company || '').localeCompare(b.metadata?.company || ''),
+      },
       { title: 'Email', render: (_, r) => r.metadata?.email || <Text type="secondary">—</Text>, ellipsis: true },
       { title: 'Phone', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
     ] : []),
@@ -404,6 +467,7 @@ function OrganizationDetail() {
       title: 'Tag ID',
       dataIndex: 'tagId',
       render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
+      sorter: (a, b) => a.tagId.localeCompare(b.tagId),
     },
     {
       title: 'Public URL',
@@ -436,6 +500,7 @@ function OrganizationDetail() {
       render: (v) => (
         <Tag color={v ? 'success' : 'default'}>{v ? 'Active' : 'Inactive'}</Tag>
       ),
+      sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
     {
       title: 'Actions',
@@ -531,9 +596,28 @@ function OrganizationDetail() {
         </Space>
       </div>
 
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Input
+          placeholder={`Search name, tag${orgType === 'SCHOOL' ? ', class, house' : orgType === 'HOSPITAL' ? ', dept, specialization' : ', company, position'}…`}
+          prefix={<SearchOutlined />}
+          allowClear
+          style={{ width: 280 }}
+          onChange={(e) => setCardSearch(e.target.value)}
+        />
+        <Select
+          placeholder="All statuses"
+          allowClear
+          style={{ width: 140 }}
+          onChange={(v) => setCardStatusFilter(v ?? '')}
+          options={[
+            { value: 'true', label: 'Active' },
+            { value: 'false', label: 'Inactive' },
+          ]}
+        />
+      </Space>
       <Table
         columns={columns}
-        dataSource={cards}
+        dataSource={filteredCards}
         rowKey="id"
         pagination={{ pageSize: 10 }}
         scroll={{ x: 1300 }}

@@ -17,7 +17,7 @@ import {
   message,
   Grid,
 } from 'antd';
-import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined } from '@ant-design/icons';
+import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined, SearchOutlined } from '@ant-design/icons';
 import { io } from 'socket.io-client';
 import { cardAPI, tenantAPI, SOCKET_BASE_URL } from '../../services/api';
 
@@ -38,6 +38,10 @@ function CardRegistration() {
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [lastScan, setLastScan] = useState('');
   const [socketState, setSocketState] = useState('connecting');
+  // Search / filter state
+  const [regSearch, setRegSearch] = useState('');
+  const [regStatusFilter, setRegStatusFilter] = useState('');
+  const [regTenantFilter, setRegTenantFilter] = useState('');
   const watchedTagId = Form.useWatch('tagId', form);
   const socketRef = useRef(null);
   const lastEventRef = useRef({ tagId: null, ts: 0 });
@@ -302,11 +306,17 @@ function CardRegistration() {
   };
 
   const registrationColumns = [
-    { title: 'Tag ID', dataIndex: 'tagId', key: 'tagId' },
+    {
+      title: 'Tag ID',
+      dataIndex: 'tagId',
+      key: 'tagId',
+      sorter: (a, b) => a.tagId.localeCompare(b.tagId),
+    },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
       render: (v) => {
         if (v === 'registered') return <Tag color="green">ACTIVE</Tag>;
         if (v === 'blocked') return <Tag color="red">BLOCKED</Tag>;
@@ -339,11 +349,13 @@ function CardRegistration() {
     {
       title: 'Tenant',
       key: 'tenant',
+      sorter: (a, b) => (a.Tenant?.name || a.tenantId || '').localeCompare(b.Tenant?.name || b.tenantId || ''),
       render: (_, row) => row.Tenant?.name || row.tenantId,
     },
     {
       title: 'User',
       key: 'user',
+      sorter: (a, b) => (a.User?.name || '').localeCompare(b.User?.name || ''),
       render: (_, row) => row.User?.name || <Text type="secondary">Unassigned</Text>,
     },
     {
@@ -369,6 +381,23 @@ function CardRegistration() {
       ),
     },
   ];
+
+  const filteredRegistrations = useMemo(() => {
+    let data = registrations;
+    if (regSearch) {
+      const q = regSearch.toLowerCase();
+      data = data.filter(
+        (r) =>
+          r.tagId?.toLowerCase().includes(q) ||
+          r.url?.toLowerCase().includes(q) ||
+          r.Tenant?.name?.toLowerCase().includes(q) ||
+          r.User?.name?.toLowerCase().includes(q),
+      );
+    }
+    if (regStatusFilter) data = data.filter((r) => r.status === regStatusFilter);
+    if (regTenantFilter) data = data.filter((r) => r.tenantId === regTenantFilter);
+    return data;
+  }, [registrations, regSearch, regStatusFilter, regTenantFilter]);
 
   const isBusy = saving || editing;
 
@@ -417,10 +446,37 @@ function CardRegistration() {
       )}
 
       <Card title="Registrations" style={{ marginBottom: 16 }}>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Search tag ID, tenant, user…"
+            prefix={<SearchOutlined />}
+            allowClear
+            style={{ width: 230 }}
+            onChange={(e) => setRegSearch(e.target.value)}
+          />
+          <Select
+            placeholder="All statuses"
+            allowClear
+            style={{ width: 140 }}
+            onChange={(v) => setRegStatusFilter(v || '')}
+            options={[
+              { value: 'registered', label: 'Active' },
+              { value: 'blocked', label: 'Blocked' },
+              { value: 'unregistered', label: 'Inactive' },
+            ]}
+          />
+          <Select
+            placeholder="All tenants"
+            allowClear
+            style={{ width: 200 }}
+            onChange={(v) => setRegTenantFilter(v || '')}
+            options={tenants.map((t) => ({ value: t.tenantId, label: `${t.name} (${t.tenantId})` }))}
+          />
+        </Space>
         <Table
           rowKey="id"
           columns={registrationColumns}
-          dataSource={registrations}
+          dataSource={filteredRegistrations}
           pagination={{ pageSize: 10 }}
           scroll={{ x: 1050 }}
           size={isMobile ? 'small' : 'middle'}

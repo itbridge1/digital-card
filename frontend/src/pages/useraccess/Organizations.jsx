@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Table,
   Button,
@@ -22,6 +22,7 @@ import {
   StopOutlined,
   EyeOutlined,
   UploadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useraccessAPI, uploadAPI } from "../../services/api";
@@ -47,7 +48,12 @@ function Organizations() {
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = currentUser.role === "admin";
-  console.log("orgs", orgs);
+
+  // Search / filter state
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [managerFilter, setManagerFilter] = useState("");
 
   const fetchOrgs = async () => {
     setLoading(true);
@@ -172,6 +178,30 @@ function Organizations() {
     }
   };
 
+  const filteredOrgs = useMemo(() => {
+    let data = orgs;
+    if (search) {
+      const q = search.toLowerCase();
+      data = data.filter(
+        (o) =>
+          o.name?.toLowerCase().includes(q) ||
+          o.tenantId?.toLowerCase().includes(q) ||
+          o.contactEmail?.toLowerCase().includes(q),
+      );
+    }
+    if (typeFilter) data = data.filter((o) => o.type === typeFilter);
+    if (statusFilter !== "") data = data.filter((o) => String(o.isActive) === statusFilter);
+    if (managerFilter) {
+      const qm = managerFilter.toLowerCase();
+      data = data.filter(
+        (o) =>
+          o.creator?.name?.toLowerCase().includes(qm) ||
+          o.creator?.email?.toLowerCase().includes(qm),
+      );
+    }
+    return data;
+  }, [orgs, search, typeFilter, statusFilter, managerFilter]);
+
   const handleDeactivate = async (tenantId) => {
     try {
       await useraccessAPI.deleteOrganization(tenantId);
@@ -198,14 +228,26 @@ function Organizations() {
       title: "ID",
       dataIndex: "tenantId",
       render: (v) => <code>{v}</code>,
+      sorter: (a, b) => a.tenantId.localeCompare(b.tenantId),
     },
-    { title: "Name", dataIndex: "name", ellipsis: true },
+    {
+      title: "Name",
+      dataIndex: "name",
+      ellipsis: true,
+      sorter: (a, b) => a.name.localeCompare(b.name),
+    },
     {
       title: "Type",
       dataIndex: "type",
       render: (v) => <Tag>{v}</Tag>,
+      sorter: (a, b) => (a.type || "").localeCompare(b.type || ""),
     },
-    { title: "Contact Email", dataIndex: "contactEmail", ellipsis: true },
+    {
+      title: "Contact Email",
+      dataIndex: "contactEmail",
+      ellipsis: true,
+      sorter: (a, b) => a.contactEmail.localeCompare(b.contactEmail),
+    },
     ...(isAdmin
       ? [
           {
@@ -229,6 +271,7 @@ function Organizations() {
       render: (v) => (
         <Tag color={v ? "success" : "default"}>{v ? "Active" : "Inactive"}</Tag>
       ),
+      sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
     {
       title: "Actions",
@@ -291,9 +334,48 @@ function Organizations() {
         </Button>
       </div>
 
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Input
+          placeholder="Search name, ID, email…"
+          prefix={<SearchOutlined />}
+          allowClear
+          style={{ width: 220 }}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select
+          placeholder="All types"
+          allowClear
+          style={{ width: 140 }}
+          onChange={(v) => setTypeFilter(v || "")}
+          options={[
+            { value: "SCHOOL", label: "School" },
+            { value: "HOSPITAL", label: "Hospital" },
+            { value: "BUSINESS", label: "Business" },
+          ]}
+        />
+        <Select
+          placeholder="All statuses"
+          allowClear
+          style={{ width: 140 }}
+          onChange={(v) => setStatusFilter(v ?? "")}
+          options={[
+            { value: "true", label: "Active" },
+            { value: "false", label: "Inactive" },
+          ]}
+        />
+        {isAdmin && (
+          <Input
+            placeholder="Filter by manager…"
+            prefix={<SearchOutlined />}
+            allowClear
+            style={{ width: 180 }}
+            onChange={(e) => setManagerFilter(e.target.value)}
+          />
+        )}
+      </Space>
       <Table
         columns={columns}
-        dataSource={orgs}
+        dataSource={filteredOrgs}
         rowKey="tenantId"
         loading={loading}
         pagination={{ pageSize: 10 }}
