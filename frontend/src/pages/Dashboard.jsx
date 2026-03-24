@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Layout,
   Select,
@@ -11,12 +11,19 @@ import {
   Avatar,
   Dropdown,
   Popconfirm,
+  Upload,
+  message,
+  Alert,
+  Descriptions,
 } from "antd";
+import { InboxOutlined } from "@ant-design/icons";
 import CardList from "../components/CardList";
 import CardForm from "../components/CardForm";
 import { tenantAPI, cardAPI } from "../services/api";
-import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { LogoutOutlined, UserOutlined, UploadOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+
+const { Dragger } = Upload;
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -31,6 +38,10 @@ function Dashboard({ onLogout }) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -105,6 +116,33 @@ function Dashboard({ onLogout }) {
     setShowForm(false);
     setEditingCard(null);
     setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const handleImportOpen = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setImportModalOpen(true);
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importFile) {
+      message.warning("Please select a file first");
+      return;
+    }
+    if (!selectedTenant) {
+      message.warning("Please select a tenant first");
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await cardAPI.importCards(selectedTenant.tenantId, importFile);
+      setImportResult(res.data);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (err) {
+      message.error(err.response?.data?.error || "Import failed");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleEdit = (card) => {
@@ -263,14 +301,24 @@ function Dashboard({ onLogout }) {
                 </span>
               }
               extra={
-                <Button
-                  type="primary"
-                  size={isMobile ? "small" : "middle"}
-                  onClick={() => setShowForm(true)}
-                  className="text-xs sm:text-sm"
-                >
-                  + Register Card
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size={isMobile ? "small" : "middle"}
+                    icon={<UploadOutlined />}
+                    onClick={handleImportOpen}
+                    className="text-xs sm:text-sm"
+                  >
+                    {isMobile ? "Import" : "Import Cards"}
+                  </Button>
+                  <Button
+                    type="primary"
+                    size={isMobile ? "small" : "middle"}
+                    onClick={() => setShowForm(true)}
+                    className="text-xs sm:text-sm"
+                  >
+                    + Register Card
+                  </Button>
+                </div>
               }
             >
               <CardList
@@ -299,6 +347,126 @@ function Dashboard({ onLogout }) {
           onSuccess={handleFormSuccess}
           onCancel={() => setShowForm(false)}
         />
+      </Modal>
+
+      {/* IMPORT MODAL */}
+      <Modal
+        open={importModalOpen}
+        onCancel={() => { if (!importing) setImportModalOpen(false); }}
+        title="Import Card Holders"
+        width={isMobile ? "95vw" : 560}
+        style={{ maxWidth: "95vw" }}
+        footer={
+          importResult ? (
+            <Button type="primary" onClick={() => setImportModalOpen(false)}>
+              Close
+            </Button>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setImportModalOpen(false)} disabled={importing}>
+                Cancel
+              </Button>
+              <Button type="primary" loading={importing} onClick={handleImportConfirm}>
+                Import
+              </Button>
+            </div>
+          )
+        }
+      >
+        {importResult ? (
+          <div className="space-y-3">
+            <Alert
+              type={importResult.summary.failed > 0 ? "warning" : "success"}
+              message={importResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Created">{importResult.summary.created}</Descriptions.Item>
+              <Descriptions.Item label="Skipped">{importResult.summary.skipped}</Descriptions.Item>
+              <Descriptions.Item label="Failed">{importResult.summary.failed}</Descriptions.Item>
+            </Descriptions>
+            {importResult.details.failed.length > 0 && (
+              <div className="text-xs text-red-500">
+                <strong>Failed rows:</strong>
+                <ul className="mt-1 list-disc pl-4">
+                  {importResult.details.failed.map((f, i) => (
+                    <li key={i}>Row {f.row} {f.tagId ? `(${f.tagId})` : ""}: {f.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importResult.details.skipped.length > 0 && (
+              <div className="text-xs text-yellow-600">
+                <strong>Skipped rows:</strong>
+                <ul className="mt-1 list-disc pl-4">
+                  {importResult.details.skipped.map((s, i) => (
+                    <li key={i}>Row {s.row} {s.tagId ? `(${s.tagId})` : ""}: {s.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Upload an <strong>.xlsx</strong>, <strong>.xls</strong>, or <strong>.csv</strong> file.
+              The first row must be a header row.
+              {selectedTenant?.type && (
+                <> Columns for <strong>{selectedTenant.type}</strong> type:</>
+              )}
+            </p>
+            {(() => {
+              const type = selectedTenant?.type;
+              const common = (
+                <div>
+                  <span className="font-semibold">Required: </span>Tag ID
+                  <br />
+                  <span className="font-semibold">Common: </span>Name, Email, Phone / Contact, Address, Business URL
+                </div>
+              );
+              const schoolCols = (
+                <div className="mt-1 text-indigo-700">
+                  <span className="font-semibold">SCHOOL: </span>
+                  Roll No, Name, Guardian, Address, Contact, Class, Section, House
+                </div>
+              );
+              const hospitalCols = (
+                <div className="mt-1 text-green-700">
+                  <span className="font-semibold">HOSPITAL: </span>
+                  Employee ID, Department, Specialization, License Number, Emergency Contact
+                </div>
+              );
+              const businessCols = (
+                <div className="mt-1 text-orange-700">
+                  <span className="font-semibold">BUSINESS: </span>
+                  Company, Position / Designation, LinkedIn, Website
+                </div>
+              );
+              return (
+                <div className="text-xs bg-gray-50 rounded p-2 leading-relaxed">
+                  {common}
+                  {(!type || type === "SCHOOL") && schoolCols}
+                  {(!type || type === "HOSPITAL") && hospitalCols}
+                  {(!type || type === "BUSINESS") && businessCols}
+                </div>
+              );
+            })()}
+
+            <Dragger
+              accept=".xlsx,.xls,.csv"
+              beforeUpload={(file) => { setImportFile(file); return false; }}
+              onRemove={() => setImportFile(null)}
+              maxCount={1}
+              fileList={importFile ? [importFile] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined />
+              </p>
+              <p className="ant-upload-text">Click or drag file here to upload</p>
+              <p className="ant-upload-hint">.xlsx / .xls / .csv — max 10 MB</p>
+            </Dragger>
+          </div>
+        )}
       </Modal>
     </Layout>
   );

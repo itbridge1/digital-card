@@ -20,6 +20,7 @@ import {
   FaSlidersH,
 } from "react-icons/fa";
 import SelectCard from "./components/SelectCard";
+import { formatFieldLabel } from "./components/SelectCard";
 
 const { Text } = Typography;
 
@@ -165,12 +166,7 @@ function CardView() {
     }
   };
 
-  const formatFieldName = (fieldName) => {
-    return fieldName
-      .replace(/([A-Z])/g, " $1")
-      .replace(/^./, (str) => str.toUpperCase())
-      .trim();
-  };
+  const formatFieldName = (fieldName) => formatFieldLabel(fieldName);
 
   const handleColorChange = (type, color) => {
     setTheme((prev) => ({ ...prev, [type]: color }));

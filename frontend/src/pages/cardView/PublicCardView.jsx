@@ -4,6 +4,7 @@ import { publicAPI } from "../../services/api";
 import { Card, Typography } from "antd";
 import { FaTimesCircle } from "react-icons/fa";
 import SelectCard from "./components/SelectCard";
+import { formatFieldLabel } from "./components/SelectCard";
 
 const { Text } = Typography;
 
@@ -23,11 +24,7 @@ const DEFAULT_THEME = {
   },
 };
 
-const formatFieldName = (fieldName) =>
-  fieldName
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim();
+const formatFieldName = (key) => formatFieldLabel(key);
 
 function PublicCardView() {
   const { tagId } = useParams();

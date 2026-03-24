@@ -34,6 +34,7 @@ export default function CardForm({
         title: values.title,
         email: values.email,
         phone: values.phone,
+        address: values.address,
       };
 
       // Dynamic fields
@@ -42,6 +43,7 @@ export default function CardForm({
           studentId: values.studentId,
           grade: values.grade,
           section: values.section,
+          house: values.house,
           guardianName: values.guardianName,
           guardianPhone: values.guardianPhone,
         });
@@ -133,7 +135,7 @@ export default function CardForm({
 
       {/* Common Info */}
       <Title level={5} className="mt-4 text-sm sm:text-base">
-        Common Information
+        {tenantType === "SCHOOL" ? "Student Information" : "Common Information"}
       </Title>
 
       <Row gutter={[12, 12]}>
@@ -144,22 +146,22 @@ export default function CardForm({
         </Col>
 
         <Col xs={24} md={12}>
-          <Form.Item name="title" label="Title">
-            <Input placeholder="Doctor / Teacher" />
+          <Form.Item name="email" label="Email">
+            <Input />
           </Form.Item>
         </Col>
       </Row>
 
       <Row gutter={[12, 12]}>
         <Col xs={24} md={12}>
-          <Form.Item name="email" label="Email">
+          <Form.Item name="phone" label={tenantType === "SCHOOL" ? "Contact" : "Phone"}>
             <Input />
           </Form.Item>
         </Col>
 
         <Col xs={24} md={12}>
-          <Form.Item name="phone" label="Phone">
-            <Input />
+          <Form.Item name="address" label="Address">
+            <Input placeholder="City / Address" />
           </Form.Item>
         </Col>
       </Row>
@@ -171,27 +173,35 @@ export default function CardForm({
 
           <Row gutter={[12, 12]}>
             <Col xs={24} md={8}>
-              <Form.Item name="studentId" label="Student ID">
-                <Input />
+              <Form.Item name="studentId" label="Roll No">
+                <Input placeholder="2" />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={8}>
-              <Form.Item name="grade" label="Grade">
-                <Input />
+              <Form.Item name="grade" label="Class">
+                <Input placeholder="Two" />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={8}>
               <Form.Item name="section" label="Section">
-                <Input />
+                <Input placeholder="A" />
               </Form.Item>
             </Col>
           </Row>
 
           <Row gutter={[12, 12]}>
             <Col xs={24} md={12}>
-              <Form.Item name="guardianName" label="Guardian Name">
+              <Form.Item name="house" label="House">
+                <Input placeholder="Blue" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name="guardianName" label="Guardian">
                 <Input />
               </Form.Item>
             </Col>
@@ -257,21 +267,7 @@ export default function CardForm({
             </Col>
 
             <Col xs={24} md={12}>
-              <Form.Item name="position" label="Position">
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={[12, 12]}>
-            <Col xs={24} md={12}>
-              <Form.Item name="company" label="Company">
-                <Input />
-              </Form.Item>
-            </Col>
-
-            <Col xs={24} md={12}>
-              <Form.Item name="position" label="Position">
+              <Form.Item name="position" label="Position / Designation">
                 <Input />
               </Form.Item>
             </Col>

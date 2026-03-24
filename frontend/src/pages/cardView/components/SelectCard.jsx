@@ -10,19 +10,47 @@ const resolveImg = (url) => {
   return `${API_BASE}${url}`;
 };
 
+const INTERNAL_KEYS = new Set(["name", "title", "custom", "shortCode", "createdBy", "section"]);
+
+const FIELD_LABELS = {
+  // common
+  email: "Email",
+  phone: "Phone",
+  address: "Address",
+  // school
+  studentId: "Roll No",
+  grade: "Class",
+  section: "Section",
+  house: "House",
+  guardianName: "Guardian",
+  guardianPhone: "Guardian Phone",
+  // hospital
+  employeeId: "Employee ID",
+  department: "Department",
+  specialization: "Specialization",
+  licenseNumber: "License No",
+  emergencyContact: "Emergency Contact",
+  // business
+  company: "Company",
+  position: "Position",
+  linkedIn: "LinkedIn",
+  website: "Website",
+};
+
 const getDisplayRows = (card) => {
   if (!card?.metadata) {
     return [];
   }
 
   return Object.entries(card.metadata).filter(([key, value]) => {
-    if (!value) {
-      return false;
-    }
-
-    return key !== "name" && key !== "title" && key !== "custom";
+    if (!value) return false;
+    return !INTERNAL_KEYS.has(key);
   });
 };
+
+export const formatFieldLabel = (key) =>
+  FIELD_LABELS[key] ||
+  key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()).trim();
 
 const copyToClipboard = async (text) => {
   if (!text) {

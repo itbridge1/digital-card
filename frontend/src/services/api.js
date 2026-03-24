@@ -89,6 +89,12 @@ export const cardAPI = {
   delete: (tagId) => api.delete(`/cards/${encodeURIComponent(tagId)}`),
   getAnalytics: (tagId) =>
     api.get(`/cards/${encodeURIComponent(tagId)}/analytics`),
+  importCards: (tenantId, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("tenantId", tenantId);
+    return api.post("/cards/import", form);
+  },
 };
 
 // Tenant API methods

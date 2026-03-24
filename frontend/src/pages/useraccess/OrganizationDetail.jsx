@@ -30,11 +30,9 @@ const EXPORT_THEME = {
   },
 };
 
-const formatFieldName = (fieldName) =>
-  fieldName
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim();
+import { formatFieldLabel } from '../cardView/components/SelectCard';
+
+const formatFieldName = (key) => formatFieldLabel(key);
 
 const { Title, Text } = Typography;
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -95,13 +93,39 @@ function OrganizationDetail() {
   const openEdit = (card) => {
     setEditingCard(card);
     setProfileUrl(card.profileImageUrl || '');
+    const m = card.metadata || {};
+    // Split merged grade "One(A)" back to grade + section for the edit form
+    let editGrade = m.grade || '';
+    let editSection = '';
+    const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
+    if (sectionMatch) {
+      editGrade = sectionMatch[1];
+      editSection = sectionMatch[2];
+    }
     form.setFieldsValue({
       tagId: card.tagId,
-      name: card.metadata?.name || '',
-      position: card.metadata?.position || '',
-      department: card.metadata?.department || '',
-      email: card.metadata?.email || '',
-      phone: card.metadata?.phone || '',
+      name: m.name || '',
+      email: m.email || '',
+      phone: m.phone || '',
+      address: m.address || '',
+      // SCHOOL
+      studentId: m.studentId || '',
+      grade: editGrade,
+      section: editSection,
+      house: m.house || '',
+      guardianName: m.guardianName || '',
+      guardianPhone: m.guardianPhone || '',
+      // HOSPITAL
+      employeeId: m.employeeId || '',
+      department: m.department || '',
+      specialization: m.specialization || '',
+      licenseNumber: m.licenseNumber || '',
+      emergencyContact: m.emergencyContact || '',
+      // BUSINESS
+      company: m.company || '',
+      position: m.position || '',
+      linkedIn: m.linkedIn || '',
+      website: m.website || '',
     });
     setModalOpen(true);
   };
@@ -163,15 +187,50 @@ function OrganizationDetail() {
     try {
       const values = await form.validateFields();
       setSaving(true);
+      const orgType = organization?.type;
+
+      const metadata = {
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        address: values.address,
+      };
+
+      if (orgType === 'SCHOOL') {
+        // Merge section into grade: "One(A)" or "One"
+        const rawGrade = (values.grade || '').trim();
+        const rawSection = (values.section || '').trim();
+        const mergedGrade = rawGrade && rawSection
+          ? `${rawGrade}(${rawSection})`
+          : rawGrade;
+        Object.assign(metadata, {
+          studentId: values.studentId,
+          grade: mergedGrade,
+          house: values.house,
+          guardianName: values.guardianName,
+        });
+        // drop email/phone/address from base metadata for SCHOOL
+        delete metadata.email;
+      } else if (orgType === 'HOSPITAL') {
+        Object.assign(metadata, {
+          employeeId: values.employeeId,
+          department: values.department,
+          specialization: values.specialization,
+          licenseNumber: values.licenseNumber,
+          emergencyContact: values.emergencyContact,
+        });
+      } else {
+        Object.assign(metadata, {
+          company: values.company,
+          position: values.position,
+          linkedIn: values.linkedIn,
+          website: values.website,
+        });
+      }
+
       const payload = {
         profileImageUrl: profileUrl || null,
-        metadata: {
-          name: values.name,
-          position: values.position,
-          department: values.department,
-          email: values.email,
-          phone: values.phone,
-        },
+        metadata,
       };
 
       if (editingCard) {
@@ -251,6 +310,8 @@ function OrganizationDetail() {
     }
   };
 
+  const orgType = organization?.type;
+
   const columns = [
     {
       title: 'Photo',
@@ -266,23 +327,29 @@ function OrganizationDetail() {
       title: 'Name',
       render: (_, r) => r.metadata?.name || <Text type="secondary">—</Text>,
     },
-    {
-      title: 'Position',
-      render: (_, r) => r.metadata?.position || <Text type="secondary">—</Text>,
-    },
-    {
-      title: 'Department',
-      render: (_, r) => r.metadata?.department || <Text type="secondary">—</Text>,
-    },
-    {
-      title: 'Email',
-      render: (_, r) => r.metadata?.email || <Text type="secondary">—</Text>,
-      ellipsis: true,
-    },
-    {
-      title: 'Phone',
-      render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text>,
-    },
+    // SCHOOL columns
+    ...(orgType === 'SCHOOL' ? [
+      { title: 'Roll No', render: (_, r) => r.metadata?.studentId || <Text type="secondary">—</Text> },
+      { title: 'Class', render: (_, r) => r.metadata?.grade || <Text type="secondary">—</Text> },
+      { title: 'House', render: (_, r) => r.metadata?.house || <Text type="secondary">—</Text> },
+      { title: 'Guardian', render: (_, r) => r.metadata?.guardianName || <Text type="secondary">—</Text> },
+      { title: 'Address', render: (_, r) => r.metadata?.address || <Text type="secondary">—</Text> },
+      { title: 'Contact', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
+    ] : []),
+    // HOSPITAL columns
+    ...(orgType === 'HOSPITAL' ? [
+      { title: 'Employee ID', render: (_, r) => r.metadata?.employeeId || <Text type="secondary">—</Text> },
+      { title: 'Department', render: (_, r) => r.metadata?.department || <Text type="secondary">—</Text> },
+      { title: 'Specialization', render: (_, r) => r.metadata?.specialization || <Text type="secondary">—</Text> },
+      { title: 'Phone', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
+    ] : []),
+    // BUSINESS & default columns
+    ...(orgType !== 'SCHOOL' && orgType !== 'HOSPITAL' ? [
+      { title: 'Position', render: (_, r) => r.metadata?.position || <Text type="secondary">—</Text> },
+      { title: 'Company', render: (_, r) => r.metadata?.company || <Text type="secondary">—</Text> },
+      { title: 'Email', render: (_, r) => r.metadata?.email || <Text type="secondary">—</Text>, ellipsis: true },
+      { title: 'Phone', render: (_, r) => r.metadata?.phone || <Text type="secondary">—</Text> },
+    ] : []),
     {
       title: 'Tag ID',
       dataIndex: 'tagId',
@@ -481,29 +548,117 @@ function OrganizationDetail() {
             </div>
           </Form.Item>
 
-          <Form.Item label="Full Name" name="name" rules={[{ required: true, message: 'Required' }]}>
-            <Input placeholder="Full name" />
-          </Form.Item>
+          {/* Non-SCHOOL: Full Name shown here; SCHOOL has it inside its own block */}
+          {orgType !== 'SCHOOL' && (
+            <Form.Item label="Full Name" name="name" rules={[{ required: true, message: 'Required' }]}>
+              <Input placeholder="Full name" />
+            </Form.Item>
+          )}
 
-          <Form.Item label="Position / Title" name="position">
-            <Input placeholder="e.g. Senior Developer" />
-          </Form.Item>
+          {/* SCHOOL fields */}
+          {orgType === 'SCHOOL' && (
+            <>
+              <Form.Item label="Roll No" name="studentId">
+                <Input placeholder="2" />
+              </Form.Item>
+              <Form.Item label="Full Name" name="name" rules={[{ required: true, message: 'Required' }]}>
+                <Input placeholder="Full name" />
+              </Form.Item>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Form.Item label="Class" name="grade" style={{ marginBottom: 0 }}>
+                  <Input placeholder="One" />
+                </Form.Item>
+                <Form.Item label="Section (optional)" name="section" style={{ marginBottom: 0 }}>
+                  <Input placeholder="A" />
+                </Form.Item>
+              </div>
+              <Form.Item label="House" name="house" style={{ marginTop: 12 }}>
+                <Input placeholder="Blue" />
+              </Form.Item>
+              <Form.Item label="Guardian" name="guardianName">
+                <Input />
+              </Form.Item>
+              <Form.Item label="Address" name="address">
+                <Input placeholder="City / Address" />
+              </Form.Item>
+              <Form.Item label="Contact" name="phone">
+                <Input placeholder="9800000000" />
+              </Form.Item>
+            </>
+          )}
 
-          <Form.Item label="Department" name="department">
-            <Input placeholder="e.g. Engineering" />
-          </Form.Item>
+          {/* HOSPITAL fields */}
+          {orgType === 'HOSPITAL' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Form.Item label="Employee ID" name="employeeId" style={{ marginBottom: 0 }}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Department" name="department" style={{ marginBottom: 0 }}>
+                  <Input placeholder="e.g. Cardiology" />
+                </Form.Item>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <Form.Item label="Specialization" name="specialization" style={{ marginBottom: 0 }}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="License Number" name="licenseNumber" style={{ marginBottom: 0 }}>
+                  <Input />
+                </Form.Item>
+              </div>
+              <Form.Item label="Emergency Contact" name="emergencyContact" style={{ marginTop: 12 }}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="Address" name="address">
+                <Input placeholder="City / Address" />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[{ type: 'email', message: 'Invalid email' }]}
+              >
+                <Input placeholder="email@org.com" />
+              </Form.Item>
+              <Form.Item label="Phone" name="phone">
+                <Input placeholder="+1 555 000 0000" />
+              </Form.Item>
+            </>
+          )}
 
-          <Form.Item
-            label="Email"
-            name="email"
-            rules={[{ type: 'email', message: 'Invalid email' }]}
-          >
-            <Input placeholder="email@org.com" />
-          </Form.Item>
-
-          <Form.Item label="Phone" name="phone">
-            <Input placeholder="+1 555 000 0000" />
-          </Form.Item>
+          {/* BUSINESS / default fields */}
+          {orgType !== 'SCHOOL' && orgType !== 'HOSPITAL' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Form.Item label="Position / Title" name="position" style={{ marginBottom: 0 }}>
+                  <Input placeholder="e.g. Senior Developer" />
+                </Form.Item>
+                <Form.Item label="Company" name="company" style={{ marginBottom: 0 }}>
+                  <Input placeholder="Company name" />
+                </Form.Item>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <Form.Item label="LinkedIn" name="linkedIn" style={{ marginBottom: 0 }}>
+                  <Input placeholder="linkedin.com/in/..." />
+                </Form.Item>
+                <Form.Item label="Website" name="website" style={{ marginBottom: 0 }}>
+                  <Input placeholder="https://..." />
+                </Form.Item>
+              </div>
+              <Form.Item label="Address" name="address" style={{ marginTop: 12 }}>
+                <Input placeholder="City / Address" />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[{ type: 'email', message: 'Invalid email' }]}
+              >
+                <Input placeholder="email@org.com" />
+              </Form.Item>
+              <Form.Item label="Phone" name="phone">
+                <Input placeholder="+1 555 000 0000" />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
     </div>

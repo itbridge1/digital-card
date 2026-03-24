@@ -5,6 +5,19 @@ const { protect, authorize } = require("../middleware/auth");
 const { Op } = require("sequelize");
 const { registerNfcCard } = require("../utils/nfcRegistration");
 const { getIO } = require("../utils/socket");
+const multer = require("multer");
+const XLSX = require("xlsx");
+
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /xlsx|xls|csv/i;
+    const extOk = allowed.test(file.originalname.split(".").pop());
+    if (extOk) cb(null, true);
+    else cb(new Error("Only .xlsx, .xls, or .csv files are allowed"));
+  },
+});
 
 function normalizeRegistrationStatus(status) {
   const value = String(status || "")
@@ -425,6 +438,147 @@ router.post("/registrations/scan", authorize("admin"), async (req, res) => {
     });
   }
 });
+
+/**
+ * POST /api/cards/import
+ * Bulk import card holders from an Excel/CSV file into a tenant.
+ * Common: Tag ID*, Name, Title, Email, Phone/Contact, Address, Business URL
+ * SCHOOL:  Roll No (studentId), Class (grade), Section, House, Guardian (guardianName), Guardian Phone
+ * HOSPITAL: Employee ID, Department, Specialization, License Number, Emergency Contact
+ * BUSINESS: Company, Position/Designation, LinkedIn, Website
+ */
+router.post(
+  "/import",
+  authorize("admin", "manager"),
+  (req, res, next) => {
+    importUpload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ success: false, error: err.message });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+
+      const targetTenantId = String(req.body.tenantId || req.tenantId || "").trim();
+      if (!targetTenantId) {
+        return res.status(400).json({ success: false, error: "tenantId is required" });
+      }
+
+      // Parse workbook from buffer
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
+      }
+
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+        defval: "",
+      });
+
+      if (rows.length === 0) {
+        return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
+      }
+
+      // Normalise a header key for flexible matching
+      const norm = (v) => String(v || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+
+      // Build a lookup from normalised header -> actual key in the row object
+      const headers = Object.keys(rows[0]);
+      const headerMap = {};
+      headers.forEach((h) => { headerMap[norm(h)] = h; });
+
+      const pick = (row, ...keys) => {
+        for (const k of keys) {
+          const real = headerMap[norm(k)];
+          if (real !== undefined) {
+            const val = String(row[real] ?? "").trim();
+            if (val) return val;
+          }
+        }
+        return "";
+      };
+
+      const created = [];
+      const skipped = [];
+      const failed = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2; // 1-based, row 1 is header
+
+        const tagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
+        if (!tagId) {
+          skipped.push({ row: rowNum, reason: "Missing Tag ID" });
+          continue;
+        }
+
+        const metadata = {
+          name: pick(row, "Name", "Full Name", "fullname"),
+          title: pick(row, "Title", "Position Title"),
+          email: pick(row, "Email", "E-mail", "Email Address"),
+          phone: pick(row, "Phone", "Phone Number", "Mobile", "Contact", "Contact No", "Phone No"),
+          address: pick(row, "Address", "Full Address"),
+          // SCHOOL
+          studentId: pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Admission No"),
+          grade: pick(row, "Class", "Grade", "Grade Level"),
+          section: pick(row, "Section", "Class Section"),
+          house: pick(row, "House"),
+          guardianName: pick(row, "Guardian", "Guardian Name", "GuardianName", "Parent", "Parent Name"),
+          guardianPhone: pick(row, "Guardian Phone", "GuardianPhone", "Parent Phone", "Guardian Contact"),
+          // HOSPITAL
+          employeeId: pick(row, "Employee ID", "EmployeeID", "Emp ID", "Staff ID"),
+          department: pick(row, "Department", "Dept"),
+          specialization: pick(row, "Specialization", "Speciality"),
+          licenseNumber: pick(row, "License Number", "LicenseNumber", "License No"),
+          emergencyContact: pick(row, "Emergency Contact", "EmergencyContact"),
+          // BUSINESS
+          company: pick(row, "Company", "Organization", "Organisation"),
+          position: pick(row, "Position", "Job Title", "Designation"),
+          linkedIn: pick(row, "LinkedIn", "Linkedin"),
+          website: pick(row, "Website", "Web"),
+        };
+
+        // Remove empty metadata fields
+        Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
+
+        const businessUrl = pick(row, "Business URL", "BusinessURL", "URL", "url") || undefined;
+
+        try {
+          const { card, cardRegister } = await registerNfcCard({
+            tagId,
+            tenantId: targetTenantId,
+            businessUrl,
+            status: "registered",
+            metadata,
+            actorUserId: req.user.id,
+            actorRole: req.user.role,
+            actorTenantId: req.user.tenantId,
+          });
+          created.push({ row: rowNum, tagId: card.tagId });
+        } catch (err) {
+          if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
+            skipped.push({ row: rowNum, tagId, reason: "Tag ID already registered" });
+          } else {
+            failed.push({ row: rowNum, tagId, reason: err.message || "Unknown error" });
+          }
+        }
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `Import complete: ${created.length} created, ${skipped.length} skipped, ${failed.length} failed`,
+        summary: { created: created.length, skipped: skipped.length, failed: failed.length },
+        details: { created, skipped, failed },
+      });
+    } catch (error) {
+      console.error("Error importing cards:", error);
+      return res.status(500).json({ success: false, error: "Failed to import cards" });
+    }
+  },
+);
 
 /**
  * GET /api/cards/:tagId
