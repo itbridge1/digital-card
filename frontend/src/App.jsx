@@ -17,7 +17,8 @@ import OrganizationDetail from "./pages/useraccess/OrganizationDetail";
 function RoleRedirect() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
-  if (user.role === "manager") return <Navigate to="/manager/dashboard" replace />;
+  if (user.role === "manager")
+    return <Navigate to="/manager/dashboard" replace />;
   return <Navigate to="/login" replace />;
 }
 
@@ -40,7 +41,10 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="card-registration" element={<CardRegistration />} />
           <Route path="organizations" element={<Organizations />} />
-          <Route path="organizations/:tenantId" element={<OrganizationDetail />} />
+          <Route
+            path="organizations/:tenantId"
+            element={<OrganizationDetail />}
+          />
         </Route>
       </Route>
 
