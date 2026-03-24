@@ -7,7 +7,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
   DownloadOutlined, ArrowLeftOutlined, UserOutlined, EyeOutlined,
-  CopyOutlined, ShareAltOutlined, InboxOutlined,
+  CopyOutlined, ShareAltOutlined, InboxOutlined, FolderOpenOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import html2canvas from 'html2canvas';
@@ -59,6 +59,10 @@ function OrganizationDetail() {
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [zipImportModalOpen, setZipImportModalOpen] = useState(false);
+  const [zipImportFile, setZipImportFile] = useState(null);
+  const [zipImporting, setZipImporting] = useState(false);
+  const [zipImportResult, setZipImportResult] = useState(null);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -322,6 +326,26 @@ function OrganizationDetail() {
     setImportModalOpen(true);
   };
 
+  const handleZipImportOpen = () => {
+    setZipImportFile(null);
+    setZipImportResult(null);
+    setZipImportModalOpen(true);
+  };
+
+  const handleZipImportConfirm = async () => {
+    if (!zipImportFile) { message.warning('Please select a ZIP file first'); return; }
+    setZipImporting(true);
+    try {
+      const res = await cardAPI.importZip(tenantId, zipImportFile);
+      setZipImportResult(res.data);
+      fetchData();
+    } catch (err) {
+      message.error(err.response?.data?.error || 'ZIP import failed');
+    } finally {
+      setZipImporting(false);
+    }
+  };
+
   const handleImportConfirm = async () => {
     if (!importFile) { message.warning('Please select a file first'); return; }
     setImporting(true);
@@ -494,6 +518,12 @@ function OrganizationDetail() {
             onClick={handleImportOpen}
           >
             Import from Excel
+          </Button>
+          <Button
+            icon={<FolderOpenOutlined />}
+            onClick={handleZipImportOpen}
+          >
+            Import ZIP
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             Add Card Holder
@@ -694,6 +724,88 @@ function OrganizationDetail() {
             </>
           )}
         </Form>
+      </Modal>
+
+      {/* Import ZIP (Excel + Photos) modal */}
+      <Modal
+        title="Import Card Holders + Photos (ZIP)"
+        open={zipImportModalOpen}
+        onCancel={() => { if (!zipImporting) setZipImportModalOpen(false); }}
+        width={isMobile ? '95%' : 560}
+        footer={
+          zipImportResult ? (
+            <Button type="primary" onClick={() => setZipImportModalOpen(false)}>Close</Button>
+          ) : (
+            <Space>
+              <Button onClick={() => setZipImportModalOpen(false)} disabled={zipImporting}>Cancel</Button>
+              <Button type="primary" loading={zipImporting} onClick={handleZipImportConfirm}>Import</Button>
+            </Space>
+          )
+        }
+      >
+        {zipImportResult ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Alert
+              type={zipImportResult.summary.failed > 0 ? 'warning' : 'success'}
+              message={zipImportResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Created">{zipImportResult.summary.created}</Descriptions.Item>
+              <Descriptions.Item label="Skipped">{zipImportResult.summary.skipped}</Descriptions.Item>
+              <Descriptions.Item label="Failed">{zipImportResult.summary.failed}</Descriptions.Item>
+            </Descriptions>
+            {zipImportResult.details.failed.length > 0 && (
+              <div style={{ fontSize: 12, color: '#cf1322' }}>
+                <strong>Failed rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {zipImportResult.details.failed.map((f, i) => (
+                    <li key={i}>Row {f.row}{f.tagId ? ` (${f.tagId})` : ''}: {f.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {zipImportResult.details.skipped.length > 0 && (
+              <div style={{ fontSize: 12, color: '#d46b08' }}>
+                <strong>Skipped rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {zipImportResult.details.skipped.map((s, i) => (
+                    <li key={i}>Row {s.row}{s.tagId ? ` (${s.tagId})` : ''}: {s.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="ZIP file structure"
+              description={
+                <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                  Create a ZIP containing:
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                    <li>One <strong>.xlsx / .xls / .csv</strong> spreadsheet (same columns as Excel import)</li>
+                    <li>Profile photo images (<strong>.jpg / .png / .webp …</strong>) at the same root level</li>
+                    <li>Add a <strong>Photo</strong> column in the spreadsheet with the image filename (e.g. <code>_DSC0036.jpg</code>)</li>
+                  </ul>
+                </div>
+              }
+            />
+            <Upload.Dragger
+              accept=".zip"
+              beforeUpload={(file) => { setZipImportFile(file); return false; }}
+              onRemove={() => setZipImportFile(null)}
+              maxCount={1}
+              fileList={zipImportFile ? [zipImportFile] : []}
+            >
+              <p className="ant-upload-drag-icon"><FolderOpenOutlined /></p>
+              <p className="ant-upload-text">Click or drag ZIP file here</p>
+              <p className="ant-upload-hint">.zip containing Excel + photos — max 50 MB</p>
+            </Upload.Dragger>
+          </div>
+        )}
       </Modal>
 
       {/* Import from Excel modal */}

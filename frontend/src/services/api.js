@@ -95,6 +95,12 @@ export const cardAPI = {
     form.append("tenantId", tenantId);
     return api.post("/cards/import", form);
   },
+  importZip: (tenantId, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("tenantId", tenantId);
+    return api.post("/cards/import-zip", form);
+  },
 };
 
 // Tenant API methods

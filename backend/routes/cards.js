@@ -8,6 +8,9 @@ const { getIO } = require("../utils/socket");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const { v4: uuidv4 } = require("uuid");
+const AdmZip = require("adm-zip");
+const fs = require("fs");
+const path = require("path");
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -576,6 +579,199 @@ router.post(
     } catch (error) {
       console.error("Error importing cards:", error);
       return res.status(500).json({ success: false, error: "Failed to import cards" });
+    }
+  },
+);
+
+// Multer config for ZIP imports (50 MB max, memory storage)
+const zipImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = file.originalname.split(".").pop().toLowerCase();
+    if (ext === "zip") cb(null, true);
+    else cb(new Error("Only .zip files are allowed"));
+  },
+});
+
+/**
+ * POST /api/cards/import-zip
+ * Bulk import card holders from a ZIP that contains one Excel/CSV file
+ * plus the profile photo files referenced in the "Photo" column.
+ * Images are saved to uploads/profiles/{tenantId}/ and linked on each card.
+ */
+router.post(
+  "/import-zip",
+  authorize("admin", "manager"),
+  (req, res, next) => {
+    zipImportUpload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ success: false, error: err.message });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+
+      const targetTenantId = String(req.body.tenantId || req.tenantId || "").trim();
+      if (!targetTenantId) {
+        return res.status(400).json({ success: false, error: "tenantId is required" });
+      }
+
+      // Extract ZIP contents into memory
+      let zip;
+      try {
+        zip = new AdmZip(req.file.buffer);
+      } catch {
+        return res.status(400).json({ success: false, error: "Invalid or corrupt ZIP file" });
+      }
+
+      const entries = zip.getEntries();
+
+      // Separate Excel entries from image entries (ignore __MACOSX and hidden files)
+      const EXCEL_EXT = /\.(xlsx|xls|csv)$/i;
+      const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
+
+      let excelEntry = null;
+      const imageMap = {}; // normalised filename -> AdmZip entry
+
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        const base = path.basename(entry.entryName);
+        if (base.startsWith(".") || entry.entryName.includes("__MACOSX")) continue;
+
+        if (!excelEntry && EXCEL_EXT.test(base)) {
+          excelEntry = entry;
+        } else if (IMAGE_EXT.test(base)) {
+          imageMap[base.toLowerCase()] = entry;
+        }
+      }
+
+      if (!excelEntry) {
+        return res.status(400).json({ success: false, error: "No Excel/CSV file found inside the ZIP" });
+      }
+
+      // Parse the spreadsheet
+      const workbook = XLSX.read(excelEntry.getData(), { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
+      }
+
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+      if (rows.length === 0) {
+        return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
+      }
+
+      // Ensure output directory exists
+      const profilesDir = path.join(__dirname, "..", "uploads", "profiles", targetTenantId.toUpperCase());
+      fs.mkdirSync(profilesDir, { recursive: true });
+
+      const norm = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const headers = Object.keys(rows[0]);
+      const headerMap = {};
+      headers.forEach((h) => { headerMap[norm(h)] = h; });
+
+      const pick = (row, ...keys) => {
+        for (const k of keys) {
+          const real = headerMap[norm(k)];
+          if (real !== undefined) {
+            const val = String(row[real] ?? "").trim();
+            if (val) return val;
+          }
+        }
+        return "";
+      };
+
+      const created = [];
+      const skipped = [];
+      const failed = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2;
+
+        const rawTagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
+        const tagId = rawTagId || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+
+        // Resolve profile photo from ZIP
+        const photoFilename = pick(row, "Photo", "Image", "Photo File", "Profile Photo").toLowerCase();
+        let profileImageUrl = null;
+        if (photoFilename && imageMap[photoFilename]) {
+          const imgEntry = imageMap[photoFilename];
+          const destFilename = `${uuidv4()}_${path.basename(photoFilename)}`;
+          const destPath = path.join(profilesDir, destFilename);
+          fs.writeFileSync(destPath, imgEntry.getData());
+          profileImageUrl = `/uploads/profiles/${targetTenantId.toUpperCase()}/${destFilename}`;
+        }
+
+        const metadata = {
+          name: pick(row, "Name", "Full Name", "fullname"),
+          title: pick(row, "Title", "Position Title"),
+          email: pick(row, "Email", "E-mail", "Email Address"),
+          phone: pick(row, "Phone", "Phone Number", "Mobile", "Contact", "Contact No", "Phone No"),
+          address: pick(row, "Address", "Full Address"),
+          // SCHOOL
+          studentId: pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Admission No"),
+          grade: pick(row, "Class", "Grade", "Grade Level"),
+          section: pick(row, "Section", "Class Section"),
+          house: pick(row, "House"),
+          guardianName: pick(row, "Guardian", "Guardian Name", "GuardianName", "Parent", "Parent Name"),
+          guardianPhone: pick(row, "Guardian Phone", "GuardianPhone", "Parent Phone", "Guardian Contact"),
+          // HOSPITAL
+          employeeId: pick(row, "Employee ID", "EmployeeID", "Emp ID", "Staff ID"),
+          department: pick(row, "Department", "Dept"),
+          specialization: pick(row, "Specialization", "Speciality"),
+          licenseNumber: pick(row, "License Number", "LicenseNumber", "License No"),
+          emergencyContact: pick(row, "Emergency Contact", "EmergencyContact"),
+          // BUSINESS
+          company: pick(row, "Company", "Organization", "Organisation"),
+          position: pick(row, "Position", "Job Title", "Designation"),
+          linkedIn: pick(row, "LinkedIn", "Linkedin"),
+          website: pick(row, "Website", "Web"),
+        };
+
+        Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
+
+        const businessUrl = pick(row, "Business URL", "BusinessURL", "URL", "url") || undefined;
+
+        try {
+          const { card } = await registerNfcCard({
+            tagId,
+            tenantId: targetTenantId,
+            businessUrl,
+            status: "registered",
+            metadata,
+            actorUserId: req.user.id,
+            actorRole: req.user.role,
+            actorTenantId: req.user.tenantId,
+          });
+
+          if (profileImageUrl) {
+            await card.update({ profileImageUrl });
+          }
+
+          created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId, hasPhoto: !!profileImageUrl });
+        } catch (err) {
+          if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
+            skipped.push({ row: rowNum, tagId, reason: "Tag ID already registered" });
+          } else {
+            failed.push({ row: rowNum, tagId, reason: err.message || "Unknown error" });
+          }
+        }
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `Import complete: ${created.length} created, ${skipped.length} skipped, ${failed.length} failed`,
+        summary: { created: created.length, skipped: skipped.length, failed: failed.length },
+        details: { created, skipped, failed },
+      });
+    } catch (error) {
+      console.error("Error importing ZIP:", error);
+      return res.status(500).json({ success: false, error: "Failed to import ZIP" });
     }
   },
 );
