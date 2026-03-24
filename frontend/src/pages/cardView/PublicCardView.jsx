@@ -70,7 +70,7 @@ function PublicCardView() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 px-3 py-4 sm:p-6">
       <SelectCard
         design="one"
         card={card}

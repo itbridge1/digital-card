@@ -8,7 +8,7 @@ import {
   ApartmentOutlined,
   CreditCardOutlined,
 } from "@ant-design/icons";
-import { Button, Layout, Menu, theme, Avatar, Typography, Dropdown } from "antd";
+import { Button, Layout, Menu, theme, Avatar, Typography, Dropdown, Grid } from "antd";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const { Header, Sider, Content } = Layout;
@@ -18,6 +18,8 @@ function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.lg;
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -67,7 +69,15 @@ function AdminLayout() {
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider
+        trigger={null}
+        collapsible
+        breakpoint="lg"
+        collapsedWidth={0}
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+        onBreakpoint={(broken) => setCollapsed(broken)}
+      >
         <div className="text-center text-white py-4 text-lg font-semibold">
           {collapsed ? "NFC" : "NFC Admin"}
         </div>
@@ -84,7 +94,11 @@ function AdminLayout() {
       <Layout>
         {/* Header */}
         <Header
-          style={{ background: colorBgContainer, paddingLeft: 16, paddingRight: 24 }}
+          style={{
+            background: colorBgContainer,
+            paddingLeft: 12,
+            paddingRight: isMobile ? 12 : 24,
+          }}
           className="flex justify-between items-center"
         >
           <Button
@@ -97,7 +111,7 @@ function AdminLayout() {
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
               <Avatar icon={<UserOutlined />} size="small" />
-              <Text strong>{user.name || "Admin"}</Text>
+              {!isMobile && <Text strong>{user.name || "Admin"}</Text>}
             </div>
           </Dropdown>
         </Header>
@@ -105,11 +119,12 @@ function AdminLayout() {
         {/* Content */}
         <Content
           style={{
-            margin: "24px 16px",
-            padding: 24,
+            margin: isMobile ? "12px" : "24px 16px",
+            padding: isMobile ? 12 : 24,
             background: colorBgContainer,
             borderRadius: borderRadiusLG,
             minHeight: 280,
+            overflowX: "auto",
           }}
         >
           <Outlet />
