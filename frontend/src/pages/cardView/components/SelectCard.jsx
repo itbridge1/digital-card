@@ -92,7 +92,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
   return (
     <Card
       style={{
-        width: 340,
+        width: "min(340px, 100%)",
         borderRadius: 16,
         overflow: "hidden",
         position: "relative",
@@ -297,7 +297,7 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
   return (
     <Card
       style={{
-        width: 340,
+        width: "min(340px, 100%)",
         borderRadius: 24,
         overflow: "hidden",
         position: "relative",
@@ -508,7 +508,7 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
   return (
     <Card
       style={{
-        width: 340, // increased width
+        width: "min(340px, 100%)",
         borderRadius: "18px",
         overflow: "hidden",
         position: "relative",
@@ -674,7 +674,7 @@ function SelectCard({ design = "one", card, tenant, formatFieldName, theme }) {
   const SelectedDesign = CARD_DESIGNS[design] || CARD_DESIGNS.one;
 
   return (
-    <div className="flex items-center justify-center">
+    <div className="flex w-full items-center justify-center">
       <SelectedDesign
         card={card}
         tenant={tenant}

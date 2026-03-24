@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Space, Typography,
   message, Popconfirm, Avatar, Upload, Tag, Breadcrumb, Spin, Tooltip,
-  Alert, Descriptions,
+  Alert, Descriptions, Grid,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
@@ -60,6 +60,8 @@ function OrganizationDetail() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   // Hidden container for card export rendering
   const exportContainerRef = useRef(null);
@@ -461,7 +463,7 @@ function OrganizationDetail() {
       />
 
       {/* Org header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         {organization?.logoUrl && (
           <Avatar
             src={`${API_BASE}${organization.logoUrl}`}
@@ -477,9 +479,9 @@ function OrganizationDetail() {
       </div>
 
       {/* Action bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <Text strong>{cards.length} card holder{cards.length !== 1 ? 's' : ''}</Text>
-        <Space>
+        <Space wrap>
           <Button
             icon={<DownloadOutlined />}
             onClick={handleExport}
@@ -504,6 +506,8 @@ function OrganizationDetail() {
         dataSource={cards}
         rowKey="id"
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 1300 }}
+        size={isMobile ? 'small' : 'middle'}
       />
 
       {/* Hidden export templates — rendered off-screen for html2canvas */}
@@ -538,7 +542,7 @@ function OrganizationDetail() {
         onCancel={() => setModalOpen(false)}
         confirmLoading={saving || profileUploading}
         okText={editingCard ? 'Save Changes' : 'Add'}
-        width={520}
+        width={isMobile ? '95%' : 520}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           {!editingCard && (
@@ -560,7 +564,7 @@ function OrganizationDetail() {
           )}
 
           <Form.Item label="Profile Photo">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               {profileUrl ? (
                 <Avatar src={`${API_BASE}${profileUrl}`} size={56} />
               ) : (
@@ -594,7 +598,7 @@ function OrganizationDetail() {
               <Form.Item label="Full Name" name="name" rules={[{ required: true, message: 'Required' }]}>
                 <Input placeholder="Full name" />
               </Form.Item>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <Form.Item label="Class" name="grade" style={{ marginBottom: 0 }}>
                   <Input placeholder="One" />
                 </Form.Item>
@@ -620,7 +624,7 @@ function OrganizationDetail() {
           {/* HOSPITAL fields */}
           {orgType === 'HOSPITAL' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <Form.Item label="Employee ID" name="employeeId" style={{ marginBottom: 0 }}>
                   <Input />
                 </Form.Item>
@@ -628,7 +632,7 @@ function OrganizationDetail() {
                   <Input placeholder="e.g. Cardiology" />
                 </Form.Item>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <Form.Item label="Specialization" name="specialization" style={{ marginBottom: 0 }}>
                   <Input />
                 </Form.Item>
@@ -658,7 +662,7 @@ function OrganizationDetail() {
           {/* BUSINESS / default fields */}
           {orgType !== 'SCHOOL' && orgType !== 'HOSPITAL' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <Form.Item label="Position / Title" name="position" style={{ marginBottom: 0 }}>
                   <Input placeholder="e.g. Senior Developer" />
                 </Form.Item>
@@ -666,7 +670,7 @@ function OrganizationDetail() {
                   <Input placeholder="Company name" />
                 </Form.Item>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <Form.Item label="LinkedIn" name="linkedIn" style={{ marginBottom: 0 }}>
                   <Input placeholder="linkedin.com/in/..." />
                 </Form.Item>
@@ -697,7 +701,7 @@ function OrganizationDetail() {
         title="Import Card Holders from Excel"
         open={importModalOpen}
         onCancel={() => { if (!importing) setImportModalOpen(false); }}
-        width={520}
+        width={isMobile ? '95%' : 520}
         footer={
           importResult ? (
             <Button type="primary" onClick={() => setImportModalOpen(false)}>Close</Button>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Row, Col, Card, Statistic, Button, Modal, Form,
-  Input, Select, Typography, message, Table, Tag, Space, Popconfirm, Tooltip, Avatar,
+  Input, Select, Typography, message, Table, Tag, Space, Popconfirm, Tooltip, Avatar, Grid,
 } from 'antd';
 import {
   PlusOutlined, UserOutlined, ApartmentOutlined,
@@ -22,6 +22,8 @@ function AdminDashboard() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const fetchOrgs = async () => {
     setLoadingOrgs(true);
@@ -236,6 +238,7 @@ function AdminDashboard() {
           rowKey="id"
           pagination={{ pageSize: 8 }}
           size="small"
+          scroll={{ x: 980 }}
         />
       </Card>
 
@@ -247,6 +250,7 @@ function AdminDashboard() {
           rowKey="tenantId"
           pagination={{ pageSize: 5 }}
           size="small"
+          scroll={{ x: 640 }}
         />
       </Card>
 
@@ -258,6 +262,7 @@ function AdminDashboard() {
         onCancel={() => { setCreateModalOpen(false); form.resetFields(); }}
         confirmLoading={creating}
         okText="Create Account"
+        width={isMobile ? '95%' : 560}
       >
         <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
           Manager accounts can manage organizations and card holders.

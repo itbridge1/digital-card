@@ -15,6 +15,7 @@ import {
   Tag,
   Typography,
   message,
+  Grid,
 } from 'antd';
 import { EditOutlined, LinkOutlined, PlusOutlined, WifiOutlined } from '@ant-design/icons';
 import { io } from 'socket.io-client';
@@ -43,6 +44,8 @@ function CardRegistration() {
   const autoRegisterRef = useRef(autoRegisterOnScan);
   const modalOpenRef = useRef(modalOpen);
   const selectedTenantRef = useRef(selectedTenant);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   useEffect(() => {
     autoRegisterRef.current = autoRegisterOnScan;
@@ -372,9 +375,12 @@ function CardRegistration() {
   return (
     <Spin spinning={isBusy} tip="Syncing card data...">
     <div>
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+      <Space
+        wrap
+        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}
+      >
         <Title level={4} style={{ margin: 0 }}>Card Registration</Title>
-        <Space>
+        <Space wrap>
           {socketState === 'connecting' && (
             <Tag color="processing">
               <Space size={6}>
@@ -416,6 +422,8 @@ function CardRegistration() {
           columns={registrationColumns}
           dataSource={registrations}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 1050 }}
+          size={isMobile ? 'small' : 'middle'}
         />
       </Card>
 
@@ -428,6 +436,7 @@ function CardRegistration() {
         onCancel={() => setModalOpen(false)}
         onOk={() => registerCard()}
         okText="Register"
+        width={isMobile ? '95%' : 520}
       >
         <Form form={form} layout="vertical" initialValues={{ status: 'registered' }}>
           <Form.Item label="Tenant (optional)" name="tenantId">
@@ -465,6 +474,7 @@ function CardRegistration() {
         }}
         onOk={updateRegistration}
         okText="Save"
+        width={isMobile ? '95%' : 520}
       >
         <Form form={editForm} layout="vertical">
           <Form.Item label="Tag ID" name="tagId">

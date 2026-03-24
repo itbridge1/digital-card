@@ -9,6 +9,7 @@ import {
   Switch,
   Drawer,
   Select,
+  Grid,
 } from "antd";
 import {
   FaArrowLeft,
@@ -82,6 +83,8 @@ function CardView() {
     }
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   useEffect(() => {
     localStorage.setItem("cardTheme", JSON.stringify(theme));
@@ -394,14 +397,14 @@ function CardView() {
 
   return (
     <div
-      className={`min-h-screen p-6 transition-colors duration-300 ${
+      className={`min-h-screen px-3 py-4 sm:p-6 transition-colors duration-300 ${
         theme.isDark ? "bg-gray-900" : "bg-gray-100"
       }`}
     >
       <div className="mx-auto mb-5 flex w-full max-w-5xl justify-end">
         {isOwner && (
           <Button
-            size="large"
+            size={isMobile ? "middle" : "large"}
             icon={<FaSlidersH />}
             onClick={() => setSidebarOpen(true)}
             style={{
@@ -434,7 +437,7 @@ function CardView() {
             </div>
           }
           placement="right"
-          width={390}
+          width={isMobile ? "92vw" : 390}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         >

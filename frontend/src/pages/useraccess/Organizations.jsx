@@ -14,6 +14,7 @@ import {
   Avatar,
   Upload,
   Tooltip,
+  Grid,
 } from "antd";
 import {
   PlusOutlined,
@@ -41,6 +42,8 @@ function Organizations() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState("");
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = currentUser.role === "admin";
@@ -258,6 +261,8 @@ function Organizations() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
           marginBottom: 16,
         }}
       >
@@ -275,6 +280,8 @@ function Organizations() {
         rowKey="tenantId"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 920 }}
+        size={isMobile ? "small" : "middle"}
       />
 
       <Modal
@@ -284,6 +291,7 @@ function Organizations() {
         onCancel={() => setModalOpen(false)}
         confirmLoading={saving}
         okText={editingOrg ? "Save Changes" : "Create"}
+        width={isMobile ? "95%" : 560}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item

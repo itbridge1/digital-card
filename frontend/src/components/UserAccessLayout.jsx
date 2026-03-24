@@ -7,6 +7,7 @@ import {
   Typography,
   Dropdown,
   Avatar,
+  Grid,
 } from "antd";
 import {
   MenuFoldOutlined,
@@ -25,6 +26,8 @@ function UserAccessLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.lg;
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
@@ -62,7 +65,15 @@ function UserAccessLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider trigger={null} collapsible collapsed={collapsed}>
+      <Sider
+        trigger={null}
+        collapsible
+        breakpoint="lg"
+        collapsedWidth={0}
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+        onBreakpoint={(broken) => setCollapsed(broken)}
+      >
         <div
           style={{
             textAlign: "center",
@@ -92,8 +103,8 @@ function UserAccessLayout() {
         <Header
           style={{
             background: colorBgContainer,
-            paddingLeft: 16,
-            paddingRight: 24,
+            paddingLeft: 12,
+            paddingRight: isMobile ? 12 : 24,
           }}
           className="flex justify-between items-center"
         >
@@ -113,18 +124,19 @@ function UserAccessLayout() {
               }}
             >
               <Avatar icon={<UserOutlined />} size="small" />
-              <Text strong>{user.name || "User Access"}</Text>
+              {!isMobile && <Text strong>{user.name || "User Access"}</Text>}
             </div>
           </Dropdown>
         </Header>
 
         <Content
           style={{
-            margin: "24px 16px",
-            padding: 24,
+            margin: isMobile ? "12px" : "24px 16px",
+            padding: isMobile ? 12 : 24,
             background: colorBgContainer,
             borderRadius: borderRadiusLG,
             minHeight: 280,
+            overflowX: "auto",
           }}
         >
           <Outlet />
