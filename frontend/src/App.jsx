@@ -6,6 +6,7 @@ import Users from "./pages/admin/Users";
 import CardRegistration from "./pages/admin/CardRegistration";
 import ErrorPage from "./pages/ErrorPage";
 import Login from "./pages/Login";
+import ChangePassword from "./pages/ChangePassword";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CardView from "./pages/cardView/CardView";
 import PublicCardView from "./pages/cardView/PublicCardView";
@@ -13,12 +14,17 @@ import UserAccessLayout from "./components/UserAccessLayout";
 import UserAccessDashboard from "./pages/useraccess/Dashboard";
 import Organizations from "./pages/useraccess/Organizations";
 import OrganizationDetail from "./pages/useraccess/OrganizationDetail";
+import TenantLayout from "./components/TenantLayout";
+import TenantDashboard from "./pages/tenant/Dashboard";
+import TenantCardHolders from "./pages/tenant/CardHolders";
 
 function RoleRedirect() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
   if (user.role === "manager")
     return <Navigate to="/manager/dashboard" replace />;
+  if (user.role === "tenant")
+    return <Navigate to="/tenant/dashboard" replace />;
   return <Navigate to="/login" replace />;
 }
 
@@ -58,6 +64,16 @@ function App() {
             element={<OrganizationDetail />}
           />
         </Route>
+      </Route>
+
+      {/* Tenant routes */}
+      <Route element={<ProtectedRoute allowedRoles={["tenant"]} />}>
+        <Route path="/tenant" element={<TenantLayout />}>
+          <Route path="dashboard" element={<TenantDashboard />} />
+          <Route path="card-holders" element={<TenantCardHolders />} />
+        </Route>
+        {/* Password change — shown outside the layout so it's the only option */}
+        <Route path="/change-password" element={<ChangePassword />} />
       </Route>
 
       {/* Default authenticated route — redirect to role-specific home */}

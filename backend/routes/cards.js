@@ -583,10 +583,10 @@ router.post(
   },
 );
 
-// Multer config for ZIP imports (50 MB max, memory storage)
+// Multer config for ZIP imports (70 MB max, memory storage)
 const zipImportUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 70 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = file.originalname.split(".").pop().toLowerCase();
     if (ext === "zip") cb(null, true);

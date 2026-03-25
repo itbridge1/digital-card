@@ -4,6 +4,19 @@ const { body, validationResult } = require("express-validator");
 const { User, Tenant } = require("../models");
 const generateToken = require("../utils/generateToken");
 const { protect, authorize } = require("../middleware/auth");
+const crypto = require("crypto");
+
+/** Generates a human-readable one-time password: e.g. Kx7#mP2! */
+function generateOTP() {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "#@!";
+  const all = upper + lower + digits + special;
+  const rand = (set) => set[crypto.randomInt(0, set.length)];
+  const rest = Array.from({ length: 5 }, () => rand(all)).join("");
+  return rand(upper) + rand(digits) + rand(special) + rand(lower) + rest;
+}
 
 /**
  * POST /api/auth/register
@@ -12,16 +25,13 @@ const { protect, authorize } = require("../middleware/auth");
 router.post(
   "/register",
   protect,
-  authorize("admin"),
+  authorize("admin", "manager"),
   [
     body("name").notEmpty().trim().withMessage("Name is required"),
     body("email")
       .isEmail()
       .normalizeEmail()
       .withMessage("Valid email is required"),
-    body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters"),
     body("tenantId").notEmpty().withMessage("Tenant ID is required"),
   ],
   async (req, res) => {
@@ -35,15 +45,47 @@ router.post(
         });
       }
 
-      const { name, email, password, tenantId, role } = req.body;
+      const { name, email, tenantId, role } = req.body;
 
-      // Only admin and manager roles are valid login accounts
-      const allowedRoles = ["admin", "manager"];
+      // Allowed login roles
+      const allowedRoles = ["admin", "manager", "tenant"];
       const assignedRole = role || "manager";
       if (!allowedRoles.includes(assignedRole)) {
         return res.status(400).json({
           success: false,
-          error: "Role must be admin or manager",
+          error: "Role must be admin, manager, or tenant",
+        });
+      }
+
+      // Only admin can create admin/manager accounts
+      if (["admin", "manager"].includes(assignedRole) && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          error: "Only admins can create admin or manager accounts",
+        });
+      }
+
+      // A manager can only create tenant accounts for organizations they own
+      if (assignedRole === "tenant" && req.user.role === "manager") {
+        const ownedTenant = await Tenant.findOne({
+          where: { tenantId: tenantId.toUpperCase(), createdBy: req.user.id },
+        });
+        if (!ownedTenant) {
+          return res.status(403).json({
+            success: false,
+            error: "You can only create tenant accounts for your own organizations",
+          });
+        }
+      }
+
+      // For tenant accounts, password is always auto-generated
+      const isTenantRole = assignedRole === "tenant";
+      const password = isTenantRole ? generateOTP() : req.body.password;
+
+      if (!isTenantRole && (!password || password.length < 6)) {
+        return res.status(400).json({
+          success: false,
+          error: "Password must be at least 6 characters",
         });
       }
 
@@ -75,18 +117,29 @@ router.post(
         password,
         tenantId: tenantId.toUpperCase(),
         role: assignedRole,
+        mustChangePassword: isTenantRole,
       });
+
+      const responseData = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        tenantId: user.tenantId,
+        role: user.role,
+      };
+
+      // Return the generated password once so the manager can share it
+      if (isTenantRole) {
+        responseData.generatedPassword = password;
+        responseData.mustChangePassword = true;
+      }
 
       res.status(201).json({
         success: true,
-        message: "Account created successfully",
-        data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          tenantId: user.tenantId,
-          role: user.role,
-        },
+        message: isTenantRole
+          ? "Tenant account created. Share the generated password with the organization."
+          : "Account created successfully",
+        data: responseData,
       });
     } catch (error) {
       console.error("Register error:", error);
@@ -171,6 +224,7 @@ router.post(
           email: user.email,
           tenantId: user.tenantId,
           role: user.role,
+          mustChangePassword: user.mustChangePassword || false,
           tenant: user.Tenant,
           token,
         },

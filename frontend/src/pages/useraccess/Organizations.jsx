@@ -15,6 +15,8 @@ import {
   Upload,
   Tooltip,
   Grid,
+  Alert,
+  Descriptions,
 } from "antd";
 import {
   PlusOutlined,
@@ -23,11 +25,14 @@ import {
   EyeOutlined,
   UploadOutlined,
   SearchOutlined,
+  KeyOutlined,
+  UserAddOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useraccessAPI, uploadAPI } from "../../services/api";
 
-const { Title } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
 const API_BASE =
@@ -54,6 +59,14 @@ function Organizations() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [managerFilter, setManagerFilter] = useState("");
+
+  // Tenant credential management state
+  const [credModalOrg, setCredModalOrg] = useState(null);      // org being managed
+  const [credAccount, setCredAccount] = useState(null);         // existing tenant account info
+  const [credLoadingOrg, setCredLoadingOrg] = useState(null);  // tenantId currently loading
+  const [credSaving, setCredSaving] = useState(false);
+  const [otpResult, setOtpResult] = useState(null);            // { email, generatedPassword }
+  const [createAccountForm] = Form.useForm();
 
   const fetchOrgs = async () => {
     setLoading(true);
@@ -202,8 +215,55 @@ function Organizations() {
     return data;
   }, [orgs, search, typeFilter, statusFilter, managerFilter]);
 
-  const handleDeactivate = async (tenantId) => {
+  // Open credential management modal for an org
+  const openCredModal = async (org) => {
+    setCredModalOrg(org);
+    setCredAccount(null);
+    setOtpResult(null);
+    createAccountForm.resetFields();
+    setCredLoadingOrg(org.tenantId);
     try {
+      const res = await useraccessAPI.getTenantAccount(org.tenantId);
+      setCredAccount(res.data.data);
+    } catch {
+      message.error("Failed to load tenant account info");
+    } finally {
+      setCredLoadingOrg(null);
+    }
+  };
+
+  const handleCreateTenantAccount = async () => {
+    try {
+      const values = await createAccountForm.validateFields();
+      setCredSaving(true);
+      const res = await useraccessAPI.createTenantAccount(credModalOrg.tenantId, values);
+      const data = res.data.data;
+      setOtpResult({ email: data.email, generatedPassword: data.generatedPassword });
+      setCredAccount({ name: data.name, email: data.email, isActive: true, mustChangePassword: true });
+      message.success("Tenant account created");
+    } catch (err) {
+      if (err?.response?.data?.error) message.error(err.response.data.error);
+    } finally {
+      setCredSaving(false);
+    }
+  };
+
+  const handleResetCredentials = async () => {
+    try {
+      setCredSaving(true);
+      const res = await useraccessAPI.resetCredentials(credModalOrg.tenantId);
+      const data = res.data.data;
+      setOtpResult({ email: data.email, generatedPassword: data.generatedPassword });
+      setCredAccount((prev) => ({ ...prev, mustChangePassword: true, isActive: true }));
+      message.success("Password reset successfully");
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to reset password");
+    } finally {
+      setCredSaving(false);
+    }
+  };
+
+  const handleDeactivate = async (tenantId) => {    try {
       await useraccessAPI.deleteOrganization(tenantId);
       message.success("Organization deactivated");
       fetchOrgs();
@@ -295,6 +355,14 @@ function Organizations() {
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEdit(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Manage Login">
+            <Button
+              size="small"
+              icon={<KeyOutlined />}
+              loading={credLoadingOrg === record.tenantId}
+              onClick={() => openCredModal(record)}
             />
           </Tooltip>
           {isAdmin && record.isActive && (
@@ -391,8 +459,7 @@ function Organizations() {
         confirmLoading={saving}
         okText={editingOrg ? "Save Changes" : "Create"}
         width={isMobile ? "95%" : 560}
-      >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+      >        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
             label="Organization ID"
             name="tenantId"
@@ -459,6 +526,142 @@ function Organizations() {
             </div>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Credential Management Modal */}
+      <Modal
+        title={
+          <Space>
+            <KeyOutlined />
+            <span>
+              Login Credentials — {credModalOrg?.name}
+            </span>
+          </Space>
+        }
+        open={!!credModalOrg}
+        onCancel={() => { setCredModalOrg(null); setOtpResult(null); }}
+        footer={null}
+        width={isMobile ? "95%" : 500}
+        destroyOnClose
+      >
+        {/* Show generated password result */}
+        {otpResult && (
+          <Alert
+            type="success"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Password generated — share this with the organization"
+            description={
+              <div>
+                <Descriptions size="small" column={1} style={{ marginTop: 8 }}>
+                  <Descriptions.Item label="Email">
+                    <Text copyable>{otpResult.email}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="One-Time Password">
+                    <Text
+                      strong
+                      copyable
+                      style={{ fontFamily: "monospace", fontSize: 16, letterSpacing: 2 }}
+                    >
+                      {otpResult.generatedPassword}
+                    </Text>
+                  </Descriptions.Item>
+                </Descriptions>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  The organization will be prompted to change this password on first login.
+                </Text>
+              </div>
+            }
+          />
+        )}
+
+        {/* Existing account info */}
+        {credAccount ? (
+          <div>
+            <Descriptions
+              title="Current Tenant Account"
+              size="small"
+              column={1}
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions.Item label="Name">{credAccount.name}</Descriptions.Item>
+              <Descriptions.Item label="Email">{credAccount.email}</Descriptions.Item>
+              <Descriptions.Item label="Status">
+                {credAccount.isActive ? (
+                  <Tag color="green">Active</Tag>
+                ) : (
+                  <Tag color="red">Inactive</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Must Change Password">
+                {credAccount.mustChangePassword ? (
+                  <Tag color="orange">Yes — awaiting first login</Tag>
+                ) : (
+                  <Tag color="green">No</Tag>
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Popconfirm
+              title="Reset password?"
+              description="A new one-time password will be generated. The previous password will no longer work."
+              onConfirm={handleResetCredentials}
+              okText="Reset"
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                danger
+                icon={<KeyOutlined />}
+                loading={credSaving}
+                block
+              >
+                Generate New One-Time Password
+              </Button>
+            </Popconfirm>
+          </div>
+        ) : (
+          /* No account yet — show create form */
+          <div>
+            <Alert
+              type="info"
+              showIcon
+              message="No login account exists for this organization yet."
+              style={{ marginBottom: 16 }}
+            />
+            <Form
+              form={createAccountForm}
+              layout="vertical"
+              onFinish={handleCreateTenantAccount}
+            >
+              <Form.Item
+                label="Contact Name"
+                name="name"
+                rules={[{ required: true, message: "Required" }]}
+              >
+                <Input placeholder="Full name of the account holder" />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[
+                  { required: true, message: "Required" },
+                  { type: "email", message: "Invalid email" },
+                ]}
+              >
+                <Input placeholder="login@organization.com" />
+              </Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={credSaving}
+                icon={<UserAddOutlined />}
+                block
+              >
+                Create Tenant Login &amp; Generate Password
+              </Button>
+            </Form>
+          </div>
+        )}
       </Modal>
     </div>
   );

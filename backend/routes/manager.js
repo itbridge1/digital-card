@@ -4,6 +4,20 @@ const { Card, Tenant, CardRegister, User } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const { registerNfcCard } = require("../utils/nfcRegistration");
 const { Op } = require("sequelize");
+const crypto = require("crypto");
+
+/** Generates a human-readable one-time password */
+function generateOTP() {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "#@!";
+  const all = upper + lower + digits + special;
+  const rand = (set) => set[crypto.randomInt(0, set.length)];
+  const rest = Array.from({ length: 5 }, () => rand(all)).join("");
+  return rand(upper) + rand(digits) + rand(special) + rand(lower) + rest;
+}
+
 // All routes require authentication and admin or manager role
 router.use(protect, authorize("admin", "manager"));
 
@@ -517,6 +531,137 @@ router.get("/organizations/:tenantId/export", async (req, res) => {
     res
       .status(500)
       .json({ success: false, error: "Failed to fetch export data" });
+  }
+});
+
+/**
+ * GET /api/manager/organizations/:tenantId/tenant-account
+ * Check if a tenant login account exists for this organization
+ */
+router.get("/organizations/:tenantId/tenant-account", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    const account = await User.findOne({
+      where: { tenantId, role: "tenant" },
+      attributes: ["id", "name", "email", "isActive", "mustChangePassword", "createdAt"],
+    });
+
+    res.json({ success: true, data: account || null });
+  } catch (error) {
+    console.error("Error fetching tenant account:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch tenant account" });
+  }
+});
+
+/**
+ * POST /api/manager/organizations/:tenantId/tenant-account
+ * Create a tenant login account for the organization with a generated password.
+ */
+router.post("/organizations/:tenantId/tenant-account", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId, isActive: true } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found or inactive" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    // One tenant account per organization
+    const existing = await User.findOne({ where: { tenantId, role: "tenant" } });
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: "A tenant login account already exists for this organization. Use reset instead.",
+      });
+    }
+
+    const { name, email } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: "name and email are required" });
+    }
+
+    const emailInUse = await User.findOne({ where: { email } });
+    if (emailInUse) {
+      return res.status(409).json({ success: false, error: "Email is already in use" });
+    }
+
+    const password = generateOTP();
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      tenantId,
+      role: "tenant",
+      mustChangePassword: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Tenant account created. Share the generated password with the organization.",
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        tenantId: user.tenantId,
+        generatedPassword: password,
+        mustChangePassword: true,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating tenant account:", error);
+    res.status(500).json({ success: false, error: "Failed to create tenant account" });
+  }
+});
+
+/**
+ * POST /api/manager/organizations/:tenantId/reset-credentials
+ * Reset the tenant login password — generates a new one-time password.
+ * Manager must own the org; admins can reset any.
+ */
+router.post("/organizations/:tenantId/reset-credentials", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    const account = await User.findOne({ where: { tenantId, role: "tenant" } });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: "No tenant login account found. Create one first.",
+      });
+    }
+
+    const newPassword = generateOTP();
+    account.password = newPassword;     // model hook will hash it
+    account.mustChangePassword = true;
+    account.isActive = true;             // re-activate if it was deactivated
+    await account.save();
+
+    res.json({
+      success: true,
+      message: "Password reset successfully. Share the new password with the organization.",
+      data: {
+        id: account.id,
+        name: account.name,
+        email: account.email,
+        generatedPassword: newPassword,
+        mustChangePassword: true,
+      },
+    });
+  } catch (error) {
+    console.error("Error resetting credentials:", error);
+    res.status(500).json({ success: false, error: "Failed to reset credentials" });
   }
 });
 

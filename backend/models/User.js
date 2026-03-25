@@ -33,12 +33,17 @@ const User = sequelize.define('User', {
     }
   },
   role: {
-    type: DataTypes.ENUM('admin', 'manager', 'viewer'),
+    type: DataTypes.ENUM('admin', 'manager', 'tenant', 'viewer'),
     defaultValue: 'viewer'
   },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  mustChangePassword: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Forces user to set a new password on next login'
   }
 }, {
   tableName: 'users',

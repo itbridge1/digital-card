@@ -18,6 +18,7 @@ function ProtectedRoute({ allowedRoles }) {
     // Redirect to appropriate home based on role
     if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
     if (user.role === "manager") return <Navigate to="/manager/dashboard" replace />;
+    if (user.role === "tenant") return <Navigate to="/tenant/dashboard" replace />;
     return <Navigate to="/login" replace />;
   }
 

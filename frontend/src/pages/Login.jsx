@@ -39,8 +39,15 @@ function Login() {
 
       message.success("Login successful");
 
+      // If tenant account must change password, redirect there first
+      if (user.mustChangePassword) {
+        navigate("/change-password");
+        return;
+      }
+
       if (user.role === "admin") navigate("/admin/dashboard");
       else if (user.role === "manager") navigate("/manager/dashboard");
+      else if (user.role === "tenant") navigate("/tenant/dashboard");
       else navigate("/");
     } catch (err) {
       message.error(err.response?.data?.error || err.message || "Login failed");

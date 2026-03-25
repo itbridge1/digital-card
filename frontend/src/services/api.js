@@ -145,6 +145,14 @@ export const useraccessAPI = {
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/export`),
   getAvailableNfcTags: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/nfc-tags`),
+
+  // Tenant login account management
+  getTenantAccount: (tenantId) =>
+    api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`),
+  createTenantAccount: (tenantId, data) =>
+    api.post(`/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`, data),
+  resetCredentials: (tenantId) =>
+    api.post(`/manager/organizations/${encodeURIComponent(tenantId)}/reset-credentials`),
 };
 
 // Public API — no auth token required, used for the read-only public card view
@@ -170,6 +178,19 @@ export const uploadAPI = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+};
+
+// Tenant portal API methods (tenant role — soft edit/delete only)
+export const tenantPortalAPI = {
+  getMe: () => api.get("/tenant/me"),
+  updateLogo: (logoUrl) => api.put("/tenant/me/logo", { logoUrl }),
+  getCards: () => api.get("/tenant/cards"),
+  getCard: (cardId) => api.get(`/tenant/cards/${cardId}`),
+  updateCard: (cardId, data) => api.put(`/tenant/cards/${cardId}`, data),
+  deactivateCard: (cardId) => api.delete(`/tenant/cards/${cardId}`),
+  restoreCard: (cardId) => api.patch(`/tenant/cards/${cardId}/restore`),
+  changePassword: (currentPassword, newPassword) =>
+    api.post("/tenant/change-password", { currentPassword, newPassword }),
 };
 
 export default api;
