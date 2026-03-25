@@ -713,6 +713,8 @@ router.post(
           email: pick(row, "Email", "E-mail", "Email Address"),
           phone: pick(row, "Phone", "Phone Number", "Mobile", "Contact", "Contact No", "Phone No"),
           address: pick(row, "Address", "Full Address"),
+          // Store original photo filename so QR exports can use it as the image name
+          photo: pick(row, "Photo", "Image", "Photo File", "Profile Photo"),
           // SCHOOL
           studentId: pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Admission No"),
           grade: pick(row, "Class", "Grade", "Grade Level"),

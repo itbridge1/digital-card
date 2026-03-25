@@ -309,13 +309,30 @@ function OrganizationDetail() {
         // 👉 3. Convert dataURL → blob
         const blob = await fetch(qrDataUrl).then((res) => res.blob());
 
-        // 👉 4. Safe file name
-        const safeName = (card.metadata?.name || card.tagId)
-          .replace(/[^a-zA-Z0-9_\- ]/g, "_")
-          .trim();
+        // 👉 4. Determine filename (priority: metadata.photo → profileImageUrl → name)
+        let exportFilename;
+        if (card.metadata?.photo) {
+          // New cards: photo filename stored directly in metadata
+          const photoBase = card.metadata.photo.replace(/\.[^.]+$/, "");
+          exportFilename = `${photoBase}_QR.png`;
+        } else if (card.profileImageUrl) {
+          // Legacy cards: extract original filename from stored path.
+          // Format: /uploads/profiles/TENANT/uuid(36chars)_originalname.ext
+          const basename = card.profileImageUrl.split("/").pop() || "";
+          const originalPart = basename.length > 37 ? basename.slice(37) : basename;
+          const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
+          exportFilename = nameBase
+            ? `${nameBase}_QR.png`
+            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_QR.png`;
+        } else {
+          const safeName = (card.metadata?.name || card.tagId)
+            .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+            .trim();
+          exportFilename = `${safeName}_QR.png`;
+        }
 
         // 👉 5. Add to zip
-        zip.file(`${safeName}_QR.png`, blob);
+        zip.file(exportFilename, blob);
       }
 
       const content = await zip.generateAsync({ type: "blob" });
