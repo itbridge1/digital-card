@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { publicAPI } from "../../services/api";
 import { Card, Typography } from "antd";
-import { FaTimesCircle } from "react-icons/fa";
 import SelectCard from "./components/SelectCard";
 import { formatFieldLabel } from "./components/SelectCard";
 
@@ -52,17 +51,39 @@ function PublicCardView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <Text>Loading card...</Text>
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f1f5f9",
+      }}>
+        <Text style={{ color: "#64748b" }}>Loading card...</Text>
       </div>
     );
   }
 
   if (error || !card) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4 bg-gray-100">
-        <Card className="max-w-md w-full text-center border-red-300 border">
-          <FaTimesCircle className="text-4xl text-red-600 mx-auto mb-3" />
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f1f5f9",
+        padding: 24,
+      }}>
+        <Card
+          style={{
+            maxWidth: 400,
+            width: "100%",
+            textAlign: "center",
+            borderRadius: 16,
+            border: "1px solid #fecaca",
+          }}
+        >
+          <div style={{ fontSize: 36, color: "#ef4444", marginBottom: 12, lineHeight: 1 }}>&#10005;</div>
           <Text type="danger">{error || "Card not found"}</Text>
         </Card>
       </div>
@@ -70,7 +91,15 @@ function PublicCardView() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 px-3 py-4 sm:p-6">
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#f1f5f9",
+      padding: "16px 12px",
+    }}>
       <SelectCard
         design="one"
         card={card}
@@ -78,7 +107,7 @@ function PublicCardView() {
         formatFieldName={formatFieldName}
         theme={DEFAULT_THEME}
       />
-      <p className="mt-6 text-xs text-gray-400">NFC Digital Card</p>
+      <p style={{ marginTop: 24, fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 500 }}>NFC Digital Card</p>
     </div>
   );
 }

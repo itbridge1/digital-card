@@ -6,14 +6,47 @@ function ErrorPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="app-theme-page-bg min-h-screen w-full flex items-center justify-center px-4 py-6">
-      <div className="app-theme-surface p-6 sm:p-10 rounded-xl shadow-md w-full max-w-3xl">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f1f5f9",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: 20,
+          boxShadow: "0 4px 24px rgba(15,23,42,0.08)",
+          border: "1px solid #e2e8f0",
+          padding: "48px 40px",
+          maxWidth: 480,
+          width: "100%",
+          textAlign: "center",
+        }}
+      >
         <Result
           status="404"
           title="404"
           subTitle="Sorry, the page you visited does not exist."
           extra={
-            <Button type="primary" size="large" onClick={() => navigate("/")}>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => navigate("/")}
+              style={{
+                background: "linear-gradient(135deg, #5046e5, #7c3aed)",
+                border: "none",
+                borderRadius: 10,
+                height: 44,
+                fontWeight: 600,
+                paddingLeft: 28,
+                paddingRight: 28,
+              }}
+            >
               Go Back Home
             </Button>
           }

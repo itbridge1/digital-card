@@ -1,12 +1,10 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   Form,
   Input,
   Button,
-  Card,
   Typography,
   message,
-  Divider,
 } from "antd";
 import {
   LockOutlined,
@@ -16,6 +14,25 @@ import { authAPI } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 const { Title, Text } = Typography;
+
+function Logo() {
+  return (
+    <div className="nfc-auth-logo-wrap">
+      <img
+        src="/logo.png"
+        alt="IT Bridge"
+        className="nfc-auth-logo-img"
+        onError={(e) => {
+          e.target.style.display = "none";
+          e.target.nextSibling.style.display = "flex";
+        }}
+      />
+      <div className="nfc-auth-logo-fallback" style={{ display: "none" }}>ITB</div>
+      <Title level={4} style={{ margin: 0, letterSpacing: "-0.03em", color: "#09090b" }}>IT Bridge NFC</Title>
+      <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>Digital Identity Platform</Text>
+    </div>
+  );
+}
 
 function Login() {
   const [loading, setLoading] = useState(false);
@@ -39,7 +56,6 @@ function Login() {
 
       message.success("Login successful");
 
-      // If tenant account must change password, redirect there first
       if (user.mustChangePassword) {
         navigate("/change-password");
         return;
@@ -57,34 +73,29 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Center Content */}
-      <div className="flex-1 flex items-center justify-center px-4">
-        <Card
-          className="w-full max-w-md rounded-2xl shadow-md border border-gray-200"
-          bodyStyle={{ padding: "28px" }}
-        >
-          {/* Header */}
-          <div className="text-center mb-6">
-            <Title level={3} className="!mb-1">
-              Welcome Back
+    <div className="nfc-auth-bg">
+      <Logo />
+
+      <div className="nfc-auth-card">
+        <div style={{ padding: "32px 32px 28px" }}>
+          <div style={{ marginBottom: 24 }}>
+            <Title level={5} style={{ margin: "0 0 4px", letterSpacing: "-0.02em", color: "#09090b" }}>
+              Sign in to your account
             </Title>
-            <Text type="secondary" className="text-sm">
-              Sign in to your NFC account
+            <Text style={{ color: "#94a3b8", fontSize: 13 }}>
+              Enter your credentials to continue
             </Text>
           </div>
 
-         
-
-          {/* Form */}
           <Form
             form={form}
             layout="vertical"
             onFinish={onFinish}
             autoComplete="off"
+            requiredMark={false}
           >
             <Form.Item
-              label="Email Address"
+              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Email Address</span>}
               name="email"
               rules={[
                 { required: true, message: "Email is required" },
@@ -94,19 +105,20 @@ function Login() {
               <Input
                 size="large"
                 placeholder="your@email.com"
-                prefix={<MailOutlined />}
+                prefix={<MailOutlined style={{ color: "#cbd5e1" }} />}
               />
             </Form.Item>
 
             <Form.Item
-              label="Password"
+              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Password</span>}
               name="password"
               rules={[{ required: true, message: "Password is required" }]}
+              style={{ marginBottom: 24 }}
             >
               <Input.Password
                 size="large"
                 placeholder="Enter your password"
-                prefix={<LockOutlined />}
+                prefix={<LockOutlined style={{ color: "#cbd5e1" }} />}
               />
             </Form.Item>
 
@@ -115,22 +127,26 @@ function Login() {
               htmlType="submit"
               loading={loading}
               size="large"
-              className="w-full mt-2 rounded-lg"
+              style={{
+                width: "100%",
+                height: 44,
+                borderRadius: 8,
+                background: "#09090b",
+                border: "none",
+                fontWeight: 600,
+                fontSize: 14,
+                letterSpacing: "0.01em",
+              }}
             >
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </Form>
-
-        
-        </Card>
+        </div>
       </div>
 
-      {/* Bottom Footer */}
-      <div className="text-center pb-4">
-        <Text type="secondary" className="text-xs">
-          © 2026 IT Bridge NFC Platform
-        </Text>
-      </div>
+      <Text style={{ color: "#cbd5e1", fontSize: 12, marginTop: 24 }}>
+        &copy; 2026 IT Bridge NFC Platform
+      </Text>
     </div>
   );
 }

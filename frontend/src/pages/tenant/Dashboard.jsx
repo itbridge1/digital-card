@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Row, Col, Card, Statistic, Typography, Spin, Tag, Upload, Button, message, Avatar } from "antd";
 import {
   IdcardOutlined,
@@ -74,89 +74,118 @@ function TenantDashboard() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 4 }}>
-        Welcome, {user.name}
-      </Title>
-      <Text type="secondary" style={{ display: "block", marginBottom: 24 }}>
-        View and manage card holders in your organization.
-      </Text>
+      {/* Page Header */}
+      <div style={{ marginBottom: 28 }}>
+        <Title level={4} style={{ marginBottom: 2, letterSpacing: "-0.02em" }}>
+          Welcome back, {user.name}
+        </Title>
+        <Text style={{ color: "#64748b", fontSize: 13 }}>
+          View and manage card holders in your organization.
+        </Text>
+      </div>
 
+      {/* Org Card */}
       {org && (
-        <Card style={{ marginBottom: 24 }} styles={{ body: { padding: "16px 20px" } }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            {/* Logo preview + upload */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        <Card
+          style={{
+            marginBottom: 24,
+            borderRadius: 14,
+            border: "1px solid #e2e8f0",
+            background: "linear-gradient(135deg, #fafbff 0%, #f0f4ff 100%)",
+          }}
+          styles={{ body: { padding: "20px 24px" } }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            {/* Logo */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               {org.logoUrl ? (
                 <img
                   src={`${API_BASE}${org.logoUrl}`}
                   alt="logo"
-                  style={{ width: 64, height: 64, objectFit: "contain", borderRadius: 6, border: "1px solid #e0e0e0" }}
+                  style={{
+                    width: 68,
+                    height: 68,
+                    objectFit: "contain",
+                    borderRadius: 12,
+                    border: "1px solid #e2e8f0",
+                    background: "#fff",
+                    padding: 4,
+                  }}
                 />
               ) : (
-                <Avatar shape="square" size={64} style={{ fontSize: 24 }}>
+                <Avatar
+                  shape="square"
+                  size={68}
+                  style={{
+                    fontSize: 26,
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    fontWeight: 700,
+                  }}
+                >
                   {org.name?.[0]?.toUpperCase()}
                 </Avatar>
               )}
-              <Upload
-                accept="image/*"
-                showUploadList={false}
-                customRequest={handleLogoUpload}
-              >
-                <Button size="small" icon={<UploadOutlined />} loading={logoUploading}>
-                  {org.logoUrl ? "Change" : "Upload Logo"}
+              <Upload accept="image/*" showUploadList={false} customRequest={handleLogoUpload}>
+                <Button size="small" icon={<UploadOutlined />} loading={logoUploading} style={{ fontSize: 11 }}>
+                  {org.logoUrl ? "Change" : "Upload"}
                 </Button>
               </Upload>
               {org.logoUrl && (
-                <Button size="small" type="text" danger onClick={handleRemoveLogo}>
+                <Button size="small" type="text" danger onClick={handleRemoveLogo} style={{ fontSize: 11 }}>
                   Remove
                 </Button>
               )}
             </div>
 
-            {/* Org info */}
+            {/* Info */}
             <div>
-              <Text strong style={{ fontSize: 16 }}>
+              <Text strong style={{ fontSize: 18, letterSpacing: "-0.02em", color: "#0f172a" }}>
                 {org.name}
               </Text>
-              <br />
-              <Tag color="blue" style={{ marginTop: 4 }}>
-                {org.type}
-              </Tag>
-              <Tag color={org.isActive ? "green" : "red"}>
-                {org.isActive ? "Active" : "Inactive"}
-              </Tag>
+              <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Tag color="blue" style={{ borderRadius: 20, fontSize: 11 }}>{org.type}</Tag>
+                <Tag
+                  color={org.isActive ? "green" : "default"}
+                  style={{ borderRadius: 20, fontSize: 11 }}
+                >
+                  {org.isActive ? "Active" : "Inactive"}
+                </Tag>
+              </div>
             </div>
           </div>
         </Card>
       )}
 
+      {/* Stats */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={8}>
-          <Card>
+          <Card className="nfc-stat-card nfc-stat-card-primary">
             <Statistic
-              title="Total Card Holders"
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Total Card Holders</span>}
               value={cards.length}
-              prefix={<IdcardOutlined />}
+              prefix={<IdcardOutlined style={{ color: "#5046e5", marginRight: 4 }} />}
+              valueStyle={{ color: "#0f172a", fontWeight: 700 }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
+          <Card className="nfc-stat-card nfc-stat-card-success">
             <Statistic
-              title="Active"
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Active</span>}
               value={activeCards}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#3f8600" }}
+              prefix={<CheckCircleOutlined style={{ color: "#10b981", marginRight: 4 }} />}
+              valueStyle={{ color: "#10b981", fontWeight: 700 }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
+          <Card className="nfc-stat-card nfc-stat-card-error">
             <Statistic
-              title="Deactivated"
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Deactivated</span>}
               value={inactiveCards}
-              prefix={<StopOutlined />}
-              valueStyle={{ color: inactiveCards > 0 ? "#cf1322" : undefined }}
+              prefix={<StopOutlined style={{ color: inactiveCards > 0 ? "#ef4444" : "#94a3b8", marginRight: 4 }} />}
+              valueStyle={{ color: inactiveCards > 0 ? "#ef4444" : "#94a3b8", fontWeight: 700 }}
             />
           </Card>
         </Col>
@@ -164,8 +193,8 @@ function TenantDashboard() {
 
       <div style={{ marginTop: 24 }}>
         <Link to="/tenant/card-holders">
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            → Go to Card Holders
+          <Text style={{ fontSize: 13, color: "#5046e5", fontWeight: 500 }}>
+            View all card holders &rarr;
           </Text>
         </Link>
       </div>
@@ -174,4 +203,3 @@ function TenantDashboard() {
 }
 
 export default TenantDashboard;
-

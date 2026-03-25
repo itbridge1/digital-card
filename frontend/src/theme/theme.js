@@ -1,9 +1,18 @@
 const APP_THEME = {
-  primaryColor: "#1d4ed8",
-  secondaryColor: "#0ea5a5",
-  backgroundColor: "#f3f6fb",
+  primaryColor: "#1e293b",
+  primaryDark: "#0f172a",
+  primaryLight: "#475569",
+  secondaryColor: "#475569",
+  accentColor: "#334155",
+  backgroundColor: "#f8fafc",
   surfaceColor: "#ffffff",
-  textColor: "#1f2937",
+  sidebarColor: "#09090b",
+  textColor: "#0f172a",
+  textMuted: "#64748b",
+  borderColor: "#e2e8f0",
+  successColor: "#15803d",
+  warningColor: "#a16207",
+  errorColor: "#b91c1c",
 };
 
 const hexToRgb = (hexColor) => {
@@ -50,6 +59,12 @@ const applyAppThemeVariables = (theme = APP_THEME) => {
     "--app-color-secondary-rgb",
     `${secondaryRgb.r}, ${secondaryRgb.g}, ${secondaryRgb.b}`,
   );
+  root.style.setProperty("--color-sidebar", theme.sidebarColor);
+  root.style.setProperty("--color-border", theme.borderColor);
+  root.style.setProperty("--color-text-muted", theme.textMuted);
+  root.style.setProperty("--color-success", theme.successColor);
+  root.style.setProperty("--color-warning", theme.warningColor);
+  root.style.setProperty("--color-error", theme.errorColor);
 };
 
 const antdThemeConfig = {
@@ -57,10 +72,73 @@ const antdThemeConfig = {
     colorPrimary: APP_THEME.primaryColor,
     colorInfo: APP_THEME.primaryColor,
     colorLink: APP_THEME.primaryColor,
-    colorWarning: APP_THEME.secondaryColor,
+    colorSuccess: APP_THEME.successColor,
+    colorWarning: APP_THEME.warningColor,
+    colorError: APP_THEME.errorColor,
     colorTextBase: APP_THEME.textColor,
     colorBgBase: APP_THEME.surfaceColor,
-    borderRadius: 10,
+    colorBgLayout: APP_THEME.backgroundColor,
+    borderRadius: 8,
+    fontFamily:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    fontSize: 14,
+    controlHeight: 36,
+  },
+  components: {
+    Layout: {
+      siderBg: APP_THEME.sidebarColor,
+      headerBg: APP_THEME.surfaceColor,
+      bodyBg: APP_THEME.backgroundColor,
+    },
+    Menu: {
+      darkItemBg: APP_THEME.sidebarColor,
+      darkSubMenuItemBg: "#111113",
+      darkItemSelectedBg: "rgba(255, 255, 255, 0.10)",
+      darkItemSelectedColor: "#ffffff",
+      darkItemHoverBg: "rgba(255, 255, 255, 0.06)",
+      darkItemColor: "rgba(255, 255, 255, 0.60)",
+      darkItemHoverColor: "rgba(255, 255, 255, 0.90)",
+      itemBorderRadius: 8,
+      iconSize: 15,
+    },
+    Card: {
+      borderRadiusLG: 12,
+    },
+    Button: {
+      borderRadius: 8,
+      fontWeight: 500,
+      paddingContentHorizontal: 16,
+    },
+    Input: {
+      borderRadius: 8,
+    },
+    Select: {
+      borderRadius: 8,
+    },
+    Table: {
+      borderRadius: 10,
+      headerBg: "#f8fafc",
+      headerColor: "#64748b",
+      headerSortActiveBg: "#f1f5f9",
+    },
+    Tag: {
+      borderRadius: 20,
+      fontSize: 11,
+      fontSizeSM: 10,
+    },
+    Modal: {
+      borderRadiusLG: 14,
+    },
+    Drawer: {
+      borderRadiusLG: 14,
+    },
+    Alert: {
+      borderRadius: 10,
+    },
+    Statistic: {
+      contentFontSize: 28,
+      titleFontSize: 13,
+    },
   },
 };
 

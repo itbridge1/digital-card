@@ -3,7 +3,6 @@ import {
   Layout,
   Menu,
   Button,
-  theme,
   Typography,
   Dropdown,
   Avatar,
@@ -15,7 +14,6 @@ import {
   DashboardOutlined,
   IdcardOutlined,
   LogoutOutlined,
-  UserOutlined,
   LockOutlined,
 } from "@ant-design/icons";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -29,9 +27,6 @@ function TenantLayout() {
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -48,9 +43,7 @@ function TenantLayout() {
       label: "Change Password",
       onClick: () => navigate("/change-password"),
     },
-    {
-      type: "divider",
-    },
+    { type: "divider" },
     {
       key: "logout",
       icon: <LogoutOutlined />,
@@ -73,6 +66,9 @@ function TenantLayout() {
     },
   ];
 
+  const orgName = user.tenant?.name || "Tenant";
+  const initials = orgName.charAt(0).toUpperCase();
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
@@ -84,65 +80,87 @@ function TenantLayout() {
         onCollapse={(value) => setCollapsed(value)}
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
-        <div
-          style={{
-            textAlign: "center",
-            color: "#fff",
-            padding: "16px 8px",
-            fontWeight: 700,
-            fontSize: collapsed ? "14px" : "16px",
-            borderBottom: "1px solid rgba(255,255,255,0.1)",
-            marginBottom: "8px",
-          }}
-        >
-          {collapsed ? "T" : user.tenant?.name || "Tenant"}
-        </div>
+        {collapsed ? (
+          <div className="nfc-sidebar-brand-collapsed">
+            <div className="nfc-sidebar-brand-logo">
+              <img src="/logo.png" alt="ITB" style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+              <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>{initials}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="nfc-sidebar-brand">
+            <div className="nfc-sidebar-brand-logo">
+              <img src="/logo.png" alt="ITB" style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+              <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>{initials}</span>
+            </div>
+            <div>
+              <div className="nfc-sidebar-brand-title">{orgName}</div>
+              <div className="nfc-sidebar-brand-sub">Organization Portal</div>
+            </div>
+          </div>
+        )}
+
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
+          style={{ border: "none", paddingLeft: 8, paddingRight: 8 }}
         />
       </Sider>
 
       <Layout>
         <Header
+          className="nfc-header"
           style={{
-            background: colorBgContainer,
             paddingLeft: 12,
             paddingRight: isMobile ? 12 : 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: 60,
           }}
-          className="flex justify-between items-center"
         >
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{ fontSize: "16px", width: 50, height: 50 }}
+            style={{ fontSize: "15px", width: 40, height: 40, color: "#64748b" }}
           />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-              }}
+              style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <Avatar icon={<UserOutlined />} size="small" />
-              {!isMobile && <Text strong>{user.name || "Tenant"}</Text>}
+              <Avatar
+                size={30}
+                style={{ background: "#27272a", fontSize: 12, fontWeight: 700 }}
+              >
+                {(user.name || "T").charAt(0).toUpperCase()}
+              </Avatar>
+              {!isMobile && (
+                <div>
+                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>{user.name || "Tenant"}</Text>
+                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1, marginTop: 2 }}>{orgName}</div>
+                </div>
+              )}
             </div>
           </Dropdown>
         </Header>
 
         <Content
           style={{
-            margin: isMobile ? "12px" : "24px 16px",
+            margin: isMobile ? 12 : "20px 20px",
             padding: isMobile ? 12 : 24,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            background: "#ffffff",
+            borderRadius: 14,
             minHeight: 280,
             overflowX: "auto",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
+            border: "1px solid #e2e8f0",
           }}
         >
           <Outlet />

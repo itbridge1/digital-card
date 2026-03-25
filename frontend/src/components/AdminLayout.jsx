@@ -8,7 +8,7 @@ import {
   ApartmentOutlined,
   CreditCardOutlined,
 } from "@ant-design/icons";
-import { Button, Layout, Menu, theme, Avatar, Typography, Dropdown, Grid } from "antd";
+import { Button, Layout, Menu, Avatar, Typography, Dropdown, Grid } from "antd";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const { Header, Sider, Content } = Layout;
@@ -20,10 +20,6 @@ function AdminLayout() {
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
-
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -66,6 +62,18 @@ function AdminLayout() {
     },
   ];
 
+  const brandLogo = (
+    <div className="nfc-sidebar-brand-logo">
+      <img
+        src="/logo.png"
+        alt="ITB"
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
+      />
+      <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>NF</span>
+    </div>
+  );
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -78,15 +86,26 @@ function AdminLayout() {
         onCollapse={(value) => setCollapsed(value)}
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
-        <div className="text-center text-white py-4 text-lg font-semibold">
-          {collapsed ? "NFC" : "NFC Admin"}
-        </div>
+        {collapsed ? (
+          <div className="nfc-sidebar-brand-collapsed">
+            {brandLogo}
+          </div>
+        ) : (
+          <div className="nfc-sidebar-brand">
+            {brandLogo}
+            <div>
+              <div className="nfc-sidebar-brand-title">NFC Admin</div>
+              <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div>
+            </div>
+          </div>
+        )}
 
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
+          style={{ border: "none", paddingLeft: 8, paddingRight: 8 }}
         />
       </Sider>
 
@@ -94,24 +113,40 @@ function AdminLayout() {
       <Layout>
         {/* Header */}
         <Header
+          className="nfc-header"
           style={{
-            background: colorBgContainer,
             paddingLeft: 12,
             paddingRight: isMobile ? 12 : 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: 60,
           }}
-          className="flex justify-between items-center"
         >
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{ fontSize: "16px", width: 50, height: 50 }}
+            style={{ fontSize: "15px", width: 40, height: 40, color: "#64748b" }}
           />
 
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <Avatar icon={<UserOutlined />} size="small" />
-              {!isMobile && <Text strong>{user.name || "Admin"}</Text>}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <Avatar
+                size={30}
+                style={{ background: "#27272a", fontSize: 12, fontWeight: 700 }}
+              >
+                {(user.name || "A").charAt(0).toUpperCase()}
+              </Avatar>
+              {!isMobile && (
+                <div>
+                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>{user.name || "Admin"}</Text>
+                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1, marginTop: 2 }}>Administrator</div>
+                </div>
+              )}
             </div>
           </Dropdown>
         </Header>
@@ -119,12 +154,14 @@ function AdminLayout() {
         {/* Content */}
         <Content
           style={{
-            margin: isMobile ? "12px" : "24px 16px",
+            margin: isMobile ? 12 : "20px 20px",
             padding: isMobile ? 12 : 24,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
+            background: "#ffffff",
+            borderRadius: 14,
             minHeight: 280,
             overflowX: "auto",
+            boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
+            border: "1px solid #e2e8f0",
           }}
         >
           <Outlet />

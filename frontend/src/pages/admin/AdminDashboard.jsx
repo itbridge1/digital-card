@@ -259,30 +259,41 @@ function AdminDashboard() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 24 }}>Admin Dashboard</Title>
+      <div style={{ marginBottom: 28 }}>
+        <Title level={4} style={{ marginBottom: 2, letterSpacing: "-0.02em" }}>Admin Dashboard</Title>
+        <Text style={{ color: "#64748b", fontSize: 13 }}>
+          Overview of organizations and manager accounts.
+        </Text>
+      </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic title="Total Organizations" value={orgs.length} prefix={<ApartmentOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card>
+          <Card className="nfc-stat-card nfc-stat-card-primary">
             <Statistic
-              title="Active Organizations"
-              value={activeOrgs}
-              valueStyle={{ color: '#3f8600' }}
-              prefix={<ApartmentOutlined />}
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Total Organizations</span>}
+              value={orgs.length}
+              prefix={<ApartmentOutlined style={{ color: "#5046e5", marginRight: 4 }} />}
+              valueStyle={{ color: "#0f172a", fontWeight: 700 }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
+          <Card className="nfc-stat-card nfc-stat-card-success">
             <Statistic
-              title="Active Managers"
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Active Organizations</span>}
+              value={activeOrgs}
+              prefix={<ApartmentOutlined style={{ color: "#10b981", marginRight: 4 }} />}
+              valueStyle={{ color: "#10b981", fontWeight: 700 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card className="nfc-stat-card nfc-stat-card-info">
+            <Statistic
+              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Active Managers</span>}
               value={activeManagers}
-              prefix={<UserOutlined />}
+              prefix={<UserOutlined style={{ color: "#0ea5e9", marginRight: 4 }} />}
+              valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
             />
           </Card>
         </Col>

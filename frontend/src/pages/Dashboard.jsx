@@ -217,106 +217,124 @@ function Dashboard({ onLogout }) {
   ];
 
   return (
-    <Layout className="h-screen">
+    <Layout style={{ minHeight: "100vh", background: "#f1f5f9" }}>
       {/* HEADER */}
       <Header
-        className="bg-linear-to-r from-purple-600 to-purple-800 flex flex-nowrap justify-between items-center gap-2 sm:gap-3 md:gap-4 px-2 sm:px-4 md:px-6 py-2 sm:py-3 overflow-visible z-10"
-        style={{ minHeight: "auto" }}
+        style={{
+          background: "#0f172a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px 0 20px",
+          height: 60,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+        }}
       >
-        <div className="max-w-7xl mx-auto w-full flex flex-nowrap justify-between items-center gap-2 sm:gap-3 md:gap-4">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 800,
+            fontSize: 13,
+            color: "#fff",
+            flexShrink: 0,
+          }}>
+            NF
+          </div>
           <Title
-            level={4}
-            className="text-white! m-0 text-xs sm:text-sm md:text-lg whitespace-nowrap shrink-0  border-amber-100"
+            level={5}
+            style={{ color: "#ffffff", margin: 0, letterSpacing: "-0.02em", fontWeight: 700 }}
           >
             <span className="inline sm:hidden">NFC</span>
             <span className="hidden sm:inline">IT Bridge NFC</span>
           </Title>
+        </div>
 
-          <div
-            className="flex gap-1.5 sm:gap-2 items-center shrink-0"
-            style={{ zIndex: 1000 }}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Select
+            value={selectedTenant?.tenantId}
+            onChange={handleTenantChange}
+            placeholder="Select tenant"
+            className="w-24 sm:w-32 md:w-44 lg:w-60"
+            size="small"
+            popupMatchSelectWidth={false}
+            style={{
+              minWidth: 100,
+            }}
           >
-            <Select
-              value={selectedTenant?.tenantId}
-              onChange={handleTenantChange}
-              placeholder="Tenant"
-              className="w-24 sm:w-32 md:w-44 lg:w-60"
-              size="small"
-              popupMatchSelectWidth={false}
+            {tenants.map((t) => (
+              <Option key={t.tenantId} value={t.tenantId}>
+                {t.name} ({t.type})
+              </Option>
+            ))}
+          </Select>
+          <Dropdown
+            menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
+            trigger={["click"]}
+            placement="bottomRight"
+          >
+            <Popconfirm
+              title="Logout"
+              description="Are you sure you want to logout?"
+              open={logoutConfirmOpen}
+              onConfirm={confirmLogout}
+              onCancel={cancelLogout}
+              okText="Yes"
+              cancelText="No"
             >
-              {tenants.map((t) => (
-                <Option key={t.tenantId} value={t.tenantId}>
-                  {t.name} ({t.type})
-                </Option>
-              ))}
-            </Select>
-            <Dropdown
-              menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
-              trigger={["click"]}
-              placement="bottomRight"
-            >
-              <Popconfirm
-                title="Logout"
-                description="Are you sure you want to logout?"
-                open={logoutConfirmOpen}
-                onConfirm={confirmLogout}
-                onCancel={cancelLogout}
-                okText="Yes"
-                cancelText="No"
+              <Avatar
+                size={30}
+                style={{
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
               >
-                <Avatar
-                  icon={<UserOutlined />}
-                  className="cursor-pointer shrink-0"
-                  size="small"
-                />
-              </Popconfirm>
-            </Dropdown>
-          </div>
+                {(JSON.parse(localStorage.getItem("user") || "{}").name || "U").charAt(0).toUpperCase()}
+              </Avatar>
+            </Popconfirm>
+          </Dropdown>
         </div>
       </Header>
 
       {/* CONTENT */}
-      <Content className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full overflow-auto">
+      <Content style={{ padding: isMobile ? 12 : "20px", maxWidth: 1280, margin: "0 auto", width: "100%", overflow: "auto" }}>
         {!selectedTenant ? (
-          <div className="text-center py-20">
+          <div style={{ textAlign: "center", paddingTop: 80 }}>
             <Title level={4}>No Tenant Selected</Title>
-            <Text>Please select a tenant</Text>
+            <Text style={{ color: "#64748b" }}>Please select a tenant from the header</Text>
           </div>
         ) : (
           <>
             {/* STATS */}
-            <Row gutter={[8, 8]} className="mb-3 sm:mb-6">
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
               <Col xs={24} sm={12} md={8}>
-                <Card size={isMobile ? "small" : "default"} className="h-full">
-                  <Text className="text-xs sm:text-sm">Total Cards</Text>
-                  <Title
-                    level={isMobile ? 3 : 2}
-                    className="m-0 mt-1 text-lg sm:text-2xl md:text-3xl"
-                  >
+                <Card className="nfc-stat-card nfc-stat-card-primary" styles={{ body: { padding: "16px 20px" } }}>
+                  <Text style={{ fontSize: 12, color: "#64748b", display: "block", fontWeight: 500 }}>Total Cards</Text>
+                  <Title level={3} style={{ margin: "4px 0 0", color: "#0f172a", fontWeight: 700 }}>
                     {stats.total}
                   </Title>
                 </Card>
               </Col>
-
               <Col xs={24} sm={12} md={8}>
-                <Card size={isMobile ? "small" : "default"} className="h-full">
-                  <Text className="text-xs sm:text-sm">Active Cards</Text>
-                  <Title
-                    level={isMobile ? 3 : 2}
-                    className="m-0 mt-1 text-lg sm:text-2xl md:text-3xl"
-                  >
+                <Card className="nfc-stat-card nfc-stat-card-success" styles={{ body: { padding: "16px 20px" } }}>
+                  <Text style={{ fontSize: 12, color: "#64748b", display: "block", fontWeight: 500 }}>Active Cards</Text>
+                  <Title level={3} style={{ margin: "4px 0 0", color: "#10b981", fontWeight: 700 }}>
                     {stats.active}
                   </Title>
                 </Card>
               </Col>
-
               <Col xs={24} sm={12} md={8}>
-                <Card size={isMobile ? "small" : "default"} className="h-full">
-                  <Text className="text-xs sm:text-sm">Total Taps</Text>
-                  <Title
-                    level={isMobile ? 3 : 2}
-                    className="m-0 mt-1 text-lg sm:text-2xl md:text-3xl"
-                  >
+                <Card className="nfc-stat-card nfc-stat-card-info" styles={{ body: { padding: "16px 20px" } }}>
+                  <Text style={{ fontSize: 12, color: "#64748b", display: "block", fontWeight: 500 }}>Total Taps</Text>
+                  <Title level={3} style={{ margin: "4px 0 0", color: "#0ea5e9", fontWeight: 700 }}>
                     {stats.totalTaps}
                   </Title>
                 </Card>
@@ -326,18 +344,18 @@ function Dashboard({ onLogout }) {
             {/* CARDS SECTION */}
             <Card
               size={isMobile ? "small" : "default"}
+              style={{ borderRadius: 14, border: "1px solid #e2e8f0" }}
               title={
-                <span className="text-xs sm:text-sm md:text-base">
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
                   Registered Cards
                 </span>
               }
               extra={
-                <div className="flex gap-2">
+                <div style={{ display: "flex", gap: 6 }}>
                   <Button
                     size={isMobile ? "small" : "middle"}
                     icon={<UploadOutlined />}
                     onClick={handleImportOpen}
-                    className="text-xs sm:text-sm"
                   >
                     {isMobile ? "Import" : "Import Cards"}
                   </Button>
@@ -345,7 +363,6 @@ function Dashboard({ onLogout }) {
                     size={isMobile ? "small" : "middle"}
                     icon={<FolderOpenOutlined />}
                     onClick={handleZipImportOpen}
-                    className="text-xs sm:text-sm"
                   >
                     {isMobile ? "ZIP" : "Import ZIP"}
                   </Button>
@@ -353,7 +370,7 @@ function Dashboard({ onLogout }) {
                     type="primary"
                     size={isMobile ? "small" : "middle"}
                     onClick={() => setShowForm(true)}
-                    className="text-xs sm:text-sm"
+                    style={{ background: "linear-gradient(135deg, #5046e5, #7c3aed)", border: "none" }}
                   >
                     + Register Card
                   </Button>

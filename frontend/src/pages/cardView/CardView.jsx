@@ -10,10 +10,15 @@ import {
   Drawer,
   Select,
   Grid,
+  Avatar,
+  Tag,
+  Descriptions,
+  Statistic,
+  Row,
+  Col,
 } from "antd";
 import {
   FaArrowLeft,
-  FaTimesCircle,
   FaPalette,
   FaSun,
   FaMoon,
@@ -221,19 +226,17 @@ function CardView() {
   };
 
   const sidebarContent = (
-    <div className="space-y-4">
-      <Card size="small" className="shadow-sm">
-        <Text strong className="block">
-          Card Design
-        </Text>
-        <Text type="secondary" className="mb-3 block text-xs">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}>
+        <Text strong style={{ display: "block", marginBottom: 4 }}>Card Design</Text>
+        <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
           Select a design to preview instantly.
         </Text>
         <Select
           value={selectedDesign}
           onChange={setSelectedDesign}
           size="large"
-          className="w-full"
+          style={{ width: "100%" }}
           options={[
             { label: "Design 1", value: "one" },
             { label: "Design 2", value: "two" },
@@ -242,21 +245,21 @@ function CardView() {
         />
       </Card>
 
-      <Card size="small" className="shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
+      <Card size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}>
+        <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Text strong>Accessibility</Text>
           <Button
             size="small"
-            icon={<FaRedo />}
+            icon={<FaRedo style={{ fontSize: 10 }} />}
             onClick={resetToDefault}
-            className="text-xs"
+            style={{ borderRadius: 6, display: "flex", alignItems: "center" }}
           />
         </div>
 
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {theme.isDark ? <FaMoon /> : <FaSun />}
-            <Text>Dark Mode</Text>
+        <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {theme.isDark ? <FaMoon style={{ fontSize: 13 }} /> : <FaSun style={{ fontSize: 13 }} />}
+            <Text style={{ fontSize: 13 }}>Dark Mode</Text>
           </div>
           <Switch
             size="small"
@@ -265,13 +268,13 @@ function CardView() {
           />
         </div>
 
-        <div className="mb-3">
-          <Text className="mb-1 block text-xs">Theme Preset</Text>
+        <div style={{ marginBottom: 14 }}>
+          <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>Theme Preset</Text>
           <Select
             value={theme.preset || "ocean"}
             onChange={handlePresetChange}
             size="middle"
-            className="w-full"
+            style={{ width: "100%" }}
             options={[
               { label: "Ocean", value: "ocean" },
               { label: "Sunset", value: "sunset" },
@@ -281,105 +284,41 @@ function CardView() {
           />
         </div>
 
-        <div className="mb-3">
-          <Text className="mb-1 block text-xs">Primary Color</Text>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={theme.primaryColor}
-              onChange={(e) =>
-                handleColorChange("primaryColor", e.target.value)
-              }
-              className="h-9 w-9 cursor-pointer rounded"
-            />
-            <input
-              type="text"
-              value={theme.primaryColor}
-              onChange={(e) =>
-                handleColorChange("primaryColor", e.target.value)
-              }
-              className="flex-1 rounded border px-2 py-1 text-sm"
-            />
+        {[
+          { key: "primaryColor", label: "Primary Color" },
+          { key: "secondaryColor", label: "Secondary Color" },
+          { key: "accentColor", label: "Accent Color" },
+          { key: "surfaceColor", label: "Surface Color" },
+        ].map(({ key, label }) => (
+          <div key={key} style={{ marginBottom: 14 }}>
+            <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>{label}</Text>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="color"
+                value={theme[key]}
+                onChange={(e) => handleColorChange(key, e.target.value)}
+                style={{ width: 36, height: 36, cursor: "pointer", borderRadius: 6, border: "1px solid #e2e8f0", padding: 2 }}
+              />
+              <input
+                type="text"
+                value={theme[key]}
+                onChange={(e) => handleColorChange(key, e.target.value)}
+                style={{ flex: 1, borderRadius: 6, border: "1px solid #e2e8f0", padding: "4px 8px", fontSize: 13, fontFamily: "monospace" }}
+              />
+            </div>
           </div>
-        </div>
-
-        <div className="mb-3">
-          <Text className="mb-1 block text-xs">Secondary Color</Text>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={theme.secondaryColor}
-              onChange={(e) =>
-                handleColorChange("secondaryColor", e.target.value)
-              }
-              className="h-9 w-9 cursor-pointer rounded"
-            />
-            <input
-              type="text"
-              value={theme.secondaryColor}
-              onChange={(e) =>
-                handleColorChange("secondaryColor", e.target.value)
-              }
-              className="flex-1 rounded border px-2 py-1 text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <Text className="mb-1 block text-xs">Accent Color</Text>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={theme.accentColor}
-              onChange={(e) =>
-                handleColorChange("accentColor", e.target.value)
-              }
-              className="h-9 w-9 cursor-pointer rounded"
-            />
-            <input
-              type="text"
-              value={theme.accentColor}
-              onChange={(e) =>
-                handleColorChange("accentColor", e.target.value)
-              }
-              className="flex-1 rounded border px-2 py-1 text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <Text className="mb-1 block text-xs">Surface Color</Text>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={theme.surfaceColor}
-              onChange={(e) =>
-                handleColorChange("surfaceColor", e.target.value)
-              }
-              className="h-9 w-9 cursor-pointer rounded"
-            />
-            <input
-              type="text"
-              value={theme.surfaceColor}
-              onChange={(e) =>
-                handleColorChange("surfaceColor", e.target.value)
-              }
-              className="flex-1 rounded border px-2 py-1 text-sm"
-            />
-          </div>
-        </div>
+        ))}
 
         <div>
-          <div className="flex justify-between text-xs">
-            <Text>Contrast</Text>
-            <Text>{theme.contrast}%</Text>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={{ fontSize: 12, color: "#64748b" }}>Contrast</Text>
+            <Text style={{ fontSize: 12, color: "#64748b" }}>{theme.contrast}%</Text>
           </div>
           <Slider
             min={50}
             max={150}
             value={theme.contrast}
             onChange={handleContrastChange}
-            className="mt-1"
           />
         </div>
       </Card>
@@ -388,63 +327,277 @@ function CardView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Text>Loading card...</Text>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <Text style={{ color: "#94a3b8" }}>Loading card...</Text>
       </div>
     );
   }
 
   if (error || !card) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-6 px-4">
-        <Card className="max-w-md w-full text-center border-red-300 border">
-          <FaTimesCircle className="text-4xl text-red-600 mx-auto" />
-          <Text type="danger">{error || "Card not found"}</Text>
-          <Button type="primary" onClick={handleBackClick}>
-            <FaArrowLeft className="mr-2" /> Back
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24, background: "#f8fafc" }}>
+        <Card style={{ maxWidth: 400, width: "100%", textAlign: "center", borderRadius: 16, border: "1px solid #e2e8f0" }}>
+          <Text type="danger" style={{ display: "block", marginBottom: 16 }}>{error || "Card not found"}</Text>
+          <Button onClick={handleBackClick} style={{ background: "#09090b", color: "#fff", border: "none", borderRadius: 8 }}>
+            Back
           </Button>
         </Card>
       </div>
     );
   }
 
+  const API_BASE = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+  const avatarSrc = card.profileImageUrl ? `${API_BASE}${card.profileImageUrl}` : null;
+  const orgLogoSrc = tenant?.logoUrl ? `${API_BASE}${tenant.logoUrl}` : null;
+
+  const INTERNAL_KEYS = ["name", "title", "custom", "shortCode", "createdBy", "section", "profileImageUrl"];
+  const displayRows = Object.entries(card.metadata || {}).filter(([key]) => !INTERNAL_KEYS.includes(key));
+
+  const cardholderName = card.metadata?.name || "—";
+  const cardholderTitle = card.metadata?.title || "";
+
+  const DESIGNS = ["one", "two", "three"];
+
   return (
-    <div
-      className={`min-h-screen px-3 py-4 sm:p-6 transition-colors duration-300 ${
-        theme.isDark ? "bg-gray-900" : "bg-gray-100"
-      }`}
-    >
-      <div className="mx-auto mb-5 flex w-full max-w-5xl justify-end">
-        {isOwner && (
+    <div style={{ minHeight: "100vh", background: theme.isDark ? "#09090b" : "#f8fafc" }}>
+      {/* Sticky top bar */}
+      <div style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
+        height: 58,
+        background: theme.isDark ? "#18181b" : "#ffffff",
+        borderBottom: `1px solid ${theme.isDark ? "#27272a" : "#e4e4e7"}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 20px",
+      }}>
+        <Button
+          icon={<FaArrowLeft style={{ fontSize: 11 }} />}
+          onClick={handleBackClick}
+          style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 8, fontWeight: 500, height: 36 }}
+        >
+          Back
+        </Button>
+
+        <Text strong style={{ color: theme.isDark ? "#f4f4f5" : "#09090b", fontSize: 14, letterSpacing: "-0.01em" }}>
+          {tenant?.name || "Card View"}
+        </Text>
+
+        {isOwner ? (
           <Button
-            size={isMobile ? "middle" : "large"}
-            icon={<FaSlidersH />}
+            icon={<FaSlidersH style={{ fontSize: 12 }} />}
             onClick={() => setSidebarOpen(true)}
             style={{
-              background: theme.primaryColor,
-              borderColor: theme.primaryColor,
-              color: "white",
+              display: "flex", alignItems: "center", gap: 6,
+              borderRadius: 8, fontWeight: 500, height: 36,
+              background: "#09090b", color: "#fff", border: "none",
             }}
           >
-            Open Sidebar
+            Customize
           </Button>
+        ) : (
+          <div style={{ width: 88 }} />
         )}
       </div>
 
-      <div className="mx-auto flex w-full max-w-5xl justify-center">
-        <SelectCard
-          design={selectedDesign}
-          card={card}
-          tenant={tenant}
-          formatFieldName={formatFieldName}
-          theme={themeContext}
-        />
+      {/* Body grid */}
+      <div style={{
+        maxWidth: 1100,
+        margin: "0 auto",
+        padding: isMobile ? "20px 16px" : "32px 24px",
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "360px 1fr",
+        gap: 24,
+        alignItems: "start",
+      }}>
+        {/* ── Left: Card Preview ── */}
+        <div style={{ position: isMobile ? "static" : "sticky", top: 74 }}>
+          <SelectCard
+            design={selectedDesign}
+            card={card}
+            tenant={tenant}
+            formatFieldName={formatFieldName}
+            theme={themeContext}
+          />
+
+          {/* Design switcher pills */}
+          <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center" }}>
+            {DESIGNS.map((d, i) => (
+              <button
+                key={d}
+                onClick={() => setSelectedDesign(d)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 20,
+                  border: selectedDesign === d ? "2px solid #09090b" : "2px solid #e4e4e7",
+                  background: selectedDesign === d ? "#09090b" : "transparent",
+                  color: selectedDesign === d ? "#ffffff" : "#94a3b8",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  transition: "all 0.15s",
+                }}
+              >
+                Design {i + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Info Panel ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Cardholder */}
+          <Card
+            style={{ borderRadius: 14, border: "1px solid #e4e4e7", background: theme.isDark ? "#18181b" : "#fff" }}
+            bodyStyle={{ padding: "20px 24px" }}
+          >
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <Avatar
+                size={72}
+                src={avatarSrc || undefined}
+                style={{ background: "#e4e4e7", color: "#64748b", fontSize: 24, flex: "none", border: "2px solid #f1f5f9" }}
+              >
+                {!avatarSrc && cardholderName.charAt(0).toUpperCase()}
+              </Avatar>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: theme.isDark ? "#f4f4f5" : "#09090b", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
+                  {cardholderName}
+                </div>
+                {cardholderTitle && (
+                  <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>{cardholderTitle}</div>
+                )}
+                <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Tag color={card.isActive ? "green" : "default"} style={{ margin: 0, borderRadius: 6, fontWeight: 500 }}>
+                    {card.isActive ? "Active" : "Inactive"}
+                  </Tag>
+                  {tenant?.type && (
+                    <Tag style={{ margin: 0, borderRadius: 6, border: "1px solid #e4e4e7", color: "#64748b", background: "transparent" }}>
+                      {tenant.type}
+                    </Tag>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Organization */}
+          {tenant && (
+            <Card
+              style={{ borderRadius: 14, border: "1px solid #e4e4e7", background: theme.isDark ? "#18181b" : "#fff" }}
+              bodyStyle={{ padding: "16px 24px" }}
+            >
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <Avatar
+                  size={44}
+                  src={orgLogoSrc || undefined}
+                  shape="square"
+                  style={{ borderRadius: 10, background: "#f1f5f9", border: "1px solid #e4e4e7", flex: "none" }}
+                >
+                  {!orgLogoSrc && tenant.name?.charAt(0).toUpperCase()}
+                </Avatar>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: theme.isDark ? "#f4f4f5" : "#09090b" }}>{tenant.name}</div>
+                  {tenant.website && (
+                    <a
+                      href={tenant.website.startsWith("http") ? tenant.website : `https://${tenant.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 12, color: "#64748b", textDecoration: "none" }}
+                    >
+                      {tenant.website}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Card Details */}
+          <Card
+            title={<span style={{ fontWeight: 600, fontSize: 13, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>Card Details</span>}
+            style={{ borderRadius: 14, border: "1px solid #e4e4e7", background: theme.isDark ? "#18181b" : "#fff" }}
+            bodyStyle={{ padding: "0 0 4px" }}
+            headStyle={{ borderBottom: "1px solid #f1f5f9", padding: "12px 24px", minHeight: "auto" }}
+          >
+            {/* Tag ID */}
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 24px", borderBottom: "1px solid #f8fafc" }}>
+              <Text style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>Tag ID</Text>
+              <Text style={{ fontSize: 13, color: theme.isDark ? "#d4d4d8" : "#1e293b", fontFamily: "monospace", fontWeight: 500 }}>{card.tagId}</Text>
+            </div>
+
+            {/* Metadata rows */}
+            {displayRows.map(([key, value], idx) => (
+              value !== null && value !== undefined && value !== "" && (
+                <div
+                  key={key}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    padding: "12px 24px",
+                    borderBottom: idx < displayRows.length - 1 ? "1px solid #f8fafc" : "none",
+                    gap: 16,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500, flex: "none" }}>{formatFieldName(key)}</Text>
+                  <Text style={{ fontSize: 13, color: theme.isDark ? "#d4d4d8" : "#374151", textAlign: "right", wordBreak: "break-word" }}>{String(value)}</Text>
+                </div>
+              )
+            ))}
+
+            {/* Business URL */}
+            {card.businessUrl && (
+              <div style={{ padding: "12px 24px", borderTop: "1px solid #f8fafc" }}>
+                <Text style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500, display: "block", marginBottom: 4 }}>Business URL</Text>
+                <a
+                  href={card.businessUrl.startsWith("http") ? card.businessUrl : `https://${card.businessUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 13, color: "#1e293b", wordBreak: "break-all" }}
+                >
+                  {card.businessUrl}
+                </a>
+              </div>
+            )}
+          </Card>
+
+          {/* Stats */}
+          <Card
+            style={{ borderRadius: 14, border: "1px solid #e4e4e7", background: theme.isDark ? "#18181b" : "#fff" }}
+            bodyStyle={{ padding: "16px 24px" }}
+          >
+            <Row gutter={24}>
+              <Col span={12}>
+                <Statistic
+                  title={<span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500 }}>Tap Count</span>}
+                  value={card.tapCount ?? 0}
+                  valueStyle={{ fontSize: 22, fontWeight: 700, color: theme.isDark ? "#f4f4f5" : "#09090b" }}
+                />
+              </Col>
+              <Col span={12}>
+                <div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginBottom: 4 }}>Status</div>
+                  <Tag
+                    color={card.isActive ? "green" : "default"}
+                    style={{ borderRadius: 6, fontWeight: 600, fontSize: 13, padding: "2px 10px" }}
+                  >
+                    {card.isActive ? "Active" : "Inactive"}
+                  </Tag>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+
+        </div>
       </div>
 
       {isOwner && (
         <Drawer
           title={
-            <div className="flex items-center gap-2">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
               <FaPalette style={{ color: theme.primaryColor }} />
               <span>Card Panel</span>
             </div>
