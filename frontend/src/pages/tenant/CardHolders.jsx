@@ -26,7 +26,9 @@ import {
   EyeOutlined,
   CopyOutlined,
   SearchOutlined,
+  BgColorsOutlined,
 } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import { tenantPortalAPI, uploadAPI } from "../../services/api";
 
 const { Title, Text } = Typography;
@@ -34,6 +36,7 @@ const API_BASE =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
 export default function TenantCardHolders() {
+  const navigate = useNavigate();
   const [cards, setCards] = useState([]);
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ export default function TenantCardHolders() {
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
 
   const fetchData = async () => {
     setLoading(true);
@@ -331,6 +335,20 @@ export default function TenantCardHolders() {
       width: isMobile ? 100 : 160,
       render: (_, record) => (
         <Space>
+          {record.tagId && (
+            <Tooltip title="Customise card design">
+              <Button
+                type="text"
+                size="small"
+                icon={<BgColorsOutlined />}
+                onClick={() =>
+                  navigate(
+                    `/card/${encodeURIComponent(record.tagId)}?tenantId=${encodeURIComponent(currentUser.tenantId)}`,
+                  )
+                }
+              />
+            </Tooltip>
+          )}
           {record.publicUrl && (
             <Tooltip title="View public card">
               <Button

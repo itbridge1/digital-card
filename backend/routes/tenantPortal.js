@@ -74,6 +74,33 @@ router.get("/cards", async (req, res) => {
 });
 
 /**
+ * GET /api/tenant/cards/by-tag/:tagId
+ * Get a specific card holder by NFC tag ID (must belong to this tenant)
+ */
+router.get("/cards/by-tag/:tagId", async (req, res) => {
+  try {
+    const tagId = String(req.params.tagId || "").trim().toUpperCase();
+    const card = await Card.findOne({
+      where: { tagId, tenantId: req.user.tenantId },
+    });
+
+    if (!card) {
+      return res.status(404).json({ success: false, error: "Card not found" });
+    }
+
+    const tenant = await Tenant.findOne({
+      where: { tenantId: req.user.tenantId },
+      attributes: ["id", "tenantId", "name", "type", "contactEmail", "logoUrl", "isActive"],
+    });
+
+    res.json({ success: true, data: card, tenant });
+  } catch (error) {
+    console.error("Error fetching card by tag:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch card" });
+  }
+});
+
+/**
  * GET /api/tenant/cards/:cardId
  * Get a specific card holder (must belong to this tenant)
  */

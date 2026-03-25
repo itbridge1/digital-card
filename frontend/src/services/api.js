@@ -185,6 +185,7 @@ export const tenantPortalAPI = {
   getMe: () => api.get("/tenant/me"),
   updateLogo: (logoUrl) => api.put("/tenant/me/logo", { logoUrl }),
   getCards: () => api.get("/tenant/cards"),
+  getCardByTag: (tagId) => api.get(`/tenant/cards/by-tag/${encodeURIComponent(tagId)}`),
   getCard: (cardId) => api.get(`/tenant/cards/${cardId}`),
   updateCard: (cardId, data) => api.put(`/tenant/cards/${cardId}`, data),
   deactivateCard: (cardId) => api.delete(`/tenant/cards/${cardId}`),

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { cardAPI, tenantAPI, useraccessAPI } from "../../services/api";
+import { cardAPI, tenantAPI, useraccessAPI, tenantPortalAPI } from "../../services/api";
 import {
   Button,
   Card,
@@ -124,18 +124,27 @@ function CardView() {
       let cardRes, tenantRes;
       
       if (isFromOrganization) {
-        // Fetch from organization context
-        cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
-        setCard(cardRes.data.data);
-        const fetchedTenant = cardRes.data.tenant;
-        setTenant(fetchedTenant);
-
-        // Only the owning manager (or an admin) may use the customization sidebar
         const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-        const owned =
-          currentUser.role === "admin" ||
-          fetchedTenant?.createdBy === currentUser.id;
-        setIsOwner(owned);
+
+        if (currentUser.role === "tenant") {
+          // Tenant users fetch their own card via the tenant portal API
+          const tenantRes = await tenantPortalAPI.getCardByTag(tagId);
+          setCard(tenantRes.data.data);
+          setTenant(tenantRes.data.tenant);
+          setIsOwner(true); // tenants can customise their own org's cards
+        } else {
+          // Fetch from organization context (admin / manager)
+          cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
+          setCard(cardRes.data.data);
+          const fetchedTenant = cardRes.data.tenant;
+          setTenant(fetchedTenant);
+
+          // Only the owning manager (or an admin) may use the customization sidebar
+          const owned =
+            currentUser.role === "admin" ||
+            fetchedTenant?.createdBy === currentUser.id;
+          setIsOwner(owned);
+        }
       } else {
         // Fetch from public context
         cardRes = await cardAPI.getById(tagId);
@@ -158,13 +167,17 @@ function CardView() {
   const handleBackClick = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.has("tenantId")) {
-      // Determine the correct prefix based on user role
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const prefix = currentUser.role === 'admin' ? '/admin' : '/manager';
-      // Go back to OrganizationDetail
-      navigate(`${prefix}/organizations/${params.get("tenantId")}`);
+      const prefix =
+        currentUser.role === 'admin' ? '/admin' :
+        currentUser.role === 'tenant' ? '/tenant' :
+        '/manager';
+      const backPath =
+        currentUser.role === 'tenant'
+          ? `${prefix}/card-holders`
+          : `${prefix}/organizations/${params.get("tenantId")}`;
+      navigate(backPath);
     } else {
-      // Go back to home
       navigate("/");
     }
   };
