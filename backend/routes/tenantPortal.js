@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { body, validationResult } = require("express-validator");
 const { Card, Tenant, CardRegister, User } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
@@ -211,17 +212,23 @@ router.patch("/cards/:cardId/restore", async (req, res) => {
  * POST /api/tenant/change-password
  * Let the tenant user set a new password (required after first login / OTP reset).
  */
-router.post("/change-password", async (req, res) => {
+router.post(
+  "/change-password",
+  [
+    body("currentPassword").notEmpty().withMessage("currentPassword is required"),
+    body("newPassword")
+      .isLength({ min: 8 }).withMessage("New password must be at least 8 characters")
+      .matches(/[A-Za-z]/).withMessage("New password must contain at least one letter")
+      .matches(/[0-9]/).withMessage("New password must contain at least one number"),
+  ],
+  async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
     const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ success: false, error: "currentPassword and newPassword are required" });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, error: "New password must be at least 8 characters" });
-    }
 
     // Fetch full record including password hash
     const user = await User.findByPk(req.user.id);

@@ -1,10 +1,30 @@
 const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
+const rateLimit = require("express-rate-limit");
 const { User, Tenant } = require("../models");
 const generateToken = require("../utils/generateToken");
 const { protect, authorize } = require("../middleware/auth");
 const crypto = require("crypto");
+
+// Strict rate limit for authentication endpoints to mitigate brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many attempts. Please try again in 15 minutes." },
+  skipSuccessfulRequests: true, // only count failed attempts
+});
+
+// Slightly more generous for register (admin-only, already protected)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many registration attempts. Please try again later." },
+});
 
 /** Generates a human-readable one-time password: e.g. Kx7#mP2! */
 function generateOTP() {
@@ -24,15 +44,16 @@ function generateOTP() {
  */
 router.post(
   "/register",
+  registerLimiter,
   protect,
   authorize("admin", "manager"),
   [
-    body("name").notEmpty().trim().withMessage("Name is required"),
+    body("name").notEmpty().trim().escape().withMessage("Name is required"),
     body("email")
       .isEmail()
       .normalizeEmail()
       .withMessage("Valid email is required"),
-    body("tenantId").notEmpty().withMessage("Tenant ID is required"),
+    body("tenantId").notEmpty().trim().withMessage("Tenant ID is required"),
   ],
   async (req, res) => {
     try {
@@ -82,11 +103,20 @@ router.post(
       const isTenantRole = assignedRole === "tenant";
       const password = isTenantRole ? generateOTP() : req.body.password;
 
-      if (!isTenantRole && (!password || password.length < 6)) {
-        return res.status(400).json({
-          success: false,
-          error: "Password must be at least 6 characters",
-        });
+      if (!isTenantRole) {
+        if (!password || password.length < 8) {
+          return res.status(400).json({
+            success: false,
+            error: "Password must be at least 8 characters",
+          });
+        }
+        // Basic strength: require at least one letter and one digit
+        if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+          return res.status(400).json({
+            success: false,
+            error: "Password must contain at least one letter and one number",
+          });
+        }
       }
 
       // Check if user exists
@@ -157,6 +187,7 @@ router.post(
  */
 router.post(
   "/login",
+  authLimiter,
   [
     body("email")
       .isEmail()
@@ -241,45 +272,14 @@ router.post(
 
 /**
  * GET /api/auth/me
- * Get current user profile
+ * Get current user profile — uses protect middleware (no manual JWT re-verification)
  */
-router.get("/me", async (req, res) => {
+router.get("/me", protect, async (req, res) => {
   try {
-    // Extract token
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: "Not authorized",
-      });
-    }
-
-    const jwt = require("jsonwebtoken");
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "nfc-platform-secret-key",
-    );
-
-    const user = await User.findByPk(decoded.id, {
-      attributes: { exclude: ["password"] },
-      include: [
-        {
-          model: Tenant,
-          attributes: ["tenantId", "name", "type"],
-        },
-      ],
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found",
-      });
-    }
-
+    // req.user is already populated by protect middleware
     res.json({
       success: true,
-      data: user,
+      data: req.user,
     });
   } catch (error) {
     console.error("Get profile error:", error);

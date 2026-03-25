@@ -23,8 +23,6 @@ api.interceptors.request.use((config) => {
 
   // For FormData, remove Content-Type so axios sets it with proper boundary
   if (config.data instanceof FormData) {
-    console.log("📡 Sending FormData request to:", config.url);
-    console.log("📦 FormData contents:", Array.from(config.data.entries()));
     delete config.headers["Content-Type"];
   }
 
@@ -70,11 +68,6 @@ export const cardAPI = {
       params: {
         ...(tenantId ? { tenantId } : {}),
         _ts: Date.now(),
-      },
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
       },
     }),
   upsertOnScan: (data) => api.post("/cards/registrations/scan", data),

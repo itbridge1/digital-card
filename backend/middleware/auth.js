@@ -15,8 +15,8 @@ const protect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'nfc-platform-secret-key');
+      // Verify token — no hardcoded fallback; JWT_SECRET must be set
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Get user from token
       req.user = await User.findByPk(decoded.id, {
@@ -39,15 +39,13 @@ const protect = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.error('Auth error:', error);
-      res.status(401).json({
+      // Do not leak JWT error details to the client
+      return res.status(401).json({
         success: false,
         error: 'Not authorized, token failed'
       });
     }
-  }
-
-  if (!token) {
+  } else {
     res.status(401).json({
       success: false,
       error: 'Not authorized, no token'

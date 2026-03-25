@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const path = require("path");
 const swaggerUi = require("swagger-ui-express");
@@ -9,19 +11,69 @@ const swaggerSpec = require("./config/swagger");
 const { connectDB } = require("./config/database");
 const { initSocket } = require("./utils/socket");
 
+// Crash early if critical secrets are missing
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is not set.");
+  process.exit(1);
+}
+
 // Initialize Express app
 const app = express();
 
 // Connect to MySQL
 connectDB();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan("dev"));
+// ── Security headers via helmet ──────────────────────────
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // allow image loads
+    contentSecurityPolicy: false, // managed by frontend
+  }),
+);
 
-// Serve uploaded images as static files
+// ── CORS ─────────────────────────────────────────────────
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173"];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Requests without an Origin header (curl, Postman, server-to-server proxy)
+      // are allowed in development; blocked in production.
+      if (!origin) {
+        return process.env.NODE_ENV === "production"
+          ? cb(null, false)
+          : cb(null, true);
+      }
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      // Reject with null (no error) — a thrown Error would cause a 500
+      cb(null, false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
+// ── Body parsers (with size limits to prevent ReDoS / DoS) ─
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+// ── Logging ───────────────────────────────────────────────
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// ── Global rate limit (all API routes) ───────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many requests, please try again later." },
+});
+app.use("/api/", globalLimiter);
+
+// ── Serve uploaded images as static files ────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Docs — Swagger UI
@@ -86,10 +138,15 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
+  // Log full error internally; never expose stack traces to clients
   console.error("Server error:", err);
-  res.status(500).json({
+  const statusCode = err.status || err.statusCode || 500;
+  res.status(statusCode).json({
     success: false,
-    error: " Internal server error",
+    error:
+      process.env.NODE_ENV === "production"
+        ? "Internal server error"
+        : err.message || "Internal server error",
   });
 });
 
