@@ -301,7 +301,7 @@ function AdminDashboard() {
       >
         <Space wrap style={{ marginBottom: 12 }}>
           <Input
-            placeholder="Search name, email, org…"
+            placeholder="Search name,org…"
             prefix={<SearchOutlined />}
             allowClear
             style={{ width: 220 }}
@@ -342,7 +342,7 @@ function AdminDashboard() {
       <Card title="Organizations" loading={loadingOrgs}>
         <Space wrap style={{ marginBottom: 12 }}>
           <Input
-            placeholder="Search name, ID, email…"
+            placeholder="Search name, ID"
             prefix={<SearchOutlined />}
             allowClear
             style={{ width: 220 }}
