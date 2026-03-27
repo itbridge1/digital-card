@@ -404,7 +404,7 @@ function Organizations() {
 
       <Space wrap style={{ marginBottom: 12 }}>
         <Input
-          placeholder="Search name, ID, email…"
+          placeholder="Search name, ID..."
           prefix={<SearchOutlined />}
           allowClear
           style={{ width: 220 }}
