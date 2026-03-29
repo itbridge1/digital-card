@@ -134,6 +134,11 @@ export const useraccessAPI = {
     api.delete(
       `/manager/organizations/${encodeURIComponent(tenantId)}/cards/${cardId}`,
     ),
+  bulkUpdateDesign: (tenantId, cardIds, designSettings) =>
+    api.put(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/cards/bulk-design`,
+      { cardIds, designSettings },
+    ),
   exportCards: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/export`),
   getAvailableNfcTags: (tenantId) =>
@@ -183,6 +188,8 @@ export const tenantPortalAPI = {
   updateCard: (cardId, data) => api.put(`/tenant/cards/${cardId}`, data),
   deactivateCard: (cardId) => api.delete(`/tenant/cards/${cardId}`),
   restoreCard: (cardId) => api.patch(`/tenant/cards/${cardId}/restore`),
+  bulkUpdateDesign: (cardIds, designSettings) =>
+    api.put("/tenant/cards/bulk-design", { cardIds, designSettings }),
   changePassword: (currentPassword, newPassword) =>
     api.post("/tenant/change-password", { currentPassword, newPassword }),
 };

@@ -10,7 +10,7 @@ const resolveImg = (url) => {
   return `${API_BASE}${url}`;
 };
 
-const INTERNAL_KEYS = new Set(["name", "title", "custom", "shortCode", "createdBy", "section"]);
+const INTERNAL_KEYS = new Set(["name", "title", "custom", "shortCode", "createdBy", "section", "_design"]);
 
 const FIELD_LABELS = {
   // common

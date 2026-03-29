@@ -367,6 +367,57 @@ router.post(
   },
 );
 /**
+ * PUT /api/manager/organizations/:tenantId/cards/bulk-design
+ * Apply card design settings to multiple card holders at once.
+ * NOTE: must be registered BEFORE PUT /cards/:cardId to prevent Express treating
+ * the literal string "bulk-design" as a :cardId parameter.
+ */
+router.put("/organizations/:tenantId/cards/bulk-design", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    const { cardIds, designSettings } = req.body;
+
+    if (!Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must be a non-empty array" });
+    }
+    if (!designSettings || typeof designSettings !== "object" || Array.isArray(designSettings)) {
+      return res.status(400).json({ success: false, error: "designSettings must be an object" });
+    }
+
+    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "isDark", "contrast"];
+    const sanitized = {};
+    for (const key of ALLOWED_KEYS) {
+      if (key in designSettings) sanitized[key] = designSettings[key];
+    }
+
+    const cards = await Card.findAll({ where: { id: cardIds, tenantId } });
+    if (cards.length === 0) {
+      return res.status(404).json({ success: false, error: "No matching cards found" });
+    }
+
+    for (const card of cards) {
+      const existing =
+        typeof card.metadata === "string"
+          ? (() => { try { return JSON.parse(card.metadata); } catch { return {}; } })()
+          : card.metadata || {};
+      card.metadata = { ...existing, _design: sanitized };
+      await card.save();
+    }
+
+    res.json({ success: true, message: `Design applied to ${cards.length} card(s)`, count: cards.length });
+  } catch (error) {
+    console.error("Error applying bulk design:", error);
+    res.status(500).json({ success: false, error: "Failed to apply bulk design" });
+  }
+});
+
+/**
  * PUT /api/manager/organizations/:tenantId/cards/:cardId
  * Update a card holder
  */

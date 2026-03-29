@@ -123,6 +123,54 @@ router.get("/cards/:cardId", async (req, res) => {
 });
 
 /**
+ * PUT /api/tenant/cards/bulk-design
+ * Apply card design settings (design variant + theme) to multiple card holders at once.
+ * NOTE: must be registered BEFORE PUT /cards/:cardId to prevent Express treating
+ * the literal string "bulk-design" as a :cardId parameter.
+ */
+router.put("/cards/bulk-design", async (req, res) => {
+  try {
+    const { cardIds, designSettings } = req.body;
+
+    if (!Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must be a non-empty array" });
+    }
+    if (!designSettings || typeof designSettings !== "object" || Array.isArray(designSettings)) {
+      return res.status(400).json({ success: false, error: "designSettings must be an object" });
+    }
+
+    // Whitelist only known design keys to prevent metadata pollution
+    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "isDark", "contrast"];
+    const sanitized = {};
+    for (const key of ALLOWED_KEYS) {
+      if (key in designSettings) sanitized[key] = designSettings[key];
+    }
+
+    const cards = await Card.findAll({
+      where: { id: cardIds, tenantId: req.user.tenantId },
+    });
+
+    if (cards.length === 0) {
+      return res.status(404).json({ success: false, error: "No matching cards found for this tenant" });
+    }
+
+    for (const card of cards) {
+      const existing =
+        typeof card.metadata === "string"
+          ? (() => { try { return JSON.parse(card.metadata); } catch { return {}; } })()
+          : card.metadata || {};
+      card.metadata = { ...existing, _design: sanitized };
+      await card.save();
+    }
+
+    res.json({ success: true, message: `Design applied to ${cards.length} card(s)`, count: cards.length });
+  } catch (error) {
+    console.error("Error applying bulk design:", error);
+    res.status(500).json({ success: false, error: "Failed to apply bulk design" });
+  }
+});
+
+/**
  * PUT /api/tenant/cards/:cardId
  * Soft-edit a card holder — only metadata and profile image may be changed.
  * Core fields (tagId, tenantId, businessUrl, publicUrl) are locked.

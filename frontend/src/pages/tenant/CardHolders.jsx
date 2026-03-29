@@ -16,6 +16,12 @@ import {
   Tooltip,
   Alert,
   Grid,
+  Select,
+  Switch,
+  Divider,
+  Badge,
+  Slider,
+  Card as AntCard,
 } from "antd";
 import {
   EditOutlined,
@@ -27,9 +33,39 @@ import {
   CopyOutlined,
   SearchOutlined,
   BgColorsOutlined,
+  AppstoreOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { tenantPortalAPI, uploadAPI } from "../../services/api";
+
+const THEME_PRESETS = {
+  ocean:  { primaryColor: "#1890ff", secondaryColor: "#52c41a", accentColor: "#ff6b6b", surfaceColor: "#f0f2f5" },
+  sunset: { primaryColor: "#f97316", secondaryColor: "#facc15", accentColor: "#dc2626", surfaceColor: "#fff7ed" },
+  royal:  { primaryColor: "#4f46e5", secondaryColor: "#06b6d4", accentColor: "#db2777", surfaceColor: "#eef2ff" },
+  forest: { primaryColor: "#166534", secondaryColor: "#22c55e", accentColor: "#b45309", surfaceColor: "#f0fdf4" },
+};
+
+const DEFAULT_BULK_THEME = {
+  design: "one",
+  preset: "ocean",
+  ...THEME_PRESETS.ocean,
+  isDark: false,
+  contrast: 100,
+};
+
+const DESIGN_OPTIONS = [
+  { value: "one",   label: "Design 1" },
+  { value: "two",   label: "Design 2" },
+  { value: "three", label: "Design 3" },
+];
+
+const PRESET_OPTIONS = [
+  { value: "ocean",  label: "Ocean" },
+  { value: "sunset", label: "Sunset" },
+  { value: "royal",  label: "Royal" },
+  { value: "forest", label: "Forest" },
+];
 
 const { Title, Text } = Typography;
 const API_BASE =
@@ -46,6 +82,14 @@ export default function TenantCardHolders() {
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUrl, setProfileUrl] = useState("");
   const [search, setSearch] = useState("");
+  const [filterHouse, setFilterHouse] = useState("");
+  const [filterGrade, setFilterGrade] = useState("");
+  const [filterDept, setFilterDept] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -201,6 +245,25 @@ export default function TenantCardHolders() {
     }
   };
 
+  // ── bulk design apply ────────────────────────────────────────────
+  const handleBulkDesignApply = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("Select at least one card first");
+      return;
+    }
+    setBulkApplying(true);
+    try {
+      const res = await tenantPortalAPI.bulkUpdateDesign(selectedRowKeys, bulkTheme);
+      message.success(res.data.message || "Design applied");
+      setBulkDesignOpen(false);
+      setSelectedRowKeys([]);
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to apply design");
+    } finally {
+      setBulkApplying(false);
+    }
+  };
+
   // ── soft deactivate ──────────────────────────────────────────────
   const handleDeactivate = async (cardId) => {
     try {
@@ -223,21 +286,45 @@ export default function TenantCardHolders() {
     }
   };
 
+  // ── distinct filter options ──────────────────────────────────────
+  const houseOptions = useMemo(() => {
+    const values = [...new Set(cards.map((c) => c.metadata?.house).filter(Boolean))];
+    return values.map((v) => ({ value: v, label: v }));
+  }, [cards]);
+
+  const gradeOptions = useMemo(() => {
+    const values = [...new Set(cards.map((c) => c.metadata?.grade).filter(Boolean))];
+    return values.map((v) => ({ value: v, label: v }));
+  }, [cards]);
+
+  const deptOptions = useMemo(() => {
+    const values = [...new Set(cards.map((c) => c.metadata?.department).filter(Boolean))];
+    return values.map((v) => ({ value: v, label: v }));
+  }, [cards]);
+
   // ── filtered cards ───────────────────────────────────────────────
   const filtered = useMemo(() => {
-    if (!search) return cards;
-    const q = search.toLowerCase();
-    return cards.filter((c) => {
-      const m = c.metadata || {};
-      return (
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.email || "").toLowerCase().includes(q) ||
-        (m.studentId || "").toLowerCase().includes(q) ||
-        (m.employeeId || "").toLowerCase().includes(q) ||
-        (c.tagId || "").toLowerCase().includes(q)
-      );
-    });
-  }, [cards, search]);
+    let data = cards;
+    if (search) {
+      const q = search.toLowerCase();
+      data = data.filter((c) => {
+        const m = c.metadata || {};
+        return (
+          (m.name || "").toLowerCase().includes(q) ||
+          (m.email || "").toLowerCase().includes(q) ||
+          (m.studentId || "").toLowerCase().includes(q) ||
+          (m.employeeId || "").toLowerCase().includes(q) ||
+          (c.tagId || "").toLowerCase().includes(q)
+        );
+      });
+    }
+    if (filterHouse)  data = data.filter((c) => c.metadata?.house === filterHouse);
+    if (filterGrade)  data = data.filter((c) => c.metadata?.grade === filterGrade);
+    if (filterDept)   data = data.filter((c) => c.metadata?.department === filterDept);
+    if (filterStatus === "active")   data = data.filter((c) => c.isActive);
+    if (filterStatus === "inactive") data = data.filter((c) => !c.isActive);
+    return data;
+  }, [cards, search, filterHouse, filterGrade, filterDept, filterStatus]);
 
   // ── table columns ────────────────────────────────────────────────
   const columns = [
@@ -487,15 +574,81 @@ export default function TenantCardHolders() {
         closable
       />
 
-      <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
+      <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         <Input
           placeholder="Search by name, email, ID or tag…"
           prefix={<SearchOutlined />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
-          style={{ maxWidth: 300 }}
+          style={{ maxWidth: 240 }}
         />
+
+        {/* Status filter — always visible */}
+        <Select
+          placeholder="Status"
+          allowClear
+          style={{ width: 120 }}
+          value={filterStatus || undefined}
+          onChange={(v) => setFilterStatus(v || "")}
+          options={[
+            { value: "active",   label: "Active" },
+            { value: "inactive", label: "Inactive" },
+          ]}
+        />
+
+        {/* SCHOOL-specific filters */}
+        {org?.type === "SCHOOL" && houseOptions.length > 0 && (
+          <Select
+            placeholder="House"
+            allowClear
+            style={{ width: 130 }}
+            value={filterHouse || undefined}
+            onChange={(v) => setFilterHouse(v || "")}
+            options={houseOptions}
+          />
+        )}
+        {org?.type === "SCHOOL" && gradeOptions.length > 0 && (
+          <Select
+            placeholder="Class / Grade"
+            allowClear
+            style={{ width: 150 }}
+            value={filterGrade || undefined}
+            onChange={(v) => setFilterGrade(v || "")}
+            options={gradeOptions}
+          />
+        )}
+
+        {/* HOSPITAL-specific filter */}
+        {org?.type === "HOSPITAL" && deptOptions.length > 0 && (
+          <Select
+            placeholder="Department"
+            allowClear
+            style={{ width: 160 }}
+            value={filterDept || undefined}
+            onChange={(v) => setFilterDept(v || "")}
+            options={deptOptions}
+          />
+        )}
+
+        {/* Bulk design button — shown when rows are selected */}
+        {selectedRowKeys.length > 0 && (
+          <Badge count={selectedRowKeys.length} size="small">
+            <Button
+              icon={<AppstoreOutlined />}
+              type="primary"
+              onClick={() => setBulkDesignOpen(true)}
+            >
+              Bulk Card Design
+            </Button>
+          </Badge>
+        )}
+
+        {selectedRowKeys.length > 0 && (
+          <Button size="small" onClick={() => setSelectedRowKeys([])}>
+            Clear selection
+          </Button>
+        )}
       </div>
 
       <Table
@@ -506,7 +659,140 @@ export default function TenantCardHolders() {
         pagination={{ pageSize: 20, showSizeChanger: true }}
         scroll={{ x: true }}
         rowClassName={(r) => (!r.isActive ? "row-inactive" : "")}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+          preserveSelectedRowKeys: true,
+        }}
       />
+
+      {/* Bulk Card Design Modal */}
+      <Modal
+        open={bulkDesignOpen}
+        title={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 32 }}>
+            <Space>
+              <AppstoreOutlined />
+              <span>Bulk Card Design ({selectedRowKeys.length} selected)</span>
+            </Space>
+            <Tooltip title="Reset to defaults">
+              <Button
+                size="small"
+                icon={<ReloadOutlined style={{ fontSize: 10 }} />}
+                onClick={() => setBulkTheme(DEFAULT_BULK_THEME)}
+                style={{ borderRadius: 6 }}
+              />
+            </Tooltip>
+          </div>
+        }
+        onCancel={() => setBulkDesignOpen(false)}
+        onOk={handleBulkDesignApply}
+        confirmLoading={bulkApplying}
+        okText={`Apply to ${selectedRowKeys.length} card(s)`}
+        width={460}
+        styles={{ body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 4 } }}
+        destroyOnClose
+      >
+        {/* ── Section 1: Card Design (mirrors CardView sidebar) ── */}
+        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 12 }}>
+          <Text strong style={{ display: "block", marginBottom: 4 }}>Card Design</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
+            Select a design to preview instantly.
+          </Text>
+          <Select
+            value={bulkTheme.design}
+            onChange={(v) => setBulkTheme((prev) => ({ ...prev, design: v }))}
+            size="large"
+            style={{ width: "100%" }}
+            options={[
+              { label: "Design 1", value: "one" },
+              { label: "Design 2", value: "two" },
+              { label: "Design 3", value: "three" },
+            ]}
+          />
+        </AntCard>
+
+        {/* ── Section 2: Accessibility (mirrors CardView sidebar) ── */}
+        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}>
+          {/* Dark Mode */}
+          <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>{bulkTheme.isDark ? "🌙" : "☀️"}</span>
+              <Text style={{ fontSize: 13 }}>Dark Mode</Text>
+            </div>
+            <Switch
+              size="small"
+              checked={bulkTheme.isDark}
+              onChange={(v) => setBulkTheme((prev) => ({ ...prev, isDark: v }))}
+            />
+          </div>
+
+          {/* Theme Preset */}
+          <div style={{ marginBottom: 14 }}>
+            <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>Theme Preset</Text>
+            <Select
+              value={bulkTheme.preset === "custom" ? undefined : bulkTheme.preset}
+              placeholder="Custom"
+              onChange={(v) => setBulkTheme((prev) => ({ ...prev, ...THEME_PRESETS[v], preset: v }))}
+              size="middle"
+              style={{ width: "100%" }}
+              options={[
+                { label: "Ocean",  value: "ocean" },
+                { label: "Sunset", value: "sunset" },
+                { label: "Royal",  value: "royal" },
+                { label: "Forest", value: "forest" },
+              ]}
+            />
+          </div>
+
+          {/* Individual Color Pickers */}
+          {[
+            { key: "primaryColor",   label: "Primary Color" },
+            { key: "secondaryColor", label: "Secondary Color" },
+            { key: "accentColor",    label: "Accent Color" },
+            { key: "surfaceColor",   label: "Surface Color" },
+          ].map(({ key, label }) => (
+            <div key={key} style={{ marginBottom: 14 }}>
+              <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>{label}</Text>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="color"
+                  value={bulkTheme[key]}
+                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
+                  style={{ width: 36, height: 36, cursor: "pointer", borderRadius: 6, border: "1px solid #e2e8f0", padding: 2 }}
+                />
+                <input
+                  type="text"
+                  value={bulkTheme[key]}
+                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
+                  style={{ flex: 1, borderRadius: 6, border: "1px solid #e2e8f0", padding: "4px 8px", fontSize: 13, fontFamily: "monospace" }}
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Contrast Slider */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>Contrast</Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>{bulkTheme.contrast}%</Text>
+            </div>
+            <Slider
+              min={50}
+              max={150}
+              value={bulkTheme.contrast}
+              onChange={(v) => setBulkTheme((prev) => ({ ...prev, contrast: v }))}
+            />
+          </div>
+        </AntCard>
+
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginTop: 12 }}
+          message={`Design settings will be applied to ${selectedRowKeys.length} card(s). Each card can still be customised individually from the card view.`}
+        />
+      </Modal>
 
       {/* Edit Modal */}
       <Modal

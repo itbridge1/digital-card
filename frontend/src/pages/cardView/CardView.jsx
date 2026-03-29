@@ -73,27 +73,11 @@ function CardView() {
   const [error, setError] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [selectedDesign, setSelectedDesign] = useState("one");
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem("cardTheme");
-
-    if (!savedTheme) {
-      return DEFAULT_THEME;
-    }
-
-    try {
-      const parsedTheme = JSON.parse(savedTheme);
-      return { ...DEFAULT_THEME, ...parsedTheme };
-    } catch {
-      return DEFAULT_THEME;
-    }
-  });
+  const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [savingDesign, setSavingDesign] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
-
-  useEffect(() => {
-    localStorage.setItem("cardTheme", JSON.stringify(theme));
-  }, [theme]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -134,13 +118,21 @@ function CardView() {
         if (currentUser.role === "tenant") {
           // Tenant users fetch their own card via the tenant portal API
           const tenantRes = await tenantPortalAPI.getCardByTag(tagId);
-          setCard(tenantRes.data.data);
+          const fetchedCard = tenantRes.data.data;
+          setCard(fetchedCard);
           setTenant(tenantRes.data.tenant);
           setIsOwner(true); // tenants can customise their own org's cards
+          // Load saved design settings from metadata
+          if (fetchedCard?.metadata?._design) {
+            const d = fetchedCard.metadata._design;
+            setSelectedDesign(d.design || "one");
+            setTheme({ ...DEFAULT_THEME, ...d });
+          }
         } else {
           // Fetch from organization context (admin / manager)
           cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
-          setCard(cardRes.data.data);
+          const fetchedCard = cardRes.data.data;
+          setCard(fetchedCard);
           const fetchedTenant = cardRes.data.tenant;
           setTenant(fetchedTenant);
 
@@ -149,6 +141,12 @@ function CardView() {
             currentUser.role === "admin" ||
             fetchedTenant?.createdBy === currentUser.id;
           setIsOwner(owned);
+          // Load saved design settings from metadata
+          if (fetchedCard?.metadata?._design) {
+            const d = fetchedCard.metadata._design;
+            setSelectedDesign(d.design || "one");
+            setTheme({ ...DEFAULT_THEME, ...d });
+          }
         }
       } else {
         // Fetch from public context
@@ -207,6 +205,33 @@ function CardView() {
     }));
   };
   const resetToDefault = () => setTheme(DEFAULT_THEME);
+
+  const handleSaveDesign = async () => {
+    if (!card) return;
+    setSavingDesign(true);
+    try {
+      const designSettings = { design: selectedDesign, ...theme };
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+      if (currentUser.role === "tenant") {
+        await tenantPortalAPI.updateCard(card.id, {
+          metadata: { _design: designSettings },
+        });
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        const tenantId = params.get("tenantId");
+        await useraccessAPI.updateCard(tenantId, card.id, {
+          metadata: { _design: designSettings },
+        });
+      }
+      const { message: msg } = await import("antd");
+      msg.success("Design saved");
+    } catch {
+      const { message: msg } = await import("antd");
+      msg.error("Failed to save design");
+    } finally {
+      setSavingDesign(false);
+    }
+  };
 
   const hexToRgba = (hex, opacity, contrast = 100) => {
     if (!hex) return `rgba(0,0,0,${opacity})`;
@@ -350,7 +375,7 @@ function CardView() {
   const avatarSrc = card.profileImageUrl ? `${API_BASE}${card.profileImageUrl}` : null;
   const orgLogoSrc = tenant?.logoUrl ? `${API_BASE}${tenant.logoUrl}` : null;
 
-  const INTERNAL_KEYS = ["name", "title", "custom", "shortCode", "createdBy", "section", "profileImageUrl"];
+  const INTERNAL_KEYS = ["name", "title", "custom", "shortCode", "createdBy", "section", "profileImageUrl", "_design"];
   const displayRows = Object.entries(card.metadata || {}).filter(([key]) => !INTERNAL_KEYS.includes(key));
 
   const cardholderName = card.metadata?.name || "—";
@@ -386,17 +411,26 @@ function CardView() {
         </Text>
 
         {isOwner ? (
-          <Button
-            icon={<FaSlidersH style={{ fontSize: 12 }} />}
-            onClick={() => setSidebarOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              borderRadius: 8, fontWeight: 500, height: 36,
-              background: "#09090b", color: "#fff", border: "none",
-            }}
-          >
-            Customize
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button
+              onClick={handleSaveDesign}
+              loading={savingDesign}
+              style={{ borderRadius: 8, fontWeight: 500, height: 36 }}
+            >
+              Save Design
+            </Button>
+            <Button
+              icon={<FaSlidersH style={{ fontSize: 12 }} />}
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                borderRadius: 8, fontWeight: 500, height: 36,
+                background: "#09090b", color: "#fff", border: "none",
+              }}
+            >
+              Customize
+            </Button>
+          </div>
         ) : (
           <div style={{ width: 88 }} />
         )}
