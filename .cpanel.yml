@@ -1,0 +1,22 @@
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/miracelt/cardapi.itbridgenepal.com.np/
+
+    # Copy ONLY backend contents (not the folder itself)
+    - /bin/rsync -av --delete \
+        --exclude=node_modules \
+        --exclude=.git \
+        backend/ $DEPLOYPATH
+
+    # Move into deployed backend
+    - cd $DEPLOYPATH
+
+    # Install dependencies
+    - /usr/bin/npm install --production
+
+    # Run seed
+    - /usr/bin/node seed.js
+
+    # Restart Node app (cPanel Passenger)
+    - /bin/mkdir -p tmp
+    - /bin/touch tmp/restart.txt
