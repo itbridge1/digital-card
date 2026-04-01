@@ -268,7 +268,7 @@ function CardRegistration() {
       setSaving(true);
       const payload = {
         tagId,
-        tenantId: allValues.tenantId || undefined,
+        managerId: allValues.managerId || undefined,
         status: "active",
         redirectUrl: allValues.redirectUrl || undefined,
       };
@@ -299,10 +299,11 @@ function CardRegistration() {
   };
 
   const openEditModal = (row) => {
+    console.log("row",row);
     setEditingRow(row);
     editForm.setFieldsValue({
       tagId: row.tagId,
-      tenantId: row.tenantId || undefined,
+      managerId: row.managerId || undefined,
       status:
         row.status === "registered"
           ? "active"
