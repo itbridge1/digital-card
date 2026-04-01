@@ -519,7 +519,12 @@ function OrganizationDetail() {
   const dataColumns = useMemo(() => {
     // 1. Template-defined columns
     if (activeTemplate && activeTemplate.fields?.length > 0) {
-      return [...activeTemplate.fields]
+      const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
+      const toTitleT = (k) =>
+        k.replace(/_/g, " ")
+         .replace(/([a-z])([A-Z])/g, "$1 $2")
+         .replace(/\b\w/g, (c) => c.toUpperCase());
+      const tplCols = [...activeTemplate.fields]
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .filter((f) => !INTERNAL_META_KEYS.has(f.key))
         .map((f) => ({
@@ -530,71 +535,87 @@ function OrganizationDetail() {
             ? <span>{r.metadata[f.key]}</span>
             : <Text type="secondary">—</Text>,
           sorter: (a, b) =>
-            String(a.metadata?.[f.key] || "").localeCompare(
-              String(b.metadata?.[f.key] || ""),
-            ),
+            String(a.metadata?.[f.key] || "").localeCompare(String(b.metadata?.[f.key] || "")),
         }));
-    }
-
-    // 2. Auto-discover columns from actual card metadata
-    //    (handles template-imported cards when template definition isn't loaded)
-    const seen = new Set();
-    const discovered = [];
-    cards.forEach((c) => {
-      Object.keys(c.metadata || {}).forEach((k) => {
-        if (!INTERNAL_META_KEYS.has(k) && !seen.has(k)) {
-          seen.add(k);
-          discovered.push(k);
-        }
-      });
-    });
-    if (discovered.length > 0) {
-      const toTitle = (k) =>
-        k.replace(/_/g, " ")
-         .replace(/([a-z])([A-Z])/g, "$1 $2")
-         .replace(/\b\w/g, (c) => c.toUpperCase());
-      return discovered.map((k) => ({
-        title: toTitle(k),
-        key: k,
-        ellipsis: true,
-        render: (_, r) =>
-          r.metadata?.[k]
-            ? <span>{r.metadata[k]}</span>
-            : <Text type="secondary">—</Text>,
-        sorter: (a, b) =>
-          String(a.metadata?.[k] || "").localeCompare(
-            String(b.metadata?.[k] || ""),
-          ),
+      // Append any extra keys in card data not part of the template definition
+      const extraT = new Set();
+      cards.forEach((c) => Object.keys(c.metadata || {}).forEach((k) => {
+        if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
       }));
+      return [...tplCols, ...[...extraT].map((k) => ({
+        title: toTitleT(k), key: k, ellipsis: true,
+        render: (_, r) => r.metadata?.[k] ? <span>{r.metadata[k]}</span> : <Text type="secondary">—</Text>,
+        sorter: (a, b) => String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+      }))];
     }
 
-    // 3. Legacy hardcoded columns
+    // ── Helper: build a column def for any metadata key ────────────
+    const toTitle = (k) =>
+      k.replace(/_/g, " ")
+       .replace(/([a-z])([A-Z])/g, "$1 $2")
+       .replace(/\b\w/g, (c) => c.toUpperCase());
+    const metaCol = (k, label) => ({
+      title: label || toTitle(k),
+      key: k,
+      ellipsis: true,
+      render: (_, r) => r.metadata?.[k]
+        ? <span>{r.metadata[k]}</span>
+        : <Text type="secondary">—</Text>,
+      sorter: (a, b) =>
+        String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+    });
+
+    // ── Find extra keys in card metadata not covered by standard cols ──
+    const extraKeys = (() => {
+      const standardKeys = new Set([
+        "name","title","email","phone","address","studentId","grade",
+        "section","house","guardianName","guardianPhone","employeeId",
+        "department","specialization","licenseNumber","emergencyContact",
+        "company","position","linkedIn","website",
+        ...INTERNAL_META_KEYS,
+      ]);
+      const seen = new Set();
+      const out = [];
+      cards.forEach((c) => {
+        Object.keys(c.metadata || {}).forEach((k) => {
+          if (!standardKeys.has(k) && !seen.has(k)) {
+            seen.add(k);
+            out.push(k);
+          }
+        });
+      });
+      return out;
+    })();
+
+    // 2. Standard columns + extra keys appended at end
+    let standard;
     if (orgType === "SCHOOL") {
-      return [
-        { title: "Name",        key: "name",        render: (_, r) => r.metadata?.name        || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.name        || "").localeCompare(b.metadata?.name        || "") },
-        { title: "Roll No",     key: "studentId",   render: (_, r) => r.metadata?.studentId   || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.studentId   || "").localeCompare(b.metadata?.studentId   || "") },
-        { title: "Class",       key: "grade",       render: (_, r) => r.metadata?.grade       || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.grade       || "").localeCompare(b.metadata?.grade       || "") },
-        { title: "House",       key: "house",       render: (_, r) => r.metadata?.house       || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.house       || "").localeCompare(b.metadata?.house       || "") },
-        { title: "Guardian",    key: "guardianName",render: (_, r) => r.metadata?.guardianName|| <Text type="secondary">—</Text> },
-        { title: "Contact",     key: "phone",       render: (_, r) => r.metadata?.phone       || <Text type="secondary">—</Text> },
+      standard = [
+        metaCol("name",        "Name"),
+        metaCol("studentId",   "Roll No"),
+        metaCol("grade",       "Class"),
+        metaCol("house",       "House"),
+        metaCol("guardianName","Guardian"),
+        metaCol("phone",       "Contact"),
+      ];
+    } else if (orgType === "HOSPITAL") {
+      standard = [
+        metaCol("name",          "Name"),
+        metaCol("employeeId",    "Employee ID"),
+        metaCol("department",    "Department"),
+        metaCol("specialization","Specialization"),
+        metaCol("phone",         "Phone"),
+      ];
+    } else {
+      standard = [
+        metaCol("name",    "Name"),
+        metaCol("position","Position"),
+        metaCol("company", "Company"),
+        metaCol("email",   "Email"),
+        metaCol("phone",   "Phone"),
       ];
     }
-    if (orgType === "HOSPITAL") {
-      return [
-        { title: "Name",           key: "name",           render: (_, r) => r.metadata?.name           || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.name           || "").localeCompare(b.metadata?.name           || "") },
-        { title: "Employee ID",    key: "employeeId",     render: (_, r) => r.metadata?.employeeId     || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.employeeId     || "").localeCompare(b.metadata?.employeeId     || "") },
-        { title: "Department",     key: "department",     render: (_, r) => r.metadata?.department     || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.department     || "").localeCompare(b.metadata?.department     || "") },
-        { title: "Specialization", key: "specialization", render: (_, r) => r.metadata?.specialization || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.specialization || "").localeCompare(b.metadata?.specialization || "") },
-        { title: "Phone",          key: "phone",          render: (_, r) => r.metadata?.phone          || <Text type="secondary">—</Text> },
-      ];
-    }
-    return [
-      { title: "Name",     key: "name",     render: (_, r) => r.metadata?.name     || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.name     || "").localeCompare(b.metadata?.name     || "") },
-      { title: "Position", key: "position", render: (_, r) => r.metadata?.position || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.position || "").localeCompare(b.metadata?.position || "") },
-      { title: "Company",  key: "company",  render: (_, r) => r.metadata?.company  || <Text type="secondary">—</Text>, sorter: (a, b) => (a.metadata?.company  || "").localeCompare(b.metadata?.company  || "") },
-      { title: "Email",    key: "email",    render: (_, r) => r.metadata?.email    || <Text type="secondary">—</Text>, ellipsis: true },
-      { title: "Phone",    key: "phone",    render: (_, r) => r.metadata?.phone    || <Text type="secondary">—</Text> },
-    ];
+    return [...standard, ...extraKeys.map((k) => metaCol(k))];
   }, [activeTemplate, orgType, cards]);
 
   const columns = [
