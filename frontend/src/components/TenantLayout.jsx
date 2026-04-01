@@ -97,7 +97,7 @@ function TenantLayout() {
             </div>
             <div>
               <div className="nfc-sidebar-brand-title">{orgName}</div>
-              <div className="nfc-sidebar-brand-sub">Organization Portal</div>
+              {/* <div className="nfc-sidebar-brand-sub">Organization Portal</div> */}
             </div>
           </div>
         )}

@@ -86,7 +86,7 @@ function UserAccessLayout() {
             </div>
             <div>
               <div className="nfc-sidebar-brand-title">Manager</div>
-              <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div>
+              {/* <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div> */}
             </div>
           </div>
         )}
