@@ -1,11 +1,13 @@
 /**
- * Database Creation Script
- * Creates the nfc_platform database if it doesn't exist
- * Run this before running seed.js for the first time
+ * Seed Script
+ * Populates the nfc_platform database with sample data for development/testing.
+ * Run create-db.js first, then: npm run seed
  *
- * Tables created by sequelize.sync() in seed.js:
+ * Tables populated:
  *   tenants        — organizations (SCHOOL / HOSPITAL / BUSINESS)
  *   users          — admin + manager accounts
+ *                   tenantId is nullable: admin/manager accounts may not belong
+ *                   to any organization (e.g. the seeded manager has tenantId: null)
  *   cards          — NFC card holders
  *                    metadata shape varies by tenant type:
  *                    SCHOOL   : name, studentId (Roll No), grade (Class or "Class(Section)"),

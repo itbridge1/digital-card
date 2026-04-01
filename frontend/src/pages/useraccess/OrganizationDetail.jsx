@@ -1023,18 +1023,16 @@ function OrganizationDetail() {
             <Form.Item
               label="NFC Tag ID"
               name="tagId"
-              rules={[{ required: true, message: "Tag ID is required" }]}
-              tooltip="Select a registered NFC tag to assign to this card holder"
+              tooltip="Select a registered NFC tag to assign to this card holder, or leave as None to assign later"
             >
               <Select
                 showSearch
+                allowClear
                 loading={nfcTagsLoading}
                 placeholder={
                   nfcTagsLoading
                     ? "Loading tags..."
-                    : nfcTags.length === 0
-                      ? "No available tags"
-                      : "Select an NFC tag"
+                    : "None (assign tag later)"
                 }
                 optionFilterProp="label"
                 notFoundContent={
@@ -1044,10 +1042,15 @@ function OrganizationDetail() {
                     "No registered NFC tags available"
                   )
                 }
-                options={nfcTags.map((t) => ({
-                  value: t.tagId,
-                  label: t.tagId,
-                }))}
+                options={[
+                  { value: null, label: "None (assign tag later)" },
+                  ...nfcTags
+                    .filter((t) => !t.tagId.toUpperCase().startsWith("PENDING-"))
+                    .map((t) => ({
+                      value: t.tagId,
+                      label: t.tagId,
+                    })),
+                ]}
               />
             </Form.Item>
           )}

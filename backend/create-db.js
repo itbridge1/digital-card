@@ -4,12 +4,16 @@
  * Run this before running seed.js for the first time
  *
  * Tables created by sequelize.sync() in seed.js:
- *   tenants       — organizations (SCHOOL / HOSPITAL / BUSINESS)
- *   users         — admin + manager accounts
- *   cards         — NFC card holders
+ *   tenants        — organizations (SCHOOL / HOSPITAL / BUSINESS)
+ *   users          — admin + manager accounts
+ *                   tenantId is nullable: admin/manager accounts may have no
+ *                   assigned organization
+ *   cards          — NFC card holders
+ *                   tagId may be a real NFC UID or a PENDING-<hex> placeholder
+ *                   when no physical tag has been assigned yet.
  *                   includes: tagId, businessUrl, publicUrl (/view/:tagId),
  *                             profileImageUrl, metadata (JSON), tapCount
- *   card_registers — NFC chip registration records
+ *   card_registers — NFC chip registration records (links tagId → card → tenant)
  */
 
 require('dotenv').config();
