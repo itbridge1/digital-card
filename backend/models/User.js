@@ -26,7 +26,7 @@ const User = sequelize.define('User', {
   },
   tenantId: {
     type: DataTypes.STRING(50),
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'tenants',
       key: 'tenantId'
