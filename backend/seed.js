@@ -58,12 +58,12 @@ const sampleUsers = [
     tenantId: "BUSINESS_01",
     role: "admin",
   },
-  // Platform manager — manages all organizations
+  // Platform manager — no organization assigned (tenantId is optional for managers)
   {
     name: "ITBridge Manager",
     email: "manager@itb.com",
     password: "ITBridge@622",
-    tenantId: "BUSINESS_01",
+    tenantId: null,
     role: "manager",
   },
 ];
