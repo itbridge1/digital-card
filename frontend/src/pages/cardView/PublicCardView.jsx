@@ -29,6 +29,7 @@ function PublicCardView() {
   const { tagId } = useParams();
   const [card, setCard] = useState(null);
   const [tenant, setTenant] = useState(null);
+  const [templateFields, setTemplateFields] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -39,6 +40,7 @@ function PublicCardView() {
         const res = await publicAPI.getCard(tagId);
         setCard(res.data.data);
         setTenant(res.data.tenant);
+        setTemplateFields(res.data.templateFields || null);
         setError("");
       } catch (err) {
         setError(err.response?.data?.error || "Card not found");
@@ -106,6 +108,7 @@ function PublicCardView() {
         tenant={tenant}
         formatFieldName={formatFieldName}
         theme={DEFAULT_THEME}
+        templateFields={templateFields}
       />
       <p style={{ marginTop: 24, fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 500 }}>NFC Digital Card</p>
     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { cardAPI, tenantAPI, useraccessAPI, tenantPortalAPI } from "../../services/api";
+import { cardAPI, tenantAPI, useraccessAPI, tenantPortalAPI, cardTemplateAPI } from "../../services/api";
 import {
   Button,
   Card,
@@ -76,6 +76,7 @@ function CardView() {
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [savingDesign, setSavingDesign] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [templateFields, setTemplateFields] = useState(null);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
@@ -121,6 +122,7 @@ function CardView() {
           const fetchedCard = tenantRes.data.data;
           setCard(fetchedCard);
           setTenant(tenantRes.data.tenant);
+          if (tenantRes.data.templateFields) setTemplateFields(tenantRes.data.templateFields);
           setIsOwner(true); // tenants can customise their own org's cards
           // Load saved design settings from metadata
           if (fetchedCard?.metadata?._design) {
@@ -135,6 +137,8 @@ function CardView() {
           setCard(fetchedCard);
           const fetchedTenant = cardRes.data.tenant;
           setTenant(fetchedTenant);
+          // Use template fields returned inline from the manager route
+          if (cardRes.data.templateFields) setTemplateFields(cardRes.data.templateFields);
 
           // Only the owning manager (or an admin) may use the customization sidebar
           const owned =
@@ -186,6 +190,18 @@ function CardView() {
   };
 
   const formatFieldName = (fieldName) => formatFieldLabel(fieldName);
+
+  // Fetch template fields whenever the card has a __templateId in its metadata
+  useEffect(() => {
+    if (!card?.metadata?.__templateId) {
+      setTemplateFields(null);
+      return;
+    }
+    cardTemplateAPI
+      .getById(card.metadata.__templateId, card.tenantId)
+      .then((res) => setTemplateFields(res.data?.data?.fields || null))
+      .catch(() => setTemplateFields(null));
+  }, [card]);
 
   const handleColorChange = (type, color) => {
     setTheme((prev) => ({ ...prev, [type]: color }));
@@ -454,6 +470,7 @@ function CardView() {
             tenant={tenant}
             formatFieldName={formatFieldName}
             theme={themeContext}
+            templateFields={templateFields}
           />
 
           {/* Design switcher pills */}

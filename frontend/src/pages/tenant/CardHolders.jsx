@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   Table,
   Button,
@@ -35,9 +35,11 @@ import {
   BgColorsOutlined,
   AppstoreOutlined,
   ReloadOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { tenantPortalAPI, uploadAPI } from "../../services/api";
+import { tenantPortalAPI, uploadAPI, cardTemplateAPI } from "../../services/api";
+import ExcelImportWizard from "../../components/ExcelImportWizard";
 
 const THEME_PRESETS = {
   ocean:  { primaryColor: "#1890ff", secondaryColor: "#52c41a", accentColor: "#ff6b6b", surfaceColor: "#f0f2f5" },
@@ -90,6 +92,8 @@ export default function TenantCardHolders() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
+  const [importWizardOpen, setImportWizardOpen] = useState(false);
+  const [templates, setTemplates] = useState([]);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -103,6 +107,7 @@ export default function TenantCardHolders() {
         tenantPortalAPI.getMe(),
       ]);
       setCards(cardsRes.data.data || []);
+      setTemplates(cardsRes.data.templates || []);
       setOrg(meRes.data.data || null);
     } catch {
       message.error("Failed to load card holders");
@@ -302,6 +307,10 @@ export default function TenantCardHolders() {
     return values.map((v) => ({ value: v, label: v }));
   }, [cards]);
 
+  const activeTemplate = templates.find((t) => t.isDefault) || templates[0] || null;
+  // Only truly internal / system keys that should never become visible table columns
+  const INTERNAL_META_KEYS = new Set(["_design", "__templateId", "shortCode", "createdBy"]);
+
   // ── filtered cards ───────────────────────────────────────────────
   const filtered = useMemo(() => {
     let data = cards;
@@ -310,11 +319,8 @@ export default function TenantCardHolders() {
       data = data.filter((c) => {
         const m = c.metadata || {};
         return (
-          (m.name || "").toLowerCase().includes(q) ||
-          (m.email || "").toLowerCase().includes(q) ||
-          (m.studentId || "").toLowerCase().includes(q) ||
-          (m.employeeId || "").toLowerCase().includes(q) ||
-          (c.tagId || "").toLowerCase().includes(q)
+          (c.tagId || "").toLowerCase().includes(q) ||
+          Object.values(m).some((v) => String(v).toLowerCase().includes(q))
         );
       });
     }
@@ -325,6 +331,105 @@ export default function TenantCardHolders() {
     if (filterStatus === "inactive") data = data.filter((c) => !c.isActive);
     return data;
   }, [cards, search, filterHouse, filterGrade, filterDept, filterStatus]);
+
+  // ── build data columns ───────────────────────────────────────────
+  // Priority: 1) active template  2) discovered from card metadata  3) legacy
+  const dataColumns = useMemo(() => {
+    // 1. Template-defined columns
+    if (activeTemplate && activeTemplate.fields?.length > 0) {
+      return [...activeTemplate.fields]
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .filter((f) => !INTERNAL_META_KEYS.has(f.key))
+        .map((f) => ({
+          title: f.label,
+          key: f.key,
+          ellipsis: true,
+          render: (_, r) =>
+            r.metadata?.[f.key]
+              ? <span>{r.metadata[f.key]}</span>
+              : <Text type="secondary">—</Text>,
+          sorter: (a, b) =>
+            String(a.metadata?.[f.key] || "").localeCompare(
+              String(b.metadata?.[f.key] || ""),
+            ),
+        }));
+    }
+
+    // 2. Auto-discover keys from actual card metadata
+    const seen = new Set();
+    const discovered = [];
+    cards.forEach((c) => {
+      Object.keys(c.metadata || {}).forEach((k) => {
+        if (!INTERNAL_META_KEYS.has(k) && !seen.has(k)) {
+          seen.add(k);
+          discovered.push(k);
+        }
+      });
+    });
+    if (discovered.length > 0) {
+      const toTitle = (k) =>
+        k.replace(/_/g, " ")
+         .replace(/([a-z])([A-Z])/g, "$1 $2")
+         .replace(/\b\w/g, (c) => c.toUpperCase());
+      return discovered.map((k) => ({
+        title: toTitle(k),
+        key: k,
+        ellipsis: true,
+        render: (_, r) =>
+          r.metadata?.[k]
+            ? <span>{r.metadata[k]}</span>
+            : <Text type="secondary">—</Text>,
+        sorter: (a, b) =>
+          String(a.metadata?.[k] || "").localeCompare(
+            String(b.metadata?.[k] || ""),
+          ),
+      }));
+    }
+
+    // 3. Legacy compact Details cell
+    return [
+      {
+        title: "Name",
+        key: "name",
+        render: (_, r) => {
+          const m = r.metadata || {};
+          return <Text strong>{m.name || <Text type="secondary">—</Text>}</Text>;
+        },
+        sorter: (a, b) =>
+          (a.metadata?.name || "").localeCompare(b.metadata?.name || ""),
+      },
+      {
+        title: "Details",
+        key: "details",
+        render: (_, r) => {
+          const m = r.metadata || {};
+          const orgType = org?.type;
+          if (orgType === "SCHOOL") {
+            return (
+              <Space direction="vertical" size={0}>
+                {m.studentId && <Text type="secondary">ID: {m.studentId}</Text>}
+                {m.grade && <Text type="secondary">Grade: {m.grade}</Text>}
+              </Space>
+            );
+          }
+          if (orgType === "HOSPITAL") {
+            return (
+              <Space direction="vertical" size={0}>
+                {m.employeeId && <Text type="secondary">EID: {m.employeeId}</Text>}
+                {m.department && <Text type="secondary">{m.department}</Text>}
+              </Space>
+            );
+          }
+          return (
+            <Space direction="vertical" size={0}>
+              {m.email && <Text type="secondary">{m.email}</Text>}
+              {m.phone && <Text type="secondary">{m.phone}</Text>}
+            </Space>
+          );
+        },
+      },
+    ];
+  }, [activeTemplate, org?.type, cards]);
 
   // ── table columns ────────────────────────────────────────────────
   const columns = [
@@ -342,16 +447,7 @@ export default function TenantCardHolders() {
           <Avatar icon={<UserOutlined />} size="default" />
         ),
     },
-    {
-      title: "Name",
-      key: "name",
-      render: (_, r) => {
-        const m = r.metadata || {};
-        return <Text strong>{m.name || <Text type="secondary">—</Text>}</Text>;
-      },
-      sorter: (a, b) =>
-        (a.metadata?.name || "").localeCompare(b.metadata?.name || ""),
-    },
+    ...dataColumns,
     {
       title: "Tag ID",
       dataIndex: "tagId",
@@ -374,36 +470,6 @@ export default function TenantCardHolders() {
           </Tooltip>
         </Space>
       ),
-    },
-    {
-      title: "Details",
-      key: "details",
-      render: (_, r) => {
-        const m = r.metadata || {};
-        const orgType = org?.type;
-        if (orgType === "SCHOOL") {
-          return (
-            <Space direction="vertical" size={0}>
-              {m.studentId && <Text type="secondary">ID: {m.studentId}</Text>}
-              {m.grade && <Text type="secondary">Grade: {m.grade}</Text>}
-            </Space>
-          );
-        }
-        if (orgType === "HOSPITAL") {
-          return (
-            <Space direction="vertical" size={0}>
-              {m.employeeId && <Text type="secondary">EID: {m.employeeId}</Text>}
-              {m.department && <Text type="secondary">{m.department}</Text>}
-            </Space>
-          );
-        }
-        return (
-          <Space direction="vertical" size={0}>
-            {m.email && <Text type="secondary">{m.email}</Text>}
-            {m.phone && <Text type="secondary">{m.phone}</Text>}
-          </Space>
-        );
-      },
     },
     {
       title: "Status",
@@ -649,6 +715,17 @@ export default function TenantCardHolders() {
             Clear selection
           </Button>
         )}
+
+        {/* Excel Import — visible when templates are available */}
+        {templates.length > 0 && (
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={() => setImportWizardOpen(true)}
+            style={{ marginLeft: "auto" }}
+          >
+            Import from Excel
+          </Button>
+        )}
       </div>
 
       <Table
@@ -664,6 +741,15 @@ export default function TenantCardHolders() {
           onChange: (keys) => setSelectedRowKeys(keys),
           preserveSelectedRowKeys: true,
         }}
+      />
+
+      {/* Excel Import Wizard */}
+      <ExcelImportWizard
+        open={importWizardOpen}
+        onClose={() => setImportWizardOpen(false)}
+        onSuccess={() => { setImportWizardOpen(false); fetchData(); }}
+        tenantId={org?.tenantId}
+        templates={templates}
       />
 
       {/* Bulk Card Design Modal */}

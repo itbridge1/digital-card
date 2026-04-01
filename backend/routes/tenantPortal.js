@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
-const { Card, Tenant, CardRegister, User } = require("../models");
+const { Card, Tenant, CardRegister, User, CardTemplate } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
 
@@ -62,12 +62,13 @@ router.put("/me/logo", async (req, res) => {
  */
 router.get("/cards", async (req, res) => {
   try {
-    const cards = await Card.findAll({
-      where: { tenantId: req.user.tenantId },
-      order: [["createdAt", "DESC"]],
-    });
+    const tenantId = req.user.tenantId;
+    const [cards, templates] = await Promise.all([
+      Card.findAll({ where: { tenantId }, order: [["createdAt", "DESC"]] }),
+      CardTemplate.findAll({ where: { tenantId }, order: [["isDefault", "DESC"], ["createdAt", "ASC"]] }),
+    ]);
 
-    res.json({ success: true, count: cards.length, data: cards });
+    res.json({ success: true, count: cards.length, data: cards, templates });
   } catch (error) {
     console.error("Error fetching cards:", error);
     res.status(500).json({ success: false, error: "Failed to fetch card holders" });
@@ -94,7 +95,20 @@ router.get("/cards/by-tag/:tagId", async (req, res) => {
       attributes: ["id", "tenantId", "name", "type", "contactEmail", "logoUrl", "isActive"],
     });
 
-    res.json({ success: true, data: card, tenant });
+    // Include template fields if card was created from a template
+    let templateFields = null;
+    const templateId = card.metadata?.__templateId;
+    if (templateId) {
+      try {
+        const tpl = await CardTemplate.findOne({
+          where: { id: templateId, tenantId: req.user.tenantId },
+          attributes: ["id", "name", "fields"],
+        });
+        if (tpl) templateFields = tpl.fields;
+      } catch { /* non-fatal */ }
+    }
+
+    res.json({ success: true, data: card, tenant, templateFields });
   } catch (error) {
     console.error("Error fetching card by tag:", error);
     res.status(500).json({ success: false, error: "Failed to fetch card" });

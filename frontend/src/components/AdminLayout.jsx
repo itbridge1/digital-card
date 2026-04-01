@@ -7,6 +7,7 @@ import {
   LogoutOutlined,
   ApartmentOutlined,
   CreditCardOutlined,
+  AppstoreAddOutlined,
 } from "@ant-design/icons";
 import { Button, Layout, Menu, Avatar, Typography, Dropdown, Grid } from "antd";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -54,6 +55,11 @@ function AdminLayout() {
       key: "/admin/card-registration",
       icon: <CreditCardOutlined />,
       label: <NavLink to="/admin/card-registration">Card Registration</NavLink>,
+    },
+    {
+      key: "/admin/card-templates",
+      icon: <AppstoreAddOutlined />,
+      label: <NavLink to="/admin/card-templates">Card Templates</NavLink>,
     },
     {
       key: "/admin/organizations",

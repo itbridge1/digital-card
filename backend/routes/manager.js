@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Card, Tenant, CardRegister, User } = require("../models");
+const { Card, Tenant, CardRegister, User, CardTemplate } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const { registerNfcCard } = require("../utils/nfcRegistration");
 const { Op } = require("sequelize");
@@ -192,12 +192,12 @@ router.get("/organizations/:tenantId/cards", async (req, res) => {
     }
     if (denyIfNotOwner(req, res, tenant)) return;
 
-    const cards = await Card.findAll({
-      where: { tenantId },
-      order: [["createdAt", "DESC"]],
-    });
+    const [cards, templates] = await Promise.all([
+      Card.findAll({ where: { tenantId }, order: [["createdAt", "DESC"]] }),
+      CardTemplate.findAll({ where: { tenantId }, order: [["isDefault", "DESC"], ["createdAt", "ASC"]] }),
+    ]);
 
-    res.json({ success: true, count: cards.length, data: cards, tenant });
+    res.json({ success: true, count: cards.length, data: cards, tenant, templates });
   } catch (error) {
     console.error("Error fetching cards:", error);
     res
@@ -230,7 +230,20 @@ router.get("/organizations/:tenantId/cards/:tagId", async (req, res) => {
       return res.status(404).json({ success: false, error: "Card not found" });
     }
 
-    res.json({ success: true, data: card, tenant });
+    // Include template fields if card was created from a template
+    let templateFields = null;
+    const templateId = card.metadata?.__templateId;
+    if (templateId) {
+      try {
+        const tpl = await CardTemplate.findOne({
+          where: { id: templateId, tenantId },
+          attributes: ["id", "name", "fields"],
+        });
+        if (tpl) templateFields = tpl.fields;
+      } catch { /* non-fatal */ }
+    }
+
+    res.json({ success: true, data: card, tenant, templateFields });
   } catch (error) {
     console.error("Error fetching card:", error);
     res.status(500).json({ success: false, error: "Failed to fetch card" });

@@ -4,6 +4,7 @@ const User = require("./User");
 const Tenant = require("./Tenant");
 const Card = require("./Card");
 const CardRegister = require("./CardRegister");
+const CardTemplate = require("./CardTemplate");
 
 // Define associations
 Tenant.hasMany(User, {
@@ -58,10 +59,14 @@ Tenant.belongsTo(User, {
   as: "creator",
 });
 
-module.exports = {
-  sequelize,
-  User,
-  Tenant,
-  Card,
-  CardRegister,
-};
+// Card templates
+Tenant.hasMany(CardTemplate, {
+  foreignKey: 'tenantId',
+  sourceKey: 'tenantId',
+});
+CardTemplate.belongsTo(Tenant, {
+  foreignKey: 'tenantId',
+  targetKey: 'tenantId',
+});
+
+module.exports = { sequelize, User, Tenant, Card, CardRegister, CardTemplate };

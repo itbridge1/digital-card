@@ -4,6 +4,7 @@ import AdminLayout from "./components/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Users from "./pages/admin/Users";
 import CardRegistration from "./pages/admin/CardRegistration";
+import CardTemplateManager from "./pages/admin/CardTemplateManager";
 import ErrorPage from "./pages/ErrorPage";
 import Login from "./pages/Login";
 import ChangePassword from "./pages/ChangePassword";
@@ -46,6 +47,7 @@ function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="card-registration" element={<CardRegistration />} />
+          <Route path="card-templates" element={<CardTemplateManager />} />
           <Route path="organizations" element={<Organizations />} />
           <Route
             path="organizations/:tenantId"
