@@ -46,11 +46,11 @@ function AdminLayout() {
       icon: <DashboardOutlined />,
       label: <NavLink to="/admin/dashboard">Dashboard</NavLink>,
     },
-    {
-      key: "/admin/users",
-      icon: <UserOutlined />,
-      label: <NavLink to="/admin/users">Users</NavLink>,
-    },
+    // {
+    //   key: "/admin/users",
+    //   icon: <UserOutlined />,
+    //   label: <NavLink to="/admin/users">Users</NavLink>,
+    // },
     {
       key: "/admin/card-registration",
       icon: <CreditCardOutlined />,
@@ -101,7 +101,7 @@ function AdminLayout() {
             {brandLogo}
             <div>
               <div className="nfc-sidebar-brand-title">NFC Admin</div>
-              <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div>
+              {/* <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div> */}
             </div>
           </div>
         )}

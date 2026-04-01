@@ -1,18 +1,39 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from "react";
 import {
-  Row, Col, Card, Statistic, Button, Modal, Form,
-  Input, Select, Typography, message, Table, Tag, Space, Popconfirm, Tooltip, Avatar, Grid,
-} from 'antd';
+  Row,
+  Col,
+  Card,
+  Statistic,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
+  Typography,
+  message,
+  Table,
+  Tag,
+  Space,
+  Popconfirm,
+  Tooltip,
+  Avatar,
+  Grid,
+} from "antd";
 import {
-  PlusOutlined, UserOutlined, ApartmentOutlined,
-  DeleteOutlined, StopOutlined, CheckCircleOutlined, SearchOutlined,
-} from '@ant-design/icons';
-import { useraccessAPI, authAPI, managerAPI } from '../../services/api';
+  PlusOutlined,
+  UserOutlined,
+  ApartmentOutlined,
+  DeleteOutlined,
+  StopOutlined,
+  CheckCircleOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
+import { useraccessAPI, authAPI, managerAPI } from "../../services/api";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const currentUserId = () => JSON.parse(localStorage.getItem('user') || '{}').id;
+const currentUserId = () => JSON.parse(localStorage.getItem("user") || "{}").id;
 
 function AdminDashboard() {
   const [orgs, setOrgs] = useState([]);
@@ -26,12 +47,12 @@ function AdminDashboard() {
   const isMobile = !screens.md;
 
   // Search / filter state
-  const [managerSearch, setManagerSearch] = useState('');
-  const [managerRoleFilter, setManagerRoleFilter] = useState('');
-  const [managerStatusFilter, setManagerStatusFilter] = useState('');
-  const [orgSearch, setOrgSearch] = useState('');
-  const [orgTypeFilter, setOrgTypeFilter] = useState('');
-  const [orgStatusFilter, setOrgStatusFilter] = useState('');
+  const [managerSearch, setManagerSearch] = useState("");
+  const [managerRoleFilter, setManagerRoleFilter] = useState("");
+  const [managerStatusFilter, setManagerStatusFilter] = useState("");
+  const [orgSearch, setOrgSearch] = useState("");
+  const [orgTypeFilter, setOrgTypeFilter] = useState("");
+  const [orgStatusFilter, setOrgStatusFilter] = useState("");
 
   const fetchOrgs = async () => {
     setLoadingOrgs(true);
@@ -39,7 +60,7 @@ function AdminDashboard() {
       const res = await useraccessAPI.getOrganizations();
       setOrgs(res.data.data || []);
     } catch {
-      message.error('Failed to load organizations');
+      message.error("Failed to load organizations");
     } finally {
       setLoadingOrgs(false);
     }
@@ -51,7 +72,7 @@ function AdminDashboard() {
       const res = await managerAPI.getAll();
       setManagers(res.data.data || []);
     } catch {
-      message.error('Failed to load manager accounts');
+      message.error("Failed to load manager accounts");
     } finally {
       setLoadingManagers(false);
     }
@@ -63,14 +84,16 @@ function AdminDashboard() {
   }, []);
 
   const activeOrgs = orgs.filter((o) => o.isActive).length;
-  const activeManagers = managers.filter((m) => m.isActive && m.role === 'manager').length;
+  const activeManagers = managers.filter(
+    (m) => m.isActive && m.role === "manager",
+  ).length;
 
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
       setCreating(true);
       await authAPI.register(values);
-      message.success('Account created successfully');
+      message.success("Account created successfully");
       setCreateModalOpen(false);
       form.resetFields();
       fetchManagers();
@@ -78,7 +101,7 @@ function AdminDashboard() {
       if (err?.response?.data?.error) {
         message.error(err.response.data.error);
       } else if (err?.response?.data?.errors) {
-        message.error(err.response.data.errors[0]?.msg || 'Validation failed');
+        message.error(err.response.data.errors[0]?.msg || "Validation failed");
       }
     } finally {
       setCreating(false);
@@ -88,30 +111,30 @@ function AdminDashboard() {
   const handleDeactivate = async (id) => {
     try {
       await managerAPI.deactivate(id);
-      message.success('Account deactivated');
+      message.success("Account deactivated");
       fetchManagers();
     } catch (err) {
-      message.error(err?.response?.data?.error || 'Failed to deactivate');
+      message.error(err?.response?.data?.error || "Failed to deactivate");
     }
   };
 
   const handleActivate = async (id) => {
     try {
       await managerAPI.activate(id);
-      message.success('Account activated');
+      message.success("Account activated");
       fetchManagers();
     } catch (err) {
-      message.error(err?.response?.data?.error || 'Failed to activate');
+      message.error(err?.response?.data?.error || "Failed to activate");
     }
   };
 
   const handleDelete = async (id) => {
     try {
       await managerAPI.remove(id);
-      message.success('Account deleted');
+      message.success("Account deleted");
       fetchManagers();
     } catch (err) {
-      message.error(err?.response?.data?.error || 'Failed to delete');
+      message.error(err?.response?.data?.error || "Failed to delete");
     }
   };
 
@@ -126,8 +149,10 @@ function AdminDashboard() {
           m.Tenant?.name?.toLowerCase().includes(q),
       );
     }
-    if (managerRoleFilter) data = data.filter((m) => m.role === managerRoleFilter);
-    if (managerStatusFilter !== '') data = data.filter((m) => String(m.isActive) === managerStatusFilter);
+    if (managerRoleFilter)
+      data = data.filter((m) => m.role === managerRoleFilter);
+    if (managerStatusFilter !== "")
+      data = data.filter((m) => String(m.isActive) === managerStatusFilter);
     return data;
   }, [managers, managerSearch, managerRoleFilter, managerStatusFilter]);
 
@@ -143,75 +168,83 @@ function AdminDashboard() {
       );
     }
     if (orgTypeFilter) data = data.filter((o) => o.type === orgTypeFilter);
-    if (orgStatusFilter !== '') data = data.filter((o) => String(o.isActive) === orgStatusFilter);
+    if (orgStatusFilter !== "")
+      data = data.filter((o) => String(o.isActive) === orgStatusFilter);
     return data;
   }, [orgs, orgSearch, orgTypeFilter, orgStatusFilter]);
 
   const orgColumns = [
     {
-      title: 'ID',
-      dataIndex: 'tenantId',
+      title: "ID",
+      dataIndex: "tenantId",
       render: (v) => <code>{v}</code>,
       sorter: (a, b) => a.tenantId.localeCompare(b.tenantId),
     },
     {
-      title: 'Name',
-      dataIndex: 'name',
+      title: "Name",
+      dataIndex: "name",
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: 'Type',
-      dataIndex: 'type',
+      title: "Type",
+      dataIndex: "type",
       render: (v) => <Tag>{v}</Tag>,
-      sorter: (a, b) => (a.type || '').localeCompare(b.type || ''),
+      sorter: (a, b) => (a.type || "").localeCompare(b.type || ""),
     },
     {
-      title: 'Status',
-      dataIndex: 'isActive',
-      render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      title: "Status",
+      dataIndex: "isActive",
+      render: (v) => (
+        <Tag color={v ? "success" : "default"}>{v ? "Active" : "Inactive"}</Tag>
+      ),
       sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
   ];
 
   const managerColumns = [
     {
-      title: '',
+      title: "",
       width: 40,
       render: () => <Avatar size={28} icon={<UserOutlined />} />,
     },
     {
-      title: 'Name',
-      dataIndex: 'name',
+      title: "Name",
+      dataIndex: "name",
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: 'Email',
-      dataIndex: 'email',
+      title: "Email",
+      dataIndex: "email",
       ellipsis: true,
       sorter: (a, b) => a.email.localeCompare(b.email),
     },
     {
-      title: 'Role',
-      dataIndex: 'role',
+      title: "Role",
+      dataIndex: "role",
       render: (v) => (
-        <Tag color={v === 'admin' ? 'gold' : 'blue'}>{v.charAt(0).toUpperCase() + v.slice(1)}</Tag>
+        <Tag color={v === "admin" ? "gold" : "blue"}>
+          {v.charAt(0).toUpperCase() + v.slice(1)}
+        </Tag>
       ),
       sorter: (a, b) => a.role.localeCompare(b.role),
     },
     {
-      title: 'Organization',
+      title: "Organization",
       render: (_, r) => r.Tenant?.name || <Text type="secondary">—</Text>,
-      sorter: (a, b) => (a.Tenant?.name || '').localeCompare(b.Tenant?.name || ''),
+      sorter: (a, b) =>
+        (a.Tenant?.name || "").localeCompare(b.Tenant?.name || ""),
     },
     {
-      title: 'Status',
-      dataIndex: 'isActive',
-      render: (v) => <Tag color={v ? 'success' : 'default'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      title: "Status",
+      dataIndex: "isActive",
+      render: (v) => (
+        <Tag color={v ? "success" : "default"}>{v ? "Active" : "Inactive"}</Tag>
+      ),
       sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
     {
-      title: 'Actions',
-      key: 'actions',
+      title: "Actions",
+      key: "actions",
       render: (_, record) => {
         const isSelf = record.id === currentUserId();
         return (
@@ -224,8 +257,14 @@ function AdminDashboard() {
                 cancelText="No"
                 disabled={isSelf}
               >
-                <Tooltip title={isSelf ? 'Cannot deactivate yourself' : 'Deactivate'}>
-                  <Button size="small" icon={<StopOutlined />} disabled={isSelf} />
+                <Tooltip
+                  title={isSelf ? "Cannot deactivate yourself" : "Deactivate"}
+                >
+                  <Button
+                    size="small"
+                    icon={<StopOutlined />}
+                    disabled={isSelf}
+                  />
                 </Tooltip>
               </Popconfirm>
             ) : (
@@ -234,7 +273,7 @@ function AdminDashboard() {
                   size="small"
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleActivate(record.id)}
-                  style={{ color: '#3f8600', borderColor: '#3f8600' }}
+                  style={{ color: "#3f8600", borderColor: "#3f8600" }}
                 />
               </Tooltip>
             )}
@@ -247,8 +286,15 @@ function AdminDashboard() {
               cancelText="Cancel"
               disabled={isSelf}
             >
-              <Tooltip title={isSelf ? 'Cannot delete yourself' : 'Delete permanently'}>
-                <Button size="small" danger icon={<DeleteOutlined />} disabled={isSelf} />
+              <Tooltip
+                title={isSelf ? "Cannot delete yourself" : "Delete permanently"}
+              >
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={isSelf}
+                />
               </Tooltip>
             </Popconfirm>
           </Space>
@@ -260,7 +306,9 @@ function AdminDashboard() {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <Title level={4} style={{ marginBottom: 2, letterSpacing: "-0.02em" }}>Admin Dashboard</Title>
+        <Title level={4} style={{ marginBottom: 2, letterSpacing: "-0.02em" }}>
+          Admin Dashboard
+        </Title>
         <Text style={{ color: "#64748b", fontSize: 13 }}>
           Overview of organizations and manager accounts.
         </Text>
@@ -270,9 +318,19 @@ function AdminDashboard() {
         <Col xs={24} sm={8}>
           <Card className="nfc-stat-card nfc-stat-card-primary">
             <Statistic
-              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Total Organizations</span>}
+              title={
+                <span
+                  style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}
+                >
+                  Total Organizations
+                </span>
+              }
               value={orgs.length}
-              prefix={<ApartmentOutlined style={{ color: "#5046e5", marginRight: 4 }} />}
+              prefix={
+                <ApartmentOutlined
+                  style={{ color: "#5046e5", marginRight: 4 }}
+                />
+              }
               valueStyle={{ color: "#0f172a", fontWeight: 700 }}
             />
           </Card>
@@ -280,9 +338,19 @@ function AdminDashboard() {
         <Col xs={24} sm={8}>
           <Card className="nfc-stat-card nfc-stat-card-success">
             <Statistic
-              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Active Organizations</span>}
+              title={
+                <span
+                  style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}
+                >
+                  Active Organizations
+                </span>
+              }
               value={activeOrgs}
-              prefix={<ApartmentOutlined style={{ color: "#10b981", marginRight: 4 }} />}
+              prefix={
+                <ApartmentOutlined
+                  style={{ color: "#10b981", marginRight: 4 }}
+                />
+              }
               valueStyle={{ color: "#10b981", fontWeight: 700 }}
             />
           </Card>
@@ -290,9 +358,17 @@ function AdminDashboard() {
         <Col xs={24} sm={8}>
           <Card className="nfc-stat-card nfc-stat-card-info">
             <Statistic
-              title={<span style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}>Active Managers</span>}
+              title={
+                <span
+                  style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}
+                >
+                  Active Managers
+                </span>
+              }
               value={activeManagers}
-              prefix={<UserOutlined style={{ color: "#0ea5e9", marginRight: 4 }} />}
+              prefix={
+                <UserOutlined style={{ color: "#0ea5e9", marginRight: 4 }} />
+              }
               valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
             />
           </Card>
@@ -304,7 +380,11 @@ function AdminDashboard() {
         title="Manager Accounts"
         style={{ marginBottom: 24 }}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateModalOpen(true)}
+          >
             Add Manager
           </Button>
         }
@@ -322,20 +402,20 @@ function AdminDashboard() {
             placeholder="All roles"
             allowClear
             style={{ width: 130 }}
-            onChange={(v) => setManagerRoleFilter(v || '')}
+            onChange={(v) => setManagerRoleFilter(v || "")}
             options={[
-              { value: 'admin', label: 'Admin' },
-              { value: 'manager', label: 'Manager' },
+              { value: "admin", label: "Admin" },
+              { value: "manager", label: "Manager" },
             ]}
           />
           <Select
             placeholder="All statuses"
             allowClear
             style={{ width: 140 }}
-            onChange={(v) => setManagerStatusFilter(v ?? '')}
+            onChange={(v) => setManagerStatusFilter(v ?? "")}
             options={[
-              { value: 'true', label: 'Active' },
-              { value: 'false', label: 'Inactive' },
+              { value: "true", label: "Active" },
+              { value: "false", label: "Inactive" },
             ]}
           />
         </Space>
@@ -363,21 +443,21 @@ function AdminDashboard() {
             placeholder="All types"
             allowClear
             style={{ width: 140 }}
-            onChange={(v) => setOrgTypeFilter(v || '')}
+            onChange={(v) => setOrgTypeFilter(v || "")}
             options={[
-              { value: 'SCHOOL', label: 'School' },
-              { value: 'HOSPITAL', label: 'Hospital' },
-              { value: 'BUSINESS', label: 'Business' },
+              { value: "SCHOOL", label: "School" },
+              { value: "HOSPITAL", label: "Hospital" },
+              { value: "BUSINESS", label: "Business" },
             ]}
           />
           <Select
             placeholder="All statuses"
             allowClear
             style={{ width: 140 }}
-            onChange={(v) => setOrgStatusFilter(v ?? '')}
+            onChange={(v) => setOrgStatusFilter(v ?? "")}
             options={[
-              { value: 'true', label: 'Active' },
-              { value: 'false', label: 'Inactive' },
+              { value: "true", label: "Active" },
+              { value: "false", label: "Inactive" },
             ]}
           />
         </Space>
@@ -396,33 +476,46 @@ function AdminDashboard() {
         title="Add Manager Account"
         open={createModalOpen}
         onOk={handleCreate}
-        onCancel={() => { setCreateModalOpen(false); form.resetFields(); }}
+        onCancel={() => {
+          setCreateModalOpen(false);
+          form.resetFields();
+        }}
         confirmLoading={creating}
         okText="Create Account"
-        width={isMobile ? '95%' : 560}
+        width={isMobile ? "95%" : 560}
       >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
           Manager accounts can manage organizations and card holders.
         </Text>
         <Form form={form} layout="vertical">
-          <Form.Item label="Full Name" name="name" rules={[{ required: true, message: 'Required' }]}>
+          <Form.Item
+            label="Full Name"
+            name="name"
+            rules={[{ required: true, message: "Required" }]}
+          >
             <Input placeholder="Full name" />
           </Form.Item>
           <Form.Item
             label="Email"
             name="email"
-            rules={[{ required: true, message: 'Required' }, { type: 'email', message: 'Invalid email' }]}
+            rules={[
+              { required: true, message: "Required" },
+              { type: "email", message: "Invalid email" },
+            ]}
           >
             <Input placeholder="email@example.com" />
           </Form.Item>
           <Form.Item
             label="Password"
             name="password"
-            rules={[{ required: true, message: 'Required' }, { min: 6, message: 'Min 6 characters' }]}
+            rules={[
+              { required: true, message: "Required" },
+              { min: 6, message: "Min 6 characters" },
+            ]}
           >
-            <Input.Password placeholder="••••••••" />
+            <Input.Password placeholder="********" />
           </Form.Item>
-          <Form.Item label="Organization" name="tenantId" rules={[{ required: true, message: 'Required' }]}>
+          {/* <Form.Item label="Organization" name="tenantId">
             <Select placeholder="Assign to organization">
               {orgs.filter((o) => o.isActive).map((o) => (
                 <Option key={o.tenantId} value={o.tenantId}>
@@ -430,7 +523,7 @@ function AdminDashboard() {
                 </Option>
               ))}
             </Select>
-          </Form.Item>
+          </Form.Item> */}
           <Form.Item label="Role" name="role" initialValue="manager">
             <Select>
               <Option value="manager">Manager</Option>
@@ -444,4 +537,3 @@ function AdminDashboard() {
 }
 
 export default AdminDashboard;
-
