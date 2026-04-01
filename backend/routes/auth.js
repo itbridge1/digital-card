@@ -53,7 +53,7 @@ router.post(
       .isEmail()
       .normalizeEmail()
       .withMessage("Valid email is required"),
-    body("tenantId").notEmpty().trim().withMessage("Tenant ID is required"),
+    body("tenantId").optional({ nullable: true }).trim(),
   ],
   async (req, res) => {
     try {
@@ -128,16 +128,18 @@ router.post(
         });
       }
 
-      // Verify tenant exists and is active
-      const tenant = await Tenant.findOne({
-        where: { tenantId: tenantId.toUpperCase(), isActive: true },
-      });
-
-      if (!tenant) {
-        return res.status(404).json({
-          success: false,
-          error: "Tenant not found or inactive",
+      // Verify tenant exists and is active (only when tenantId is provided)
+      if (tenantId) {
+        const tenant = await Tenant.findOne({
+          where: { tenantId: tenantId.toUpperCase(), isActive: true },
         });
+
+        if (!tenant) {
+          return res.status(404).json({
+            success: false,
+            error: "Tenant not found or inactive",
+          });
+        }
       }
 
       // Create user
@@ -145,7 +147,7 @@ router.post(
         name,
         email,
         password,
-        tenantId: tenantId.toUpperCase(),
+        tenantId: tenantId ? tenantId.toUpperCase() : null,
         role: assignedRole,
         mustChangePassword: isTenantRole,
       });
