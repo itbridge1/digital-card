@@ -228,12 +228,12 @@ function AdminDashboard() {
       ),
       sorter: (a, b) => a.role.localeCompare(b.role),
     },
-    {
-      title: "Organization",
-      render: (_, r) => r.Tenant?.name || <Text type="secondary">—</Text>,
-      sorter: (a, b) =>
-        (a.Tenant?.name || "").localeCompare(b.Tenant?.name || ""),
-    },
+    // {
+    //   title: "Organization",
+    //   render: (_, r) => r.Tenant?.name || <Text type="secondary">—</Text>,
+    //   sorter: (a, b) =>
+    //     (a.Tenant?.name || "").localeCompare(b.Tenant?.name || ""),
+    // },
     {
       title: "Status",
       dataIndex: "isActive",
