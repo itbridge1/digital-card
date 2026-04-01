@@ -10,7 +10,11 @@ const resolveImg = (url) => {
   return `${API_BASE}${url}`;
 };
 
-const INTERNAL_KEYS = new Set(["name", "title", "custom", "shortCode", "createdBy", "section", "_design"]);
+// Keys that are never shown on the card face (internal / design settings)
+const INTERNAL_KEYS = new Set([
+  "name", "title", "custom", "shortCode", "createdBy", "section", "_design",
+  "__templateId",
+]);
 
 const FIELD_LABELS = {
   // common
@@ -37,26 +41,62 @@ const FIELD_LABELS = {
   website: "Website",
 };
 
-const getDisplayRows = (card) => {
-  if (!card?.metadata) {
-    return [];
+/**
+ * Build display rows from a card's metadata.
+ *
+ * When `templateFields` is supplied (array of {key, label, order}), rows are
+ * returned in template order using only the keys defined in the template.
+ * Otherwise every non-internal, non-empty metadata entry is returned.
+ */
+const getDisplayRows = (card, templateFields) => {
+  if (!card?.metadata) return [];
+
+  if (templateFields && templateFields.length > 0) {
+    return templateFields
+      .filter((f) => !INTERNAL_KEYS.has(f.key))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((f) => [f.key, card.metadata[f.key], f.label])
+      .filter(([, value]) => value !== undefined && value !== null && value !== "");
   }
 
-  return Object.entries(card.metadata).filter(([key, value]) => {
-    if (!value) return false;
-    return !INTERNAL_KEYS.has(key);
-  });
+  return Object.entries(card.metadata)
+    .filter(([key, value]) => value && !INTERNAL_KEYS.has(key))
+    .map(([key, value]) => [key, value, null]); // label will be resolved by formatFieldName
 };
 
 export const formatFieldLabel = (key) =>
   FIELD_LABELS[key] ||
   key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()).trim();
 
-const copyToClipboard = async (text) => {
-  if (!text) {
-    return;
-  }
+/**
+ * Resolve the display name and subtitle for the card header.
+ * When a template is present, the first non-internal field of type "text"
+ * is treated as the name, and the second (or a field named "title"/"position"/"designation")
+ * as the subtitle.  Falls back to metadata.name / metadata.title.
+ */
+const resolveNameAndTitle = (card, templateFields) => {
+  const rawName = card.metadata?.name || "";
+  const rawTitle = card.metadata?.title || card.metadata?.position || "";
 
+  if (!templateFields || templateFields.length === 0) return { name: rawName, title: rawTitle };
+
+  // Look for a template field whose key is "name" / "fullName" / "fullname"
+  const nameField = templateFields.find((f) =>
+    /^(name|fullname|fullName|studentName|employeeName)$/i.test(f.key),
+  );
+  // Look for a field whose key is "title" / "position" / "designation" / "jobTitle"
+  const titleField = templateFields.find((f) =>
+    /^(title|position|designation|jobTitle|role|grade|class)$/i.test(f.key),
+  );
+
+  const resolvedName = (nameField ? card.metadata[nameField.key] : rawName) || rawName;
+  const resolvedTitle = (titleField ? card.metadata[titleField.key] : rawTitle) || rawTitle;
+
+  return { name: resolvedName, title: resolvedTitle };
+};
+
+const copyToClipboard = async (text) => {
+  if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
     message.success("Copied!");
@@ -72,8 +112,9 @@ const DARK_SURFACE_BASE = "#111827";
 const DARK_SURFACE_ELEVATED = "#1f2937";
 const DARK_BORDER_SOFT = "rgba(255, 255, 255, 0.2)";
 
-function CardDesignOne({ card, tenant, formatFieldName, theme }) {
-  const displayRows = getDisplayRows(card);
+function CardDesignOne({ card, tenant, formatFieldName, theme, templateFields }) {
+  const displayRows = getDisplayRows(card, templateFields);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
 
   const {
     primaryColor,
@@ -189,7 +230,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
                 color: "#fff",
               }}
             >
-              {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
+              {displayName?.charAt(0)?.toUpperCase() || "N"}
             </div>
           )}
         </div>
@@ -198,15 +239,15 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
         <div style={{ textAlign: "center", marginTop: 10 }}>
           <h3 style={{ marginBottom: 0 }}>
             <span style={{ color: primaryColor }}>
-              {card.metadata?.name?.split(" ")[0] || "Name"}
+              {displayName?.split(" ")[0] || "Name"}
             </span>{" "}
             <span style={{ color: secondaryColor }}>
-              {card.metadata?.name?.split(" ")[1] || ""}
+              {displayName?.split(" ")[1] || ""}
             </span>
           </h3>
 
           <p style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}>
-            {card.metadata?.title || "Member"}
+            {displayTitle || "Member"}
           </p>
         </div>
 
@@ -219,7 +260,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
           </div>
 
           {/* Dynamic Rows */}
-          {displayRows.map(([key, value]) => (
+          {displayRows.map(([key, value, tplLabel]) => (
             <div
               key={key}
               style={{
@@ -228,7 +269,7 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
                 marginTop: 4,
               }}
             >
-              <span style={{ color: labelColor }}>{formatFieldName(key)}</span>
+              <span style={{ color: labelColor }}>{tplLabel || formatFieldName(key)}</span>
               <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
@@ -283,8 +324,9 @@ function CardDesignOne({ card, tenant, formatFieldName, theme }) {
   );
 }
 
-function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
-  const displayRows = getDisplayRows(card);
+function CardDesignTwo({ card, tenant, formatFieldName, theme, templateFields }) {
+  const displayRows = getDisplayRows(card, templateFields);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
 
   const { primaryColor, secondaryColor, surfaceColor, isDark, hexToRgba } =
     theme;
@@ -392,7 +434,7 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
                 color: "#fff",
               }}
             >
-              {card.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
+              {displayName?.charAt(0)?.toUpperCase() || "N"}
             </div>
           )}
         </div>
@@ -408,10 +450,10 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
               color: isDark ? DARK_TEXT_PRIMARY : primaryColor,
             }}
           >
-            {card.metadata?.name || "Your Name"}
+            {displayName || "Your Name"}
           </h3>
           <p style={{ fontSize: 12, color: mutedTextColor, margin: 0 }}>
-            {card.metadata?.title || "Designation"}
+            {displayTitle || "Designation"}
           </p>
         </div>
 
@@ -424,7 +466,7 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
 
         {/* 📋 Dynamic Fields */}
         <div style={{ marginTop: 10, fontSize: 12 }}>
-          {displayRows.map(([key, value]) => (
+          {displayRows.map(([key, value, tplLabel]) => (
             <div
               key={key}
               style={{
@@ -435,7 +477,7 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
                 paddingBottom: 2,
               }}
             >
-              <span style={{ color: labelColor }}>{formatFieldName(key)}</span>
+              <span style={{ color: labelColor }}>{tplLabel || formatFieldName(key)}</span>
               <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
@@ -490,8 +532,9 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme }) {
   );
 }
 
-function CardDesignThree({ card, tenant, formatFieldName, theme }) {
-  const displayRows = getDisplayRows(card);
+function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields }) {
+  const displayRows = getDisplayRows(card, templateFields);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
 
   const {
     primaryColor,
@@ -582,7 +625,7 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
                 color: "#fff",
               }}
             >
-              {card?.metadata?.name?.charAt(0)?.toUpperCase() || "U"}
+              {card?.metadata?.name?.charAt(0)?.toUpperCase() || displayName?.charAt(0)?.toUpperCase() || "U"}
             </div>
           )}
         </div>
@@ -595,10 +638,10 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
           <div
             style={{ fontWeight: "bold", fontSize: 14, color: bodyTextColor }}
           >
-            {card?.metadata?.name || "Your Name"}
+            {displayName || "Your Name"}
           </div>
           <div style={{ fontSize: 10, color: mutedTextColor }}>
-            {card?.metadata?.title || "Job Position"}
+            {displayTitle || "Job Position"}
           </div>
         </div>
 
@@ -614,10 +657,10 @@ function CardDesignThree({ card, tenant, formatFieldName, theme }) {
 
         {/* Simple Fields */}
         <div style={{ fontSize: 11, lineHeight: "18px" }}>
-          {displayRows.map(([key, value]) => (
+          {displayRows.map(([key, value, tplLabel]) => (
             <div key={key}>
               <span style={{ color: accentColor, fontWeight: 500 }}>
-                {formatFieldName(key)}:
+                {tplLabel || formatFieldName(key)}:
               </span>{" "}
               <span style={{ color: bodyTextColor }}>{value}</span>
             </div>
@@ -670,7 +713,7 @@ const CARD_DESIGNS = {
   three: CardDesignThree,
 };
 
-function SelectCard({ design = "one", card, tenant, formatFieldName, theme }) {
+function SelectCard({ design = "one", card, tenant, formatFieldName, theme, templateFields }) {
   const SelectedDesign = CARD_DESIGNS[design] || CARD_DESIGNS.one;
 
   return (
@@ -680,6 +723,7 @@ function SelectCard({ design = "one", card, tenant, formatFieldName, theme }) {
         tenant={tenant}
         formatFieldName={formatFieldName}
         theme={theme}
+        templateFields={templateFields}
       />
     </div>
   );

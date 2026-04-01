@@ -1,11 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { Card, Tenant } = require("../models");
+const { Card, Tenant, CardTemplate } = require("../models");
 
 /**
  * GET /api/public/card/:tagId
  * Public endpoint — no auth required.
  * Returns card data + tenant info for the read-only public card view.
+ * When the card was created from a template, also returns `template.fields`
+ * so the view can render proper dynamic labels and field order.
  */
 router.get("/cardInfo/:tagId", async (req, res) => {
   try {
@@ -29,6 +31,19 @@ router.get("/cardInfo/:tagId", async (req, res) => {
     // Record the tap non-blocking (same as the /t/:tagId redirect)
     card.recordTap().catch((err) => console.error("Failed to record tap:", err));
 
+    // Resolve template fields when card was created from a template
+    let templateFields = null;
+    const templateId = card.metadata?.__templateId;
+    if (templateId) {
+      try {
+        const tpl = await CardTemplate.findOne({
+          where: { id: templateId, tenantId: card.tenantId },
+          attributes: ["id", "name", "fields"],
+        });
+        if (tpl) templateFields = tpl.fields;
+      } catch { /* non-fatal */ }
+    }
+
     // Return only the safe public fields
     res.json({
       success: true,
@@ -43,6 +58,7 @@ router.get("/cardInfo/:tagId", async (req, res) => {
         tapCount: card.tapCount,
       },
       tenant: tenant || null,
+      templateFields,
     });
   } catch (error) {
     console.error("Error fetching public card:", error);

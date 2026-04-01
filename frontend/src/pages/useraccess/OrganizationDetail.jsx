@@ -40,12 +40,14 @@ import {
   FolderOpenOutlined,
   SearchOutlined,
   AppstoreOutlined,
+  AppstoreAddOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
 import JSZip from "jszip";
-import { useraccessAPI, uploadAPI, cardAPI } from "../../services/api";
+import { useraccessAPI, uploadAPI, cardAPI, cardTemplateAPI } from "../../services/api";
+import ExcelImportWizard from "../../components/ExcelImportWizard";
 
 const THEME_PRESETS = {
   ocean:  { primaryColor: "#1890ff", secondaryColor: "#52c41a", accentColor: "#ff6b6b", surfaceColor: "#f0f2f5" },
@@ -120,6 +122,8 @@ function OrganizationDetail() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
+  const [templateImportOpen, setTemplateImportOpen] = useState(false);
+  const [orgTemplates, setOrgTemplates] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -127,6 +131,7 @@ function OrganizationDetail() {
       const res = await useraccessAPI.getOrganizationCards(tenantId);
       setCards(res.data.data || []);
       setOrganization(res.data.tenant || null);
+      setOrgTemplates(res.data.templates || []);
     } catch {
       message.error("Failed to load card holders");
     } finally {
@@ -449,6 +454,13 @@ function OrganizationDetail() {
 
   const orgType = organization?.type;
 
+  // Pick the template to drive column display:
+  // prefer the default template, else the first one available
+  const activeTemplate = orgTemplates.find((t) => t.isDefault) || orgTemplates[0] || null;
+
+  // Only truly internal / system keys — never visible as table columns
+  const INTERNAL_META_KEYS = new Set(["_design", "__templateId", "shortCode", "createdBy"]);
+
   // ── bulk design handler ──────────────────────────────────────────
   const handleBulkDesignApply = async () => {
     if (selectedRowKeys.length === 0) {
@@ -486,20 +498,10 @@ function OrganizationDetail() {
     if (cardSearch) {
       const q = cardSearch.toLowerCase();
       data = data.filter((c) => {
+        if (c.tagId?.toLowerCase().includes(q)) return true;
         const m = c.metadata || {};
-        return (
-          c.tagId?.toLowerCase().includes(q) ||
-          m.name?.toLowerCase().includes(q) ||
-          m.studentId?.toLowerCase().includes(q) ||
-          m.employeeId?.toLowerCase().includes(q) ||
-          m.department?.toLowerCase().includes(q) ||
-          m.specialization?.toLowerCase().includes(q) ||
-          m.grade?.toLowerCase().includes(q) ||
-          m.house?.toLowerCase().includes(q) ||
-          m.position?.toLowerCase().includes(q) ||
-          m.company?.toLowerCase().includes(q) ||
-          m.email?.toLowerCase().includes(q) ||
-          m.phone?.toLowerCase().includes(q)
+        return Object.values(m).some(
+          (v) => v && String(v).toLowerCase().includes(q),
         );
       });
     }
@@ -510,6 +512,111 @@ function OrganizationDetail() {
     if (filterDept)  data = data.filter((c) => c.metadata?.department === filterDept);
     return data;
   }, [cards, cardSearch, cardStatusFilter, filterHouse, filterGrade, filterDept]);
+
+  // ── Build table columns ───────────────────────────────────────────
+  // Priority: 1) active template fields  2) keys discovered from card metadata
+  // 3) legacy hardcoded columns per orgType
+  const dataColumns = useMemo(() => {
+    // 1. Template-defined columns
+    if (activeTemplate && activeTemplate.fields?.length > 0) {
+      const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
+      const toTitleT = (k) =>
+        k.replace(/_/g, " ")
+         .replace(/([a-z])([A-Z])/g, "$1 $2")
+         .replace(/\b\w/g, (c) => c.toUpperCase());
+      const tplCols = [...activeTemplate.fields]
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .filter((f) => !INTERNAL_META_KEYS.has(f.key))
+        .map((f) => ({
+          title: f.label,
+          key: f.key,
+          ellipsis: true,
+          render: (_, r) => r.metadata?.[f.key]
+            ? <span>{r.metadata[f.key]}</span>
+            : <Text type="secondary">—</Text>,
+          sorter: (a, b) =>
+            String(a.metadata?.[f.key] || "").localeCompare(String(b.metadata?.[f.key] || "")),
+        }));
+      // Append any extra keys in card data not part of the template definition
+      const extraT = new Set();
+      cards.forEach((c) => Object.keys(c.metadata || {}).forEach((k) => {
+        if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
+      }));
+      return [...tplCols, ...[...extraT].map((k) => ({
+        title: toTitleT(k), key: k, ellipsis: true,
+        render: (_, r) => r.metadata?.[k] ? <span>{r.metadata[k]}</span> : <Text type="secondary">—</Text>,
+        sorter: (a, b) => String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+      }))];
+    }
+
+    // ── Helper: build a column def for any metadata key ────────────
+    const toTitle = (k) =>
+      k.replace(/_/g, " ")
+       .replace(/([a-z])([A-Z])/g, "$1 $2")
+       .replace(/\b\w/g, (c) => c.toUpperCase());
+    const metaCol = (k, label) => ({
+      title: label || toTitle(k),
+      key: k,
+      ellipsis: true,
+      render: (_, r) => r.metadata?.[k]
+        ? <span>{r.metadata[k]}</span>
+        : <Text type="secondary">—</Text>,
+      sorter: (a, b) =>
+        String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+    });
+
+    // ── Find extra keys in card metadata not covered by standard cols ──
+    const extraKeys = (() => {
+      const standardKeys = new Set([
+        "name","title","email","phone","address","studentId","grade",
+        "section","house","guardianName","guardianPhone","employeeId",
+        "department","specialization","licenseNumber","emergencyContact",
+        "company","position","linkedIn","website",
+        ...INTERNAL_META_KEYS,
+      ]);
+      const seen = new Set();
+      const out = [];
+      cards.forEach((c) => {
+        Object.keys(c.metadata || {}).forEach((k) => {
+          if (!standardKeys.has(k) && !seen.has(k)) {
+            seen.add(k);
+            out.push(k);
+          }
+        });
+      });
+      return out;
+    })();
+
+    // 2. Standard columns + extra keys appended at end
+    let standard;
+    if (orgType === "SCHOOL") {
+      standard = [
+        metaCol("name",        "Name"),
+        metaCol("studentId",   "Roll No"),
+        metaCol("grade",       "Class"),
+        metaCol("house",       "House"),
+        metaCol("guardianName","Guardian"),
+        metaCol("phone",       "Contact"),
+      ];
+    } else if (orgType === "HOSPITAL") {
+      standard = [
+        metaCol("name",          "Name"),
+        metaCol("employeeId",    "Employee ID"),
+        metaCol("department",    "Department"),
+        metaCol("specialization","Specialization"),
+        metaCol("phone",         "Phone"),
+      ];
+    } else {
+      standard = [
+        metaCol("name",    "Name"),
+        metaCol("position","Position"),
+        metaCol("company", "Company"),
+        metaCol("email",   "Email"),
+        metaCol("phone",   "Phone"),
+      ];
+    }
+    return [...standard, ...extraKeys.map((k) => metaCol(k))];
+  }, [activeTemplate, orgType, cards]);
 
   const columns = [
     {
@@ -522,126 +629,7 @@ function OrganizationDetail() {
           <Avatar icon={<UserOutlined />} size={40} />
         ),
     },
-    {
-      title: "Name",
-      render: (_, r) => r.metadata?.name || <Text type="secondary">—</Text>,
-      sorter: (a, b) =>
-        (a.metadata?.name || "").localeCompare(b.metadata?.name || ""),
-    },
-    // SCHOOL columns
-    ...(orgType === "SCHOOL"
-      ? [
-          {
-            title: "Roll No",
-            render: (_, r) =>
-              r.metadata?.studentId || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.studentId || "").localeCompare(
-                b.metadata?.studentId || "",
-              ),
-          },
-          {
-            title: "Class",
-            render: (_, r) =>
-              r.metadata?.grade || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.grade || "").localeCompare(b.metadata?.grade || ""),
-          },
-          {
-            title: "House",
-            render: (_, r) =>
-              r.metadata?.house || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.house || "").localeCompare(b.metadata?.house || ""),
-          },
-          {
-            title: "Guardian",
-            render: (_, r) =>
-              r.metadata?.guardianName || <Text type="secondary">—</Text>,
-          },
-          {
-            title: "Address",
-            render: (_, r) =>
-              r.metadata?.address || <Text type="secondary">—</Text>,
-          },
-          {
-            title: "Contact",
-            render: (_, r) =>
-              r.metadata?.phone || <Text type="secondary">—</Text>,
-          },
-        ]
-      : []),
-    // HOSPITAL columns
-    ...(orgType === "HOSPITAL"
-      ? [
-          {
-            title: "Employee ID",
-            render: (_, r) =>
-              r.metadata?.employeeId || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.employeeId || "").localeCompare(
-                b.metadata?.employeeId || "",
-              ),
-          },
-          {
-            title: "Department",
-            render: (_, r) =>
-              r.metadata?.department || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.department || "").localeCompare(
-                b.metadata?.department || "",
-              ),
-          },
-          {
-            title: "Specialization",
-            render: (_, r) =>
-              r.metadata?.specialization || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.specialization || "").localeCompare(
-                b.metadata?.specialization || "",
-              ),
-          },
-          {
-            title: "Phone",
-            render: (_, r) =>
-              r.metadata?.phone || <Text type="secondary">—</Text>,
-          },
-        ]
-      : []),
-    // BUSINESS & default columns
-    ...(orgType !== "SCHOOL" && orgType !== "HOSPITAL"
-      ? [
-          {
-            title: "Position",
-            render: (_, r) =>
-              r.metadata?.position || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.position || "").localeCompare(
-                b.metadata?.position || "",
-              ),
-          },
-          {
-            title: "Company",
-            render: (_, r) =>
-              r.metadata?.company || <Text type="secondary">—</Text>,
-            sorter: (a, b) =>
-              (a.metadata?.company || "").localeCompare(
-                b.metadata?.company || "",
-              ),
-          },
-          {
-            title: "Email",
-            render: (_, r) =>
-              r.metadata?.email || <Text type="secondary">—</Text>,
-            ellipsis: true,
-          },
-          {
-            title: "Phone",
-            render: (_, r) =>
-              r.metadata?.phone || <Text type="secondary">—</Text>,
-          },
-        ]
-      : []),
+    ...dataColumns,
     {
       title: "Tag ID",
       dataIndex: "tagId",
@@ -798,6 +786,16 @@ function OrganizationDetail() {
           <Button icon={<UploadOutlined />} onClick={handleImportOpen}>
             Import from Excel
           </Button>
+          {orgTemplates.length > 0 && (
+            <Button
+              icon={<AppstoreAddOutlined />}
+              type="primary"
+              ghost
+              onClick={() => setTemplateImportOpen(true)}
+            >
+              Import with Template
+            </Button>
+          )}
           <Button icon={<FolderOpenOutlined />} onClick={handleZipImportOpen}>
             Import ZIP
           </Button>
@@ -1407,6 +1405,15 @@ function OrganizationDetail() {
           </div>
         )}
       </Modal>
+
+      {/* Template-based Excel Import Wizard */}
+      <ExcelImportWizard
+        open={templateImportOpen}
+        onClose={() => setTemplateImportOpen(false)}
+        onSuccess={() => { setTemplateImportOpen(false); fetchData(); }}
+        tenantId={tenantId}
+        templates={orgTemplates}
+      />
 
       {/* Import from Excel modal */}
       <Modal

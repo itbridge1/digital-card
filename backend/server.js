@@ -94,6 +94,7 @@ app.use("/", require("./routes/redirect"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/tenants", require("./routes/tenants"));
 app.use("/api/cards", require("./routes/cards"));
+app.use("/api/card-templates", require("./routes/cardTemplates"));
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/manager", require("./routes/manager"));
 app.use("/api/tenant", require("./routes/tenantPortal"));

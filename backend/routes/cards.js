@@ -547,6 +547,34 @@ router.post(
         // Remove empty metadata fields
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
+        // ── Capture any custom columns not covered by the named fields above ──
+        // This allows arbitrary Excel headers (e.g. "Ronik", "Basnet", "S.N") to
+        // be stored as metadata so the dynamic table discovery can display them.
+        const knownNorms = new Set([
+          "name","fullname","title","positiontitle","email","emailaddress",
+          "phone","phonenumber","mobile","contact","contactno","phoneno",
+          "address","fulladdress","rollno","roll","rollnumber","studentid",
+          "admissionno","class","grade","gradelevel","section","classsection",
+          "house","guardian","guardianname","parent","parentname",
+          "guardianphone","parentphone","guardiancontact","employeeid","empid",
+          "staffid","department","dept","specialization","speciality",
+          "licensenumber","licenseno","emergencycontact","company",
+          "organization","organisation","position","jobtitle","designation",
+          "linkedin","website","web","tagid","tag","businessurl","url",
+        ]);
+        headers.forEach((h) => {
+          if (knownNorms.has(norm(h))) return; // already captured above
+          const val = String(row[h] ?? "").trim();
+          if (!val) return;
+          // Sanitise header into a safe metadata key
+          const key = h.trim()
+            .replace(/\s+/g, "_")
+            .replace(/[^a-zA-Z0-9_]/g, "")
+            .replace(/^_+|_+$/g, "")
+            .toLowerCase();
+          if (key && !metadata[key]) metadata[key] = val;
+        });
+
         const businessUrl = pick(row, "Business URL", "BusinessURL", "URL", "url") || undefined;
 
         try {

@@ -160,6 +160,32 @@ export const publicAPI = {
     publicApi.get(`/public/cardInfo/${encodeURIComponent(tagId)}`),
 };
 
+// Card Template API methods
+export const cardTemplateAPI = {
+  getAll: (tenantId) =>
+    api.get('/card-templates', { params: tenantId ? { tenantId } : {} }),
+  getById: (id, tenantId) =>
+    api.get(`/card-templates/${id}`, { params: tenantId ? { tenantId } : {} }),
+  create: (data) => api.post('/card-templates', data),
+  update: (id, data) => api.put(`/card-templates/${id}`, data),
+  delete: (id, tenantId) =>
+    api.delete(`/card-templates/${id}`, { data: { tenantId } }),
+  /** Upload Excel and get columns + first-5-row preview. Returns { columns, preview, totalRows } */
+  previewExcel: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/card-templates/preview-excel', form);
+  },
+  /** Import cards using template field mapping */
+  importFromExcel: (templateId, tenantId, file, mapping) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('tenantId', tenantId);
+    form.append('mapping', JSON.stringify(mapping));
+    return api.post(`/card-templates/${templateId}/import`, form);
+  },
+};
+
 // Upload API methods — uses multipart/form-data
 export const uploadAPI = {
   uploadProfile: (file) => {
