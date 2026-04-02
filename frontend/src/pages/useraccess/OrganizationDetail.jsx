@@ -42,6 +42,8 @@ import {
   AppstoreOutlined,
   AppstoreAddOutlined,
   ReloadOutlined,
+  LeftOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
@@ -124,6 +126,13 @@ function OrganizationDetail() {
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [orgTemplates, setOrgTemplates] = useState([]);
+
+  // Bulk data edit state
+  const [bulkDataEditOpen, setBulkDataEditOpen] = useState(false);
+  const [bulkDataIndex, setBulkDataIndex] = useState(0);
+  const [bulkDataCards, setBulkDataCards] = useState([]);
+  const [bulkDataSaving, setBulkDataSaving] = useState(false);
+  const [bulkDataForm] = Form.useForm();
 
   const fetchData = async () => {
     setLoading(true);
@@ -453,6 +462,129 @@ function OrganizationDetail() {
   };
 
   const orgType = organization?.type;
+
+  // ── bulk data edit handlers ─────────────────────────────────────
+  const populateBulkDataForm = (cardsList, idx) => {
+    const card = cardsList[idx];
+    const m = card.metadata || {};
+    let editGrade = m.grade || "";
+    let editSection = "";
+    const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
+    if (sectionMatch) {
+      editGrade = sectionMatch[1];
+      editSection = sectionMatch[2];
+    }
+    bulkDataForm.resetFields();
+    bulkDataForm.setFieldsValue({
+      name: m.name || "",
+      email: m.email || "",
+      phone: m.phone || "",
+      address: m.address || "",
+      studentId: m.studentId || "",
+      grade: editGrade,
+      section: editSection,
+      house: m.house || "",
+      guardianName: m.guardianName || "",
+      employeeId: m.employeeId || "",
+      department: m.department || "",
+      specialization: m.specialization || "",
+      licenseNumber: m.licenseNumber || "",
+      emergencyContact: m.emergencyContact || "",
+      company: m.company || "",
+      position: m.position || "",
+      linkedIn: m.linkedIn || "",
+      website: m.website || "",
+    });
+  };
+
+  const openBulkDataEdit = () => {
+    const cloned = cards
+      .filter((c) => selectedRowKeys.includes(c.id))
+      .map((c) => ({ ...c, metadata: { ...(c.metadata || {}) } }));
+    setBulkDataCards(cloned);
+    setBulkDataIndex(0);
+    setBulkDataEditOpen(true);
+    populateBulkDataForm(cloned, 0);
+  };
+
+  const saveBulkDataCurrent = async () => {
+    const values = await bulkDataForm.validateFields();
+    const updated = [...bulkDataCards];
+    const metadata = {
+      ...updated[bulkDataIndex].metadata,
+      name: values.name,
+      email: values.email,
+      phone: values.phone,
+      address: values.address,
+    };
+    if (orgType === "SCHOOL") {
+      const rawGrade = (values.grade || "").trim();
+      const rawSection = (values.section || "").trim();
+      const mergedGrade = rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
+      Object.assign(metadata, {
+        studentId: values.studentId,
+        grade: mergedGrade,
+        house: values.house,
+        guardianName: values.guardianName,
+      });
+      delete metadata.email;
+    } else if (orgType === "HOSPITAL") {
+      Object.assign(metadata, {
+        employeeId: values.employeeId,
+        department: values.department,
+        specialization: values.specialization,
+        licenseNumber: values.licenseNumber,
+        emergencyContact: values.emergencyContact,
+      });
+    } else {
+      Object.assign(metadata, {
+        company: values.company,
+        position: values.position,
+        linkedIn: values.linkedIn,
+        website: values.website,
+      });
+    }
+    updated[bulkDataIndex] = { ...updated[bulkDataIndex], metadata };
+    setBulkDataCards(updated);
+    return updated;
+  };
+
+  const handleBulkDataPrev = async () => {
+    const updated = await saveBulkDataCurrent();
+    const newIdx = bulkDataIndex - 1;
+    setBulkDataIndex(newIdx);
+    populateBulkDataForm(updated, newIdx);
+  };
+
+  const handleBulkDataNext = async () => {
+    const updated = await saveBulkDataCurrent();
+    const newIdx = bulkDataIndex + 1;
+    setBulkDataIndex(newIdx);
+    populateBulkDataForm(updated, newIdx);
+  };
+
+  const handleBulkDataSaveAll = async () => {
+    const updated = await saveBulkDataCurrent();
+    setBulkDataSaving(true);
+    try {
+      await Promise.all(
+        updated.map((card) =>
+          useraccessAPI.updateCard(tenantId, card.id, {
+            profileImageUrl: card.profileImageUrl || null,
+            metadata: card.metadata,
+          })
+        )
+      );
+      message.success(`${updated.length} card(s) updated successfully`);
+      setBulkDataEditOpen(false);
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to update cards");
+    } finally {
+      setBulkDataSaving(false);
+    }
+  };
 
   // Pick the template to drive column display:
   // prefer the default template, else the first one available
@@ -806,6 +938,16 @@ function OrganizationDetail() {
                 onClick={() => setBulkDesignOpen(true)}
               >
                 Bulk Card Design
+              </Button>
+            </Badge>
+          )}
+          {selectedRowKeys.length > 0 && (
+            <Badge count={selectedRowKeys.length} size="small">
+              <Button
+                icon={<EditOutlined />}
+                onClick={openBulkDataEdit}
+              >
+                Edit in Bulk
               </Button>
             </Badge>
           )}
@@ -1417,6 +1559,107 @@ function OrganizationDetail() {
         tenantId={tenantId}
         templates={orgTemplates}
       />
+
+      {/* Bulk Data Edit modal */}
+      <Modal
+        title={
+          bulkDataCards.length > 0
+            ? `Edit Card ${bulkDataIndex + 1} of ${bulkDataCards.length} — ${bulkDataCards[bulkDataIndex]?.metadata?.name || bulkDataCards[bulkDataIndex]?.tagId || ""}`
+            : "Edit in Bulk"
+        }
+        open={bulkDataEditOpen}
+        onCancel={() => setBulkDataEditOpen(false)}
+        width={isMobile ? "95%" : 520}
+        footer={[
+          <Button
+            key="prev"
+            icon={<LeftOutlined />}
+            disabled={bulkDataIndex === 0}
+            onClick={handleBulkDataPrev}
+          >
+            Previous
+          </Button>,
+          <Text key="counter" style={{ padding: "0 12px", lineHeight: "32px" }}>
+            {bulkDataCards.length > 0 ? `${bulkDataIndex + 1} / ${bulkDataCards.length}` : ""}
+          </Text>,
+          <Button
+            key="next"
+            icon={<RightOutlined />}
+            iconPosition="end"
+            disabled={bulkDataIndex === bulkDataCards.length - 1}
+            onClick={handleBulkDataNext}
+          >
+            Next
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            loading={bulkDataSaving}
+            onClick={handleBulkDataSaveAll}
+            style={{ marginLeft: 8 }}
+          >
+            Save All
+          </Button>,
+        ]}
+      >
+        <Form form={bulkDataForm} layout="vertical" style={{ marginTop: 12 }}>
+          {orgType !== "SCHOOL" && (
+            <Form.Item label="Full Name" name="name" rules={[{ required: true, message: "Required" }]}>
+              <Input placeholder="Full name" />
+            </Form.Item>
+          )}
+
+          {orgType === "SCHOOL" && (
+            <>
+              <Form.Item label="Roll No" name="studentId"><Input /></Form.Item>
+              <Form.Item label="Full Name" name="name" rules={[{ required: true, message: "Required" }]}>
+                <Input placeholder="Full name" />
+              </Form.Item>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                <Form.Item label="Class" name="grade" style={{ marginBottom: 0 }}><Input placeholder="One" /></Form.Item>
+                <Form.Item label="Section" name="section" style={{ marginBottom: 0 }}><Input placeholder="A" /></Form.Item>
+              </div>
+              <Form.Item label="House" name="house" style={{ marginTop: 12 }}><Input /></Form.Item>
+              <Form.Item label="Guardian" name="guardianName"><Input /></Form.Item>
+              <Form.Item label="Address" name="address"><Input /></Form.Item>
+              <Form.Item label="Contact" name="phone"><Input /></Form.Item>
+            </>
+          )}
+
+          {orgType === "HOSPITAL" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                <Form.Item label="Employee ID" name="employeeId" style={{ marginBottom: 0 }}><Input /></Form.Item>
+                <Form.Item label="Department" name="department" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
+                <Form.Item label="Specialization" name="specialization" style={{ marginBottom: 0 }}><Input /></Form.Item>
+                <Form.Item label="License Number" name="licenseNumber" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              </div>
+              <Form.Item label="Emergency Contact" name="emergencyContact" style={{ marginTop: 12 }}><Input /></Form.Item>
+              <Form.Item label="Address" name="address"><Input /></Form.Item>
+              <Form.Item label="Email" name="email" rules={[{ type: "email", message: "Invalid email" }]}><Input /></Form.Item>
+              <Form.Item label="Phone" name="phone"><Input /></Form.Item>
+            </>
+          )}
+
+          {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                <Form.Item label="Position / Title" name="position" style={{ marginBottom: 0 }}><Input /></Form.Item>
+                <Form.Item label="Company" name="company" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
+                <Form.Item label="LinkedIn" name="linkedIn" style={{ marginBottom: 0 }}><Input /></Form.Item>
+                <Form.Item label="Website" name="website" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              </div>
+              <Form.Item label="Address" name="address" style={{ marginTop: 12 }}><Input /></Form.Item>
+              <Form.Item label="Email" name="email" rules={[{ type: "email", message: "Invalid email" }]}><Input /></Form.Item>
+              <Form.Item label="Phone" name="phone"><Input /></Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
 
       {/* Import from Excel modal */}
       <Modal

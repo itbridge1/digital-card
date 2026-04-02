@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { cardAPI } from "../services/api";
-import { Button, Table, Tag, Popconfirm, message, Space } from "antd";
-import { DeleteOutlined, EditOutlined, EyeOutlined } from "@ant-design/icons";
+import { Button, Table, Tag, Popconfirm, message, Space, Modal, Form, Input, Typography } from "antd";
+import { DeleteOutlined, EditOutlined, EyeOutlined, EditFilled, LeftOutlined, RightOutlined } from "@ant-design/icons";
+
+const { Text } = Typography;
 
 export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const navigate = useNavigate();
@@ -10,6 +12,15 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Bulk edit state
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [selectedCards, setSelectedCards] = useState([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditIndex, setBulkEditIndex] = useState(0);
+  const [bulkEditCards, setBulkEditCards] = useState([]);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkForm] = Form.useForm();
 
   useEffect(() => {
     if (tenantId) {
@@ -37,6 +48,94 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Populate bulk form when card index or open state changes
+  useEffect(() => {
+    if (bulkEditOpen && bulkEditCards.length > 0) {
+      const card = bulkEditCards[bulkEditIndex];
+      bulkForm.resetFields();
+      bulkForm.setFieldsValue({
+        businessUrl: card.businessUrl || "",
+        ...(card.metadata || {}),
+      });
+    }
+  }, [bulkEditIndex, bulkEditOpen, bulkEditCards]);
+
+  const openBulkEdit = () => {
+    const cloned = selectedCards.map((c) => ({
+      ...c,
+      metadata: { ...(c.metadata || {}) },
+    }));
+    setBulkEditCards(cloned);
+    setBulkEditIndex(0);
+    setBulkEditOpen(true);
+  };
+
+  const saveCurrentToState = async () => {
+    const values = await bulkForm.validateFields();
+    const { businessUrl, ...metadataValues } = values;
+    const updated = [...bulkEditCards];
+    updated[bulkEditIndex] = {
+      ...updated[bulkEditIndex],
+      businessUrl,
+      metadata: {
+        ...updated[bulkEditIndex].metadata,
+        ...metadataValues,
+      },
+    };
+    setBulkEditCards(updated);
+    return updated;
+  };
+
+  const handleBulkPrev = async () => {
+    await saveCurrentToState();
+    setBulkEditIndex((i) => i - 1);
+  };
+
+  const handleBulkNext = async () => {
+    await saveCurrentToState();
+    setBulkEditIndex((i) => i + 1);
+  };
+
+  const handleBulkSaveAll = async () => {
+    const updated = await saveCurrentToState();
+    setBulkSaving(true);
+    try {
+      await Promise.all(
+        updated.map((card) =>
+          cardAPI.update(card.tagId, {
+            businessUrl: card.businessUrl,
+            metadata: card.metadata,
+          })
+        )
+      );
+      message.success(`${updated.length} card(s) updated successfully`);
+      setBulkEditOpen(false);
+      setSelectedRowKeys([]);
+      setSelectedCards([]);
+      fetchCards();
+    } catch (err) {
+      message.error(err.response?.data?.error || "Failed to update cards");
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const renderBulkFormFields = () => {
+    if (!bulkEditCards.length) return null;
+    const card = bulkEditCards[bulkEditIndex];
+    const meta = card.metadata || {};
+    const keys = Object.keys(meta).filter((k) => !k.startsWith("__"));
+    return keys.map((key) => (
+      <Form.Item
+        key={key}
+        label={key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}
+        name={key}
+      >
+        <Input />
+      </Form.Item>
+    ));
   };
 
   const handleDelete = async (tagId) => {
@@ -180,12 +279,31 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
     },
   ];
 
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys, rows) => {
+      setSelectedRowKeys(keys);
+      setSelectedCards(rows);
+    },
+  };
+
   return (
     <div className="cards-table-container overflow-x-auto">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <Button
+          type="primary"
+          icon={<EditFilled />}
+          disabled={selectedRowKeys.length === 0}
+          onClick={openBulkEdit}
+        >
+          Edit in Bulk{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+        </Button>
+      </div>
       <Table
         columns={columns}
         dataSource={cards}
         rowKey="id"
+        rowSelection={rowSelection}
         bordered
         size={isMobile ? "small" : "middle"}
         scroll={{ x: isMobile ? 400 : "auto" }}
@@ -194,6 +312,55 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
           size: "small"
         }}
       />
+
+      <Modal
+        title={
+          bulkEditCards.length > 0
+            ? `Edit Card ${bulkEditIndex + 1} of ${bulkEditCards.length} — ${bulkEditCards[bulkEditIndex]?.tagId || ""}`
+            : "Edit in Bulk"
+        }
+        open={bulkEditOpen}
+        onCancel={() => setBulkEditOpen(false)}
+        width={600}
+        footer={[
+          <Button
+            key="prev"
+            icon={<LeftOutlined />}
+            disabled={bulkEditIndex === 0}
+            onClick={handleBulkPrev}
+          >
+            Previous
+          </Button>,
+          <Text key="counter" style={{ padding: "0 12px", lineHeight: "32px" }}>
+            {bulkEditCards.length > 0 ? `${bulkEditIndex + 1} / ${bulkEditCards.length}` : ""}
+          </Text>,
+          <Button
+            key="next"
+            icon={<RightOutlined />}
+            iconPosition="end"
+            disabled={bulkEditIndex === bulkEditCards.length - 1}
+            onClick={handleBulkNext}
+          >
+            Next
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            loading={bulkSaving}
+            onClick={handleBulkSaveAll}
+            style={{ marginLeft: 8 }}
+          >
+            Save All
+          </Button>,
+        ]}
+      >
+        <Form form={bulkForm} layout="vertical" style={{ marginTop: 12 }}>
+          <Form.Item label="Business URL" name="businessUrl">
+            <Input placeholder="https://" />
+          </Form.Item>
+          {renderBulkFormFields()}
+        </Form>
+      </Modal>
     </div>
   );
 }
