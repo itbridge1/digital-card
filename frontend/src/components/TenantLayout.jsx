@@ -1,13 +1,5 @@
 import React, { useState } from "react";
-import {
-  Layout,
-  Menu,
-  Button,
-  Typography,
-  Dropdown,
-  Avatar,
-  Grid,
-} from "antd";
+import { Layout, Menu, Button, Typography, Dropdown, Avatar, Grid } from "antd";
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -83,17 +75,55 @@ function TenantLayout() {
         {collapsed ? (
           <div className="nfc-sidebar-brand-collapsed">
             <div className="nfc-sidebar-brand-logo">
-              <img src="/logo.png" alt="ITB" style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
-              <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>{initials}</span>
+              <img
+                src="/logo.png"
+                alt="ITB"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={(e) => {
+                  e.target.style.display = "none";
+                  e.target.nextSibling.style.display = "flex";
+                }}
+              />
+              <span
+                style={{
+                  display: "none",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  height: "100%",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {initials}
+              </span>
             </div>
           </div>
         ) : (
           <div className="nfc-sidebar-brand">
             <div className="nfc-sidebar-brand-logo">
-              <img src="/logo.png" alt="ITB" style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
-              <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>{initials}</span>
+              <img
+                src="/logo.png"
+                alt="ITB"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={(e) => {
+                  e.target.style.display = "none";
+                  e.target.nextSibling.style.display = "flex";
+                }}
+              />
+              <span
+                style={{
+                  display: "none",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  height: "100%",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {initials}
+              </span>
             </div>
             <div>
               <div className="nfc-sidebar-brand-title">{orgName}</div>
@@ -127,13 +157,30 @@ function TenantLayout() {
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{ fontSize: "15px", width: 40, height: 40, color: "#64748b" }}
+            style={{
+              fontSize: "15px",
+              width: 40,
+              height: 40,
+              color: "#64748b",
+            }}
           />
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
             <div
-              style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                padding: "4px 8px",
+                borderRadius: 8,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#f1f5f9")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
             >
               <Avatar
                 size={30}
@@ -143,8 +190,19 @@ function TenantLayout() {
               </Avatar>
               {!isMobile && (
                 <div>
-                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>{user.name || "Tenant"}</Text>
-                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1, marginTop: 2 }}>{orgName}</div>
+                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>
+                    {user.name || "Tenant"}
+                  </Text>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#94a3b8",
+                      lineHeight: 1,
+                      marginTop: 2,
+                    }}
+                  >
+                    {orgName}
+                  </div>
                 </div>
               )}
             </div>

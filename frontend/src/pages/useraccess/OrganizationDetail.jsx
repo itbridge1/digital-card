@@ -124,6 +124,10 @@ function OrganizationDetail() {
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [orgTemplates, setOrgTemplates] = useState([]);
+  const [tablePagination, setTablePagination] = useState({
+    current: 1,
+    pageSize: 10,
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -513,6 +517,17 @@ function OrganizationDetail() {
     return data;
   }, [cards, cardSearch, cardStatusFilter, filterHouse, filterGrade, filterDept]);
 
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredCards.length / tablePagination.pageSize));
+    if (tablePagination.current > maxPage) {
+      setTablePagination((prev) => ({ ...prev, current: maxPage }));
+    }
+  }, [filteredCards.length, tablePagination.current, tablePagination.pageSize]);
+
+  useEffect(() => {
+    setTablePagination((prev) => ({ ...prev, current: 1 }));
+  }, [cardSearch, cardStatusFilter, filterHouse, filterGrade, filterDept]);
+
   // ── Build table columns ───────────────────────────────────────────
   // Priority: 1) active template fields  2) keys discovered from card metadata
   // 3) legacy hardcoded columns per orgType
@@ -622,6 +637,7 @@ function OrganizationDetail() {
     {
       title: "Photo",
       dataIndex: "profileImageUrl",
+      width: 84,
       render: (url) =>
         url ? (
           <Avatar src={`${API_BASE}${url}`} size={40} />
@@ -633,12 +649,16 @@ function OrganizationDetail() {
     {
       title: "Tag ID",
       dataIndex: "tagId",
+      width: 150,
+      ellipsis: true,
       render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
       sorter: (a, b) => a.tagId.localeCompare(b.tagId),
     },
     {
       title: "Public URL",
       key: "publicUrl",
+      width: 220,
+      ellipsis: true,
       render: (_, record) => {
         const url = `${window.location.origin}/view/${record.tagId}`;
         return (
@@ -647,7 +667,15 @@ function OrganizationDetail() {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ fontSize: 11 }}
+              style={{
+                fontSize: 11,
+                maxWidth: 150,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "inline-block",
+                verticalAlign: "middle",
+              }}
             >
               /view/{record.tagId}
             </a>
@@ -669,6 +697,7 @@ function OrganizationDetail() {
     {
       title: "Status",
       dataIndex: "isActive",
+      width: 110,
       render: (v) => (
         <Tag color={v ? "success" : "default"}>{v ? "Active" : "Inactive"}</Tag>
       ),
@@ -677,6 +706,8 @@ function OrganizationDetail() {
     {
       title: "Actions",
       key: "actions",
+      width: 220,
+      fixed: "right",
       render: (_, record) => (
         <Space>
           <Tooltip title="View Card (internal)">
@@ -870,8 +901,18 @@ function OrganizationDetail() {
         columns={columns}
         dataSource={filteredCards}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 1300 }}
+        tableLayout="fixed"
+        pagination={{
+          current: tablePagination.current,
+          pageSize: tablePagination.pageSize,
+          total: filteredCards.length,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50", "100"],
+          onChange: (page, pageSize) => {
+            setTablePagination({ current: page, pageSize });
+          },
+        }}
+        scroll={{ x: 1500 }}
         size={isMobile ? "small" : "middle"}
         rowSelection={{
           selectedRowKeys,
