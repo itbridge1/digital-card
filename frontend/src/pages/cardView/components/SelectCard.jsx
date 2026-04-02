@@ -12,9 +12,18 @@ const resolveImg = (url) => {
 
 // Keys that are never shown on the card face (internal / design settings)
 const INTERNAL_KEYS = new Set([
-  "name", "title", "custom", "shortCode", "createdBy", "section", "_design",
+  "name",
+  "title",
+  "custom",
+  "shortCode",
+  "createdBy",
+  "section",
+  "_design",
   "__templateId",
 ]);
+
+// Metadata keys intentionally hidden from card body in all designs.
+const HIDDEN_DISPLAY_FIELDS = new Set(["photo"]);
 
 const FIELD_LABELS = {
   // common
@@ -56,7 +65,9 @@ const getDisplayRows = (card, templateFields) => {
       .filter((f) => !INTERNAL_KEYS.has(f.key))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((f) => [f.key, card.metadata[f.key], f.label])
-      .filter(([, value]) => value !== undefined && value !== null && value !== "");
+      .filter(
+        ([, value]) => value !== undefined && value !== null && value !== "",
+      );
   }
 
   return Object.entries(card.metadata)
@@ -66,7 +77,10 @@ const getDisplayRows = (card, templateFields) => {
 
 export const formatFieldLabel = (key) =>
   FIELD_LABELS[key] ||
-  key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()).trim();
+  key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
 
 /**
  * Resolve the display name and subtitle for the card header.
@@ -78,7 +92,8 @@ const resolveNameAndTitle = (card, templateFields) => {
   const rawName = card.metadata?.name || "";
   const rawTitle = card.metadata?.title || card.metadata?.position || "";
 
-  if (!templateFields || templateFields.length === 0) return { name: rawName, title: rawTitle };
+  if (!templateFields || templateFields.length === 0)
+    return { name: rawName, title: rawTitle };
 
   // Look for a template field whose key is "name" / "fullName" / "fullname"
   const nameField = templateFields.find((f) =>
@@ -89,8 +104,10 @@ const resolveNameAndTitle = (card, templateFields) => {
     /^(title|position|designation|jobTitle|role|grade|class)$/i.test(f.key),
   );
 
-  const resolvedName = (nameField ? card.metadata[nameField.key] : rawName) || rawName;
-  const resolvedTitle = (titleField ? card.metadata[titleField.key] : rawTitle) || rawTitle;
+  const resolvedName =
+    (nameField ? card.metadata[nameField.key] : rawName) || rawName;
+  const resolvedTitle =
+    (titleField ? card.metadata[titleField.key] : rawTitle) || rawTitle;
 
   return { name: resolvedName, title: resolvedTitle };
 };
@@ -105,6 +122,20 @@ const copyToClipboard = async (text) => {
   }
 };
 
+const toDisplayValue = (value) => {
+  if (typeof value !== "string") return value;
+
+  const parts = value.split(".");
+  const ext = parts[parts.length - 1]?.toLowerCase();
+  const imageExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
+
+  if (imageExtensions.has(ext)) {
+    return parts.slice(0, -1).join(".");
+  }
+
+  return value;
+};
+
 const DARK_TEXT_PRIMARY = "rgba(255, 255, 255, 0.92)";
 const DARK_TEXT_SECONDARY = "rgba(255, 255, 255, 0.78)";
 const DARK_TEXT_MUTED = "rgba(255, 255, 255, 0.68)";
@@ -112,9 +143,20 @@ const DARK_SURFACE_BASE = "#111827";
 const DARK_SURFACE_ELEVATED = "#1f2937";
 const DARK_BORDER_SOFT = "rgba(255, 255, 255, 0.2)";
 
-function CardDesignOne({ card, tenant, formatFieldName, theme, templateFields }) {
-  const displayRows = getDisplayRows(card, templateFields);
-  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
+function CardDesignOne({
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+}) {
+  const displayRows = getDisplayRows(card, templateFields)
+    .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(
+    card,
+    templateFields,
+  );
 
   const {
     primaryColor,
@@ -254,11 +296,10 @@ function CardDesignOne({ card, tenant, formatFieldName, theme, templateFields })
         {/* 📋 Data */}
         <div style={{ marginTop: 12, fontSize: 12 }}>
           {/* ID */}
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          {/* <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: labelColor }}>ID</span>
             <strong style={{ color: accentColor }}>{card.tagId}</strong>
-          </div>
-
+          </div> */}
           {/* Dynamic Rows */}
           {displayRows.map(([key, value, tplLabel]) => (
             <div
@@ -269,13 +310,15 @@ function CardDesignOne({ card, tenant, formatFieldName, theme, templateFields })
                 marginTop: 4,
               }}
             >
-              <span style={{ color: labelColor }}>{tplLabel || formatFieldName(key)}</span>
+              <span style={{ color: labelColor }}>
+                {tplLabel || formatFieldName(key)}
+              </span>
               <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
         </div>
 
-        {/* 🌐 Business URL + COPY BUTTON ✅ */}
+        {/* 🌐 Business URL + COPY BUTTON ✅
         {card.businessUrl && (
           <div
             style={{
@@ -312,21 +355,32 @@ function CardDesignOne({ card, tenant, formatFieldName, theme, templateFields })
               onClick={() => copyToClipboard(card.businessUrl)}
             />
           </div>
-        )}
+        )} */}
 
-        <div style={{ marginTop: 12, textAlign: "center" }}>
+        {/* <div style={{ marginTop: 12, textAlign: "center" }}>
           <div style={{ fontSize: 10, marginTop: 4, color: bodyTextColor }}>
             {tenant?.website || "www.company.com"}
           </div>
-        </div>
+        </div> */}
       </div>
     </Card>
   );
 }
 
-function CardDesignTwo({ card, tenant, formatFieldName, theme, templateFields }) {
-  const displayRows = getDisplayRows(card, templateFields);
-  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
+function CardDesignTwo({
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+}) {
+  const displayRows = getDisplayRows(card, templateFields)
+    .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(
+    card,
+    templateFields,
+  );
 
   const { primaryColor, secondaryColor, surfaceColor, isDark, hexToRgba } =
     theme;
@@ -458,11 +512,11 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme, templateFields })
         </div>
 
         {/* ID */}
-        <div style={{ textAlign: "center", marginTop: 8 }}>
+        {/* <div style={{ textAlign: "center", marginTop: 8 }}>
           <span style={{ fontSize: 11, color: bodyTextColor }}>
             ID No: <strong>{card.tagId}</strong>
           </span>
-        </div>
+        </div> */}
 
         {/* 📋 Dynamic Fields */}
         <div style={{ marginTop: 10, fontSize: 12 }}>
@@ -477,14 +531,16 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme, templateFields })
                 paddingBottom: 2,
               }}
             >
-              <span style={{ color: labelColor }}>{tplLabel || formatFieldName(key)}</span>
+              <span style={{ color: labelColor }}>
+                {tplLabel || formatFieldName(key)}
+              </span>
               <strong style={{ color: valueColor }}>{value}</strong>
             </div>
           ))}
         </div>
 
         {/* 🌐 URL + COPY */}
-        {card.businessUrl && (
+        {/* {card.businessUrl && (
           <div
             style={{
               marginTop: 10,
@@ -518,23 +574,33 @@ function CardDesignTwo({ card, tenant, formatFieldName, theme, templateFields })
               onClick={() => copyToClipboard(card.businessUrl)}
             />
           </div>
-        )}
+        )} */}
       </div>
 
-      {/* 🔻 BOTTOM WAVE */}
-      <svg viewBox="0 0 500 80" preserveAspectRatio="none">
+      {/* <svg viewBox="0 0 500 80" preserveAspectRatio="none">
         <path
           d="M0,40 C150,0 350,80 500,40 L500,80 L0,80 Z"
           style={{ fill: primaryColor }}
         />
-      </svg>
+      </svg> */}
     </Card>
   );
 }
 
-function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields }) {
-  const displayRows = getDisplayRows(card, templateFields);
-  const { name: displayName, title: displayTitle } = resolveNameAndTitle(card, templateFields);
+function CardDesignThree({
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+}) {
+  const displayRows = getDisplayRows(card, templateFields)
+    .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(
+    card,
+    templateFields,
+  );
 
   const {
     primaryColor,
@@ -625,7 +691,9 @@ function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields 
                 color: "#fff",
               }}
             >
-              {card?.metadata?.name?.charAt(0)?.toUpperCase() || displayName?.charAt(0)?.toUpperCase() || "U"}
+              {card?.metadata?.name?.charAt(0)?.toUpperCase() ||
+                displayName?.charAt(0)?.toUpperCase() ||
+                "U"}
             </div>
           )}
         </div>
@@ -646,14 +714,14 @@ function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields 
         </div>
 
         {/* ID */}
-        <div style={{ textAlign: "center", marginBottom: 10 }}>
+        {/* <div style={{ textAlign: "center", marginBottom: 10 }}>
           <span style={{ fontSize: 9, color: mutedTextColor }}>ID: </span>
           <span
             style={{ fontSize: 11, fontWeight: "bold", color: accentColor }}
           >
             {card.tagId}
           </span>
-        </div>
+        </div> */}
 
         {/* Simple Fields */}
         <div style={{ fontSize: 11, lineHeight: "18px" }}>
@@ -668,7 +736,7 @@ function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields 
         </div>
 
         {/* URL */}
-        {card.businessUrl && (
+        {/* {card.businessUrl && (
           <div style={{ marginTop: 8, fontSize: 10, color: bodyTextColor }}>
             <span style={{ color: accentColor }}>Link: </span>
             <span>{card.businessUrl}</span>
@@ -684,7 +752,7 @@ function CardDesignThree({ card, tenant, formatFieldName, theme, templateFields 
               Copy
             </Button>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* 🔵 Bottom */}
@@ -713,7 +781,14 @@ const CARD_DESIGNS = {
   three: CardDesignThree,
 };
 
-function SelectCard({ design = "one", card, tenant, formatFieldName, theme, templateFields }) {
+function SelectCard({
+  design = "one",
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+}) {
   const SelectedDesign = CARD_DESIGNS[design] || CARD_DESIGNS.one;
 
   return (
