@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Layout, Menu, Button, Typography, Dropdown, Avatar, Grid } from "antd";
 import {
   MenuFoldOutlined,
@@ -14,11 +14,25 @@ const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 function TenantLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
+  const siderCollapsed = isMobile ? !mobileOpen : desktopCollapsed;
+
+  useEffect(() => {
+    if (!isMobile) setMobileOpen(false);
+  }, [isMobile]);
+
+  const toggleSider = () => {
+    if (isMobile) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      setDesktopCollapsed((prev) => !prev);
+    }
+  };
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -68,11 +82,22 @@ function TenantLayout() {
         collapsible
         breakpoint="lg"
         collapsedWidth={0}
-        collapsed={collapsed}
-        onCollapse={(value) => setCollapsed(value)}
-        onBreakpoint={(broken) => setCollapsed(broken)}
+        width={240}
+        collapsed={siderCollapsed}
+        onCollapse={(value) => {
+          if (isMobile) setMobileOpen(!value);
+          else setDesktopCollapsed(value);
+        }}
+        onBreakpoint={(broken) => {
+          if (!broken) setMobileOpen(false);
+        }}
+        style={
+          isMobile
+            ? { position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 1001, height: "100vh" }
+            : undefined
+        }
       >
-        {collapsed ? (
+        {siderCollapsed ? (
           <div className="nfc-sidebar-brand-collapsed">
             <div className="nfc-sidebar-brand-logo">
               <img
@@ -137,9 +162,24 @@ function TenantLayout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
+          onClick={() => {
+            if (isMobile) setMobileOpen(false);
+          }}
           style={{ border: "none", paddingLeft: 8, paddingRight: 8 }}
         />
       </Sider>
+
+      {isMobile && mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            zIndex: 1000,
+          }}
+        />
+      )}
 
       <Layout>
         <Header
@@ -155,8 +195,8 @@ function TenantLayout() {
         >
           <Button
             type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
+            icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={toggleSider}
             style={{
               fontSize: "15px",
               width: 40,

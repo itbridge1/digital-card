@@ -22,12 +22,14 @@ import {
   Badge,
   Slider,
   Card as AntCard,
+  Descriptions,
 } from "antd";
 import {
   EditOutlined,
   StopOutlined,
   UndoOutlined,
   UploadOutlined,
+  DownloadOutlined,
   UserOutlined,
   EyeOutlined,
   CopyOutlined,
@@ -36,16 +38,46 @@ import {
   AppstoreOutlined,
   ReloadOutlined,
   FileExcelOutlined,
+  FolderOpenOutlined,
+  InboxOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { tenantPortalAPI, uploadAPI, cardTemplateAPI } from "../../services/api";
+import QRCode from "qrcode";
+import JSZip from "jszip";
+import * as XLSX from "xlsx";
+import {
+  tenantPortalAPI,
+  uploadAPI,
+  cardAPI,
+  cardTemplateAPI,
+} from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
 
 const THEME_PRESETS = {
-  ocean:  { primaryColor: "#1890ff", secondaryColor: "#52c41a", accentColor: "#ff6b6b", surfaceColor: "#f0f2f5" },
-  sunset: { primaryColor: "#f97316", secondaryColor: "#facc15", accentColor: "#dc2626", surfaceColor: "#fff7ed" },
-  royal:  { primaryColor: "#4f46e5", secondaryColor: "#06b6d4", accentColor: "#db2777", surfaceColor: "#eef2ff" },
-  forest: { primaryColor: "#166534", secondaryColor: "#22c55e", accentColor: "#b45309", surfaceColor: "#f0fdf4" },
+  ocean: {
+    primaryColor: "#1890ff",
+    secondaryColor: "#52c41a",
+    accentColor: "#ff6b6b",
+    surfaceColor: "#f0f2f5",
+  },
+  sunset: {
+    primaryColor: "#f97316",
+    secondaryColor: "#facc15",
+    accentColor: "#dc2626",
+    surfaceColor: "#fff7ed",
+  },
+  royal: {
+    primaryColor: "#4f46e5",
+    secondaryColor: "#06b6d4",
+    accentColor: "#db2777",
+    surfaceColor: "#eef2ff",
+  },
+  forest: {
+    primaryColor: "#166534",
+    secondaryColor: "#22c55e",
+    accentColor: "#b45309",
+    surfaceColor: "#f0fdf4",
+  },
 };
 
 const DEFAULT_BULK_THEME = {
@@ -57,15 +89,15 @@ const DEFAULT_BULK_THEME = {
 };
 
 const DESIGN_OPTIONS = [
-  { value: "one",   label: "Design 1" },
-  { value: "two",   label: "Design 2" },
+  { value: "one", label: "Design 1" },
+  { value: "two", label: "Design 2" },
   { value: "three", label: "Design 3" },
 ];
 
 const PRESET_OPTIONS = [
-  { value: "ocean",  label: "Ocean" },
+  { value: "ocean", label: "Ocean" },
   { value: "sunset", label: "Sunset" },
-  { value: "royal",  label: "Royal" },
+  { value: "royal", label: "Royal" },
   { value: "forest", label: "Forest" },
 ];
 
@@ -83,6 +115,8 @@ export default function TenantCardHolders() {
   const [saving, setSaving] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUrl, setProfileUrl] = useState("");
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingZip, setExportingZip] = useState(false);
   const [search, setSearch] = useState("");
   const [filterHouse, setFilterHouse] = useState("");
   const [filterGrade, setFilterGrade] = useState("");
@@ -93,11 +127,25 @@ export default function TenantCardHolders() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [zipImportModalOpen, setZipImportModalOpen] = useState(false);
+  const [zipImportFile, setZipImportFile] = useState(null);
+  const [zipImporting, setZipImporting] = useState(false);
+  const [zipImportResult, setZipImportResult] = useState(null);
   const [templates, setTemplates] = useState([]);
+  const [tablePagination, setTablePagination] = useState({
+    current: 1,
+    pageSize: 20,
+  });
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const cardTenantId =
+    org?.tenantId || currentUser.tenantId || currentUser.selectedTenantId;
 
   const fetchData = async () => {
     setLoading(true);
@@ -180,7 +228,9 @@ export default function TenantCardHolders() {
       message.success("Profile photo uploaded");
       if (onSuccess) onSuccess(res.data);
     } catch (err) {
-      message.error(err?.response?.data?.error || err.message || "Upload failed");
+      message.error(
+        err?.response?.data?.error || err.message || "Upload failed",
+      );
       if (onError) onError(err);
     } finally {
       setProfileUploading(false);
@@ -258,7 +308,10 @@ export default function TenantCardHolders() {
     }
     setBulkApplying(true);
     try {
-      const res = await tenantPortalAPI.bulkUpdateDesign(selectedRowKeys, bulkTheme);
+      const res = await tenantPortalAPI.bulkUpdateDesign(
+        selectedRowKeys,
+        bulkTheme,
+      );
       message.success(res.data.message || "Design applied");
       setBulkDesignOpen(false);
       setSelectedRowKeys([]);
@@ -266,6 +319,152 @@ export default function TenantCardHolders() {
       message.error(err?.response?.data?.error || "Failed to apply design");
     } finally {
       setBulkApplying(false);
+    }
+  };
+
+  const handleExcelExport = () => {
+    if (cards.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+
+    setExportingExcel(true);
+    try {
+      const rows = cards.map((card) => {
+        const row = {};
+        dataColumns.forEach((col) => {
+          const key = col.key;
+          if (!key) return;
+          const title = typeof col.title === "string" ? col.title : key;
+          row[title] = card.metadata?.[key] ?? "";
+        });
+        row["Tag ID"] = card.tagId || "";
+        row["Status"] = card.isActive ? "Active" : "Inactive";
+        row["Public URL"] = `${window.location.origin}/view/${card.tagId}`;
+        return row;
+      });
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
+
+      const safeOrgName = (org?.name || "organization")
+        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+        .trim();
+      XLSX.writeFile(workbook, `${safeOrgName}_card_holders.xlsx`);
+
+      message.success(`Exported ${rows.length} card holder(s) to Excel`);
+    } catch (err) {
+      console.error(err);
+      message.error("Excel export failed");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportZip = async () => {
+    if (cards.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+
+    setExportingZip(true);
+    const zip = new JSZip();
+
+    try {
+      for (const card of cards) {
+        const cardUrl = `${window.location.origin}/view/${card.tagId}`;
+        const qrDataUrl = await QRCode.toDataURL(cardUrl, {
+          width: 500,
+          margin: 2,
+        });
+
+        const blob = await fetch(qrDataUrl).then((res) => res.blob());
+
+        let exportFilename;
+        if (card.metadata?.photo) {
+          const photoBase = card.metadata.photo.replace(/\.[^.]+$/, "");
+          exportFilename = `${photoBase}_QR.png`;
+        } else if (card.profileImageUrl) {
+          const basename = card.profileImageUrl.split("/").pop() || "";
+          const originalPart =
+            basename.length > 37 ? basename.slice(37) : basename;
+          const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
+          exportFilename = nameBase
+            ? `${nameBase}_QR.png`
+            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_QR.png`;
+        } else {
+          const safeName = (card.metadata?.name || card.tagId)
+            .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+            .trim();
+          exportFilename = `${safeName}_QR.png`;
+        }
+
+        zip.file(exportFilename, blob);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(org?.name || "organization").replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_qr_codes.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      message.success(`Exported ${cards.length} QR codes`);
+    } catch (err) {
+      console.error(err);
+      message.error("ZIP export failed");
+    } finally {
+      setExportingZip(false);
+    }
+  };
+
+  const handleImportOpen = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setImportModalOpen(true);
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importFile) {
+      message.warning("Please select a file first");
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await cardAPI.importCards(org?.tenantId, importFile);
+      setImportResult(res.data);
+      fetchData();
+    } catch (err) {
+      message.error(err.response?.data?.error || "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleZipImportOpen = () => {
+    setZipImportFile(null);
+    setZipImportResult(null);
+    setZipImportModalOpen(true);
+  };
+
+  const handleZipImportConfirm = async () => {
+    if (!zipImportFile) {
+      message.warning("Please select a ZIP file first");
+      return;
+    }
+    setZipImporting(true);
+    try {
+      const res = await cardAPI.importZip(org?.tenantId, zipImportFile);
+      setZipImportResult(res.data);
+      fetchData();
+    } catch (err) {
+      message.error(err.response?.data?.error || "ZIP import failed");
+    } finally {
+      setZipImporting(false);
     }
   };
 
@@ -293,23 +492,35 @@ export default function TenantCardHolders() {
 
   // ── distinct filter options ──────────────────────────────────────
   const houseOptions = useMemo(() => {
-    const values = [...new Set(cards.map((c) => c.metadata?.house).filter(Boolean))];
+    const values = [
+      ...new Set(cards.map((c) => c.metadata?.house).filter(Boolean)),
+    ];
     return values.map((v) => ({ value: v, label: v }));
   }, [cards]);
 
   const gradeOptions = useMemo(() => {
-    const values = [...new Set(cards.map((c) => c.metadata?.grade).filter(Boolean))];
+    const values = [
+      ...new Set(cards.map((c) => c.metadata?.grade).filter(Boolean)),
+    ];
     return values.map((v) => ({ value: v, label: v }));
   }, [cards]);
 
   const deptOptions = useMemo(() => {
-    const values = [...new Set(cards.map((c) => c.metadata?.department).filter(Boolean))];
+    const values = [
+      ...new Set(cards.map((c) => c.metadata?.department).filter(Boolean)),
+    ];
     return values.map((v) => ({ value: v, label: v }));
   }, [cards]);
 
-  const activeTemplate = templates.find((t) => t.isDefault) || templates[0] || null;
+  const activeTemplate =
+    templates.find((t) => t.isDefault) || templates[0] || null;
   // Only truly internal / system keys that should never become visible table columns
-  const INTERNAL_META_KEYS = new Set(["_design", "__templateId", "shortCode", "createdBy"]);
+  const INTERNAL_META_KEYS = new Set([
+    "_design",
+    "__templateId",
+    "shortCode",
+    "createdBy",
+  ]);
 
   // ── filtered cards ───────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -324,13 +535,30 @@ export default function TenantCardHolders() {
         );
       });
     }
-    if (filterHouse)  data = data.filter((c) => c.metadata?.house === filterHouse);
-    if (filterGrade)  data = data.filter((c) => c.metadata?.grade === filterGrade);
-    if (filterDept)   data = data.filter((c) => c.metadata?.department === filterDept);
-    if (filterStatus === "active")   data = data.filter((c) => c.isActive);
+    if (filterHouse)
+      data = data.filter((c) => c.metadata?.house === filterHouse);
+    if (filterGrade)
+      data = data.filter((c) => c.metadata?.grade === filterGrade);
+    if (filterDept)
+      data = data.filter((c) => c.metadata?.department === filterDept);
+    if (filterStatus === "active") data = data.filter((c) => c.isActive);
     if (filterStatus === "inactive") data = data.filter((c) => !c.isActive);
     return data;
   }, [cards, search, filterHouse, filterGrade, filterDept, filterStatus]);
+
+  useEffect(() => {
+    const maxPage = Math.max(
+      1,
+      Math.ceil(filtered.length / tablePagination.pageSize),
+    );
+    if (tablePagination.current > maxPage) {
+      setTablePagination((prev) => ({ ...prev, current: maxPage }));
+    }
+  }, [filtered.length, tablePagination.current, tablePagination.pageSize]);
+
+  useEffect(() => {
+    setTablePagination((prev) => ({ ...prev, current: 1 }));
+  }, [search, filterHouse, filterGrade, filterDept, filterStatus]);
 
   // ── build data columns ───────────────────────────────────────────
   // Priority: 1) active template  2) discovered from card metadata  3) legacy
@@ -339,9 +567,10 @@ export default function TenantCardHolders() {
     if (activeTemplate && activeTemplate.fields?.length > 0) {
       const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
       const toTitleT = (k) =>
-        k.replace(/_/g, " ")
-         .replace(/([a-z])([A-Z])/g, "$1 $2")
-         .replace(/\b\w/g, (c) => c.toUpperCase());
+        k
+          .replace(/_/g, " ")
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
       const tplCols = [...activeTemplate.fields]
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .filter((f) => !INTERNAL_META_KEYS.has(f.key))
@@ -349,47 +578,89 @@ export default function TenantCardHolders() {
           title: f.label,
           key: f.key,
           ellipsis: true,
-          render: (_, r) => r.metadata?.[f.key]
-            ? <span>{r.metadata[f.key]}</span>
-            : <Text type="secondary">—</Text>,
+          render: (_, r) =>
+            r.metadata?.[f.key] ? (
+              <span>{r.metadata[f.key]}</span>
+            ) : (
+              <Text type="secondary">—</Text>
+            ),
           sorter: (a, b) =>
-            String(a.metadata?.[f.key] || "").localeCompare(String(b.metadata?.[f.key] || "")),
+            String(a.metadata?.[f.key] || "").localeCompare(
+              String(b.metadata?.[f.key] || ""),
+            ),
         }));
       // Append extra keys in card data not part of the template definition
       const extraT = new Set();
-      cards.forEach((c) => Object.keys(c.metadata || {}).forEach((k) => {
-        if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
-      }));
-      return [...tplCols, ...[...extraT].map((k) => ({
-        title: toTitleT(k), key: k, ellipsis: true,
-        render: (_, r) => r.metadata?.[k] ? <span>{r.metadata[k]}</span> : <Text type="secondary">—</Text>,
-        sorter: (a, b) => String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
-      }))];
+      cards.forEach((c) =>
+        Object.keys(c.metadata || {}).forEach((k) => {
+          if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
+        }),
+      );
+      return [
+        ...tplCols,
+        ...[...extraT].map((k) => ({
+          title: toTitleT(k),
+          key: k,
+          ellipsis: true,
+          render: (_, r) =>
+            r.metadata?.[k] ? (
+              <span>{r.metadata[k]}</span>
+            ) : (
+              <Text type="secondary">—</Text>
+            ),
+          sorter: (a, b) =>
+            String(a.metadata?.[k] || "").localeCompare(
+              String(b.metadata?.[k] || ""),
+            ),
+        })),
+      ];
     }
 
     // ── Helper: build a column def for any metadata key ──────────
     const toTitle = (k) =>
-      k.replace(/_/g, " ")
-       .replace(/([a-z])([A-Z])/g, "$1 $2")
-       .replace(/\b\w/g, (c) => c.toUpperCase());
+      k
+        .replace(/_/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
     const metaCol = (k, label) => ({
       title: label || toTitle(k),
       key: k,
       ellipsis: true,
-      render: (_, r) => r.metadata?.[k]
-        ? <span>{r.metadata[k]}</span>
-        : <Text type="secondary">—</Text>,
+      render: (_, r) =>
+        r.metadata?.[k] ? (
+          <span>{r.metadata[k]}</span>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
       sorter: (a, b) =>
-        String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+        String(a.metadata?.[k] || "").localeCompare(
+          String(b.metadata?.[k] || ""),
+        ),
     });
 
     // ── Find extra keys not covered by standard cols ──────────────
     const extraKeys = (() => {
       const standardKeys = new Set([
-        "name","title","email","phone","address","studentId","grade",
-        "section","house","guardianName","guardianPhone","employeeId",
-        "department","specialization","licenseNumber","emergencyContact",
-        "company","position","linkedIn","website",
+        "name",
+        "title",
+        "email",
+        "phone",
+        "address",
+        "studentId",
+        "grade",
+        "section",
+        "house",
+        "guardianName",
+        "guardianPhone",
+        "employeeId",
+        "department",
+        "specialization",
+        "licenseNumber",
+        "emergencyContact",
+        "company",
+        "position",
+        "linkedIn",
+        "website",
         ...INTERNAL_META_KEYS,
       ]);
       const seen = new Set();
@@ -410,28 +681,28 @@ export default function TenantCardHolders() {
     let standard;
     if (orgType === "SCHOOL") {
       standard = [
-        metaCol("name",        "Name"),
-        metaCol("studentId",   "Roll No"),
-        metaCol("grade",       "Class"),
-        metaCol("house",       "House"),
-        metaCol("guardianName","Guardian"),
-        metaCol("phone",       "Contact"),
+        metaCol("name", "Name"),
+        metaCol("studentId", "Roll No"),
+        metaCol("grade", "Class"),
+        metaCol("house", "House"),
+        metaCol("guardianName", "Guardian"),
+        metaCol("phone", "Contact"),
       ];
     } else if (orgType === "HOSPITAL") {
       standard = [
-        metaCol("name",          "Name"),
-        metaCol("employeeId",    "Employee ID"),
-        metaCol("department",    "Department"),
-        metaCol("specialization","Specialization"),
-        metaCol("phone",         "Phone"),
+        metaCol("name", "Name"),
+        metaCol("employeeId", "Employee ID"),
+        metaCol("department", "Department"),
+        metaCol("specialization", "Specialization"),
+        metaCol("phone", "Phone"),
       ];
     } else {
       standard = [
-        metaCol("name",    "Name"),
-        metaCol("position","Position"),
+        metaCol("name", "Name"),
+        metaCol("position", "Position"),
         metaCol("company", "Company"),
-        metaCol("email",   "Email"),
-        metaCol("phone",   "Phone"),
+        metaCol("email", "Email"),
+        metaCol("phone", "Phone"),
       ];
     }
     return [...standard, ...extraKeys.map((k) => metaCol(k))];
@@ -445,10 +716,7 @@ export default function TenantCardHolders() {
       width: 56,
       render: (_, record) =>
         record.profileImageUrl ? (
-          <Avatar
-            src={`${API_BASE}${record.profileImageUrl}`}
-            size="default"
-          />
+          <Avatar src={`${API_BASE}${record.profileImageUrl}`} size="default" />
         ) : (
           <Avatar icon={<UserOutlined />} size="default" />
         ),
@@ -502,19 +770,27 @@ export default function TenantCardHolders() {
                 icon={<BgColorsOutlined />}
                 onClick={() =>
                   navigate(
-                    `/card/${encodeURIComponent(record.tagId)}?tenantId=${encodeURIComponent(currentUser.tenantId)}`,
+                    cardTenantId
+                      ? `/card/${encodeURIComponent(record.tagId)}?tenantId=${encodeURIComponent(cardTenantId)}`
+                      : `/card/${encodeURIComponent(record.tagId)}`,
                   )
                 }
               />
             </Tooltip>
           )}
-          {record.publicUrl && (
+          {record.tagId && (
             <Tooltip title="View public card">
               <Button
                 type="text"
                 size="small"
                 icon={<EyeOutlined />}
-                onClick={() => window.open(record.publicUrl, "_blank")}
+                onClick={() =>
+                  window.open(
+                    `${window.location.origin}/view/${encodeURIComponent(record.tagId)}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
               />
             </Tooltip>
           )}
@@ -646,7 +922,15 @@ export default function TenantCardHolders() {
         closable
       />
 
-      <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+      <div
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
         <Input
           placeholder="Search by name, email, ID or tag…"
           prefix={<SearchOutlined />}
@@ -664,7 +948,7 @@ export default function TenantCardHolders() {
           value={filterStatus || undefined}
           onChange={(v) => setFilterStatus(v || "")}
           options={[
-            { value: "active",   label: "Active" },
+            { value: "active", label: "Active" },
             { value: "inactive", label: "Inactive" },
           ]}
         />
@@ -722,6 +1006,22 @@ export default function TenantCardHolders() {
           </Button>
         )}
 
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleExcelExport}
+          loading={exportingExcel}
+        >
+          Export to Excel
+        </Button>
+
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleExportZip}
+          loading={exportingZip}
+        >
+          Export as ZIP
+        </Button>
+
         {/* Excel Import — visible when templates are available */}
         {templates.length > 0 && (
           <Button
@@ -732,6 +1032,10 @@ export default function TenantCardHolders() {
             Import from Excel
           </Button>
         )}
+
+        <Button icon={<FolderOpenOutlined />} onClick={handleZipImportOpen}>
+          Import ZIP
+        </Button>
       </div>
 
       <Table
@@ -739,8 +1043,17 @@ export default function TenantCardHolders() {
         columns={columns}
         rowKey="id"
         size="small"
-        pagination={{ pageSize: 20, showSizeChanger: true }}
-        scroll={{ x: true }}
+        pagination={{
+          current: tablePagination.current,
+          pageSize: tablePagination.pageSize,
+          total: filtered.length,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50", "100"],
+          onChange: (page, pageSize) => {
+            setTablePagination({ current: page, pageSize });
+          },
+        }}
+        scroll={{ x: "max-content", y: isMobile ? 420 : 560 }}
         rowClassName={(r) => (!r.isActive ? "row-inactive" : "")}
         rowSelection={{
           selectedRowKeys,
@@ -753,16 +1066,199 @@ export default function TenantCardHolders() {
       <ExcelImportWizard
         open={importWizardOpen}
         onClose={() => setImportWizardOpen(false)}
-        onSuccess={() => { setImportWizardOpen(false); fetchData(); }}
+        onSuccess={() => {
+          setImportWizardOpen(false);
+          fetchData();
+        }}
         tenantId={org?.tenantId}
         templates={templates}
       />
+
+      <Modal
+        title="Import Card Holders from Excel"
+        open={importModalOpen}
+        onCancel={() => {
+          if (!importing) setImportModalOpen(false);
+        }}
+        width={isMobile ? "95%" : 520}
+        footer={
+          importResult ? (
+            <Button type="primary" onClick={() => setImportModalOpen(false)}>
+              Close
+            </Button>
+          ) : (
+            <Space>
+              <Button
+                onClick={() => setImportModalOpen(false)}
+                disabled={importing}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                loading={importing}
+                onClick={handleImportConfirm}
+              >
+                Import
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {importResult ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type={importResult.summary.failed > 0 ? "warning" : "success"}
+              message={importResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Created">
+                {importResult.summary.created}
+              </Descriptions.Item>
+              <Descriptions.Item label="Skipped">
+                {importResult.summary.skipped}
+              </Descriptions.Item>
+              <Descriptions.Item label="Failed">
+                {importResult.summary.failed}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <p style={{ margin: 0, color: "#555", fontSize: 13 }}>
+              Upload an <strong>.xlsx</strong>, <strong>.xls</strong>, or{" "}
+              <strong>.csv</strong> file. The first row must be a header row.
+            </p>
+            <Upload.Dragger
+              accept=".xlsx,.xls,.csv"
+              beforeUpload={(file) => {
+                setImportFile(file);
+                return false;
+              }}
+              onRemove={() => setImportFile(null)}
+              maxCount={1}
+              fileList={importFile ? [importFile] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined />
+              </p>
+              <p className="ant-upload-text">
+                Click or drag file here to upload
+              </p>
+              <p className="ant-upload-hint">.xlsx / .xls / .csv — max 10 MB</p>
+            </Upload.Dragger>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="Import Card Holders + Photos (ZIP)"
+        open={zipImportModalOpen}
+        onCancel={() => {
+          if (!zipImporting) setZipImportModalOpen(false);
+        }}
+        width={isMobile ? "95%" : 560}
+        footer={
+          zipImportResult ? (
+            <Button type="primary" onClick={() => setZipImportModalOpen(false)}>
+              Close
+            </Button>
+          ) : (
+            <Space>
+              <Button
+                onClick={() => setZipImportModalOpen(false)}
+                disabled={zipImporting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                loading={zipImporting}
+                onClick={handleZipImportConfirm}
+              >
+                Import
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {zipImportResult ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type={zipImportResult.summary.failed > 0 ? "warning" : "success"}
+              message={zipImportResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Created">
+                {zipImportResult.summary.created}
+              </Descriptions.Item>
+              <Descriptions.Item label="Skipped">
+                {zipImportResult.summary.skipped}
+              </Descriptions.Item>
+              <Descriptions.Item label="Failed">
+                {zipImportResult.summary.failed}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="ZIP file structure"
+              description={
+                <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                  Create a ZIP containing:
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                    <li>
+                      One <strong>.xlsx / .xls / .csv</strong> spreadsheet (same
+                      columns as Excel import)
+                    </li>
+                    <li>Profile photo images at the same root level</li>
+                    <li>
+                      Add a <strong>Photo</strong> column with the image
+                      filename
+                    </li>
+                  </ul>
+                </div>
+              }
+            />
+            <Upload.Dragger
+              accept=".zip"
+              beforeUpload={(file) => {
+                setZipImportFile(file);
+                return false;
+              }}
+              onRemove={() => setZipImportFile(null)}
+              maxCount={1}
+              fileList={zipImportFile ? [zipImportFile] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <FolderOpenOutlined />
+              </p>
+              <p className="ant-upload-text">Click or drag ZIP file here</p>
+              <p className="ant-upload-hint">
+                .zip containing Excel + photos — max 50 MB
+              </p>
+            </Upload.Dragger>
+          </div>
+        )}
+      </Modal>
 
       {/* Bulk Card Design Modal */}
       <Modal
         open={bulkDesignOpen}
         title={
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 32 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingRight: 32,
+            }}
+          >
             <Space>
               <AppstoreOutlined />
               <span>Bulk Card Design ({selectedRowKeys.length} selected)</span>
@@ -782,13 +1278,27 @@ export default function TenantCardHolders() {
         confirmLoading={bulkApplying}
         okText={`Apply to ${selectedRowKeys.length} card(s)`}
         width={460}
-        styles={{ body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 4 } }}
+        styles={{
+          body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 4 },
+        }}
         destroyOnClose
       >
         {/* ── Section 1: Card Design (mirrors CardView sidebar) ── */}
-        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 12 }}>
-          <Text strong style={{ display: "block", marginBottom: 4 }}>Card Design</Text>
-          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
+        <AntCard
+          size="small"
+          style={{
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            marginBottom: 12,
+          }}
+        >
+          <Text strong style={{ display: "block", marginBottom: 4 }}>
+            Card Design
+          </Text>
+          <Text
+            type="secondary"
+            style={{ fontSize: 12, display: "block", marginBottom: 12 }}
+          >
             Select a design to preview instantly.
           </Text>
           <Select
@@ -805,11 +1315,23 @@ export default function TenantCardHolders() {
         </AntCard>
 
         {/* ── Section 2: Accessibility (mirrors CardView sidebar) ── */}
-        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}>
+        <AntCard
+          size="small"
+          style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}
+        >
           {/* Dark Mode */}
-          <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              marginBottom: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13 }}>{bulkTheme.isDark ? "🌙" : "☀️"}</span>
+              <span style={{ fontSize: 13 }}>
+                {bulkTheme.isDark ? "🌙" : "☀️"}
+              </span>
               <Text style={{ fontSize: 13 }}>Dark Mode</Text>
             </div>
             <Switch
@@ -821,17 +1343,34 @@ export default function TenantCardHolders() {
 
           {/* Theme Preset */}
           <div style={{ marginBottom: 14 }}>
-            <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>Theme Preset</Text>
+            <Text
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              Theme Preset
+            </Text>
             <Select
-              value={bulkTheme.preset === "custom" ? undefined : bulkTheme.preset}
+              value={
+                bulkTheme.preset === "custom" ? undefined : bulkTheme.preset
+              }
               placeholder="Custom"
-              onChange={(v) => setBulkTheme((prev) => ({ ...prev, ...THEME_PRESETS[v], preset: v }))}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({
+                  ...prev,
+                  ...THEME_PRESETS[v],
+                  preset: v,
+                }))
+              }
               size="middle"
               style={{ width: "100%" }}
               options={[
-                { label: "Ocean",  value: "ocean" },
+                { label: "Ocean", value: "ocean" },
                 { label: "Sunset", value: "sunset" },
-                { label: "Royal",  value: "royal" },
+                { label: "Royal", value: "royal" },
                 { label: "Forest", value: "forest" },
               ]}
             />
@@ -839,25 +1378,60 @@ export default function TenantCardHolders() {
 
           {/* Individual Color Pickers */}
           {[
-            { key: "primaryColor",   label: "Primary Color" },
+            { key: "primaryColor", label: "Primary Color" },
             { key: "secondaryColor", label: "Secondary Color" },
-            { key: "accentColor",    label: "Accent Color" },
-            { key: "surfaceColor",   label: "Surface Color" },
+            { key: "accentColor", label: "Accent Color" },
+            { key: "surfaceColor", label: "Surface Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
-              <Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>{label}</Text>
+              <Text
+                style={{
+                  display: "block",
+                  marginBottom: 6,
+                  fontSize: 12,
+                  color: "#64748b",
+                }}
+              >
+                {label}
+              </Text>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input
                   type="color"
                   value={bulkTheme[key]}
-                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
-                  style={{ width: 36, height: 36, cursor: "pointer", borderRadius: 6, border: "1px solid #e2e8f0", padding: 2 }}
+                  onChange={(e) =>
+                    setBulkTheme((prev) => ({
+                      ...prev,
+                      [key]: e.target.value,
+                      preset: "custom",
+                    }))
+                  }
+                  style={{
+                    width: 36,
+                    height: 36,
+                    cursor: "pointer",
+                    borderRadius: 6,
+                    border: "1px solid #e2e8f0",
+                    padding: 2,
+                  }}
                 />
                 <input
                   type="text"
                   value={bulkTheme[key]}
-                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
-                  style={{ flex: 1, borderRadius: 6, border: "1px solid #e2e8f0", padding: "4px 8px", fontSize: 13, fontFamily: "monospace" }}
+                  onChange={(e) =>
+                    setBulkTheme((prev) => ({
+                      ...prev,
+                      [key]: e.target.value,
+                      preset: "custom",
+                    }))
+                  }
+                  style={{
+                    flex: 1,
+                    borderRadius: 6,
+                    border: "1px solid #e2e8f0",
+                    padding: "4px 8px",
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                  }}
                 />
               </div>
             </div>
@@ -865,15 +1439,25 @@ export default function TenantCardHolders() {
 
           {/* Contrast Slider */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 4,
+              }}
+            >
               <Text style={{ fontSize: 12, color: "#64748b" }}>Contrast</Text>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>{bulkTheme.contrast}%</Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>
+                {bulkTheme.contrast}%
+              </Text>
             </div>
             <Slider
               min={50}
               max={150}
               value={bulkTheme.contrast}
-              onChange={(v) => setBulkTheme((prev) => ({ ...prev, contrast: v }))}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({ ...prev, contrast: v }))
+              }
             />
           </div>
         </AntCard>
@@ -902,10 +1486,7 @@ export default function TenantCardHolders() {
           <Form.Item label="Profile Photo">
             <Space align="start">
               {profileUrl ? (
-                <Avatar
-                  src={`${API_BASE}${profileUrl}`}
-                  size={56}
-                />
+                <Avatar src={`${API_BASE}${profileUrl}`} size={56} />
               ) : (
                 <Avatar icon={<UserOutlined />} size={56} />
               )}
@@ -914,7 +1495,11 @@ export default function TenantCardHolders() {
                 customRequest={handleProfileUpload}
                 accept="image/*"
               >
-                <Button icon={<UploadOutlined />} loading={profileUploading} size="small">
+                <Button
+                  icon={<UploadOutlined />}
+                  loading={profileUploading}
+                  size="small"
+                >
                   {profileUploading ? "Uploading…" : "Change Photo"}
                 </Button>
               </Upload>

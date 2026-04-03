@@ -48,14 +48,40 @@ import {
 import { useNavigate, useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
 import JSZip from "jszip";
-import { useraccessAPI, uploadAPI, cardAPI, cardTemplateAPI } from "../../services/api";
+import * as XLSX from "xlsx";
+import {
+  useraccessAPI,
+  uploadAPI,
+  cardAPI,
+  cardTemplateAPI,
+} from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
 
 const THEME_PRESETS = {
-  ocean:  { primaryColor: "#1890ff", secondaryColor: "#52c41a", accentColor: "#ff6b6b", surfaceColor: "#f0f2f5" },
-  sunset: { primaryColor: "#f97316", secondaryColor: "#facc15", accentColor: "#dc2626", surfaceColor: "#fff7ed" },
-  royal:  { primaryColor: "#4f46e5", secondaryColor: "#06b6d4", accentColor: "#db2777", surfaceColor: "#eef2ff" },
-  forest: { primaryColor: "#166534", secondaryColor: "#22c55e", accentColor: "#b45309", surfaceColor: "#f0fdf4" },
+  ocean: {
+    primaryColor: "#1890ff",
+    secondaryColor: "#52c41a",
+    accentColor: "#ff6b6b",
+    surfaceColor: "#f0f2f5",
+  },
+  sunset: {
+    primaryColor: "#f97316",
+    secondaryColor: "#facc15",
+    accentColor: "#dc2626",
+    surfaceColor: "#fff7ed",
+  },
+  royal: {
+    primaryColor: "#4f46e5",
+    secondaryColor: "#06b6d4",
+    accentColor: "#db2777",
+    surfaceColor: "#eef2ff",
+  },
+  forest: {
+    primaryColor: "#166534",
+    secondaryColor: "#22c55e",
+    accentColor: "#b45309",
+    surfaceColor: "#f0fdf4",
+  },
 };
 
 const DEFAULT_BULK_THEME = {
@@ -67,15 +93,15 @@ const DEFAULT_BULK_THEME = {
 };
 
 const DESIGN_OPTIONS = [
-  { value: "one",   label: "Design 1" },
-  { value: "two",   label: "Design 2" },
+  { value: "one", label: "Design 1" },
+  { value: "two", label: "Design 2" },
   { value: "three", label: "Design 3" },
 ];
 
 const PRESET_OPTIONS = [
-  { value: "ocean",  label: "Ocean" },
+  { value: "ocean", label: "Ocean" },
   { value: "sunset", label: "Sunset" },
-  { value: "royal",  label: "Royal" },
+  { value: "royal", label: "Royal" },
   { value: "forest", label: "Forest" },
 ];
 
@@ -98,6 +124,7 @@ function OrganizationDetail() {
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUrl, setProfileUrl] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [nfcTags, setNfcTags] = useState([]);
   const [nfcTagsLoading, setNfcTagsLoading] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -381,7 +408,8 @@ function OrganizationDetail() {
           // Legacy cards: extract original filename from stored path.
           // Format: /uploads/profiles/TENANT/uuid(36chars)_originalname.ext
           const basename = card.profileImageUrl.split("/").pop() || "";
-          const originalPart = basename.length > 37 ? basename.slice(37) : basename;
+          const originalPart =
+            basename.length > 37 ? basename.slice(37) : basename;
           const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
           exportFilename = nameBase
             ? `${nameBase}_QR.png`
@@ -465,6 +493,47 @@ function OrganizationDetail() {
     }
   };
 
+  const handleExcelExport = () => {
+    const exportData = filteredCards;
+    if (exportData.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+
+    setExportingExcel(true);
+    try {
+      const rows = exportData.map((card) => {
+        const row = {};
+        dataColumns.forEach((col) => {
+          const key = col.key;
+          if (!key) return;
+          const title = typeof col.title === "string" ? col.title : key;
+          row[title] = card.metadata?.[key] ?? "";
+        });
+        row["Tag ID"] = card.tagId || "";
+        row["Status"] = card.isActive ? "Active" : "Inactive";
+        row["Public URL"] = `${window.location.origin}/view/${card.tagId}`;
+        return row;
+      });
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
+
+      const safeOrgName = (organization?.name || tenantId || "organization")
+        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+        .trim();
+      XLSX.writeFile(workbook, `${safeOrgName}_card_holders.xlsx`);
+
+      message.success(`Exported ${rows.length} card holder(s) to Excel`);
+    } catch (err) {
+      console.error(err);
+      message.error("Excel export failed");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const orgType = organization?.type;
 
   // ── bulk data edit handlers ─────────────────────────────────────
@@ -524,7 +593,8 @@ function OrganizationDetail() {
     if (orgType === "SCHOOL") {
       const rawGrade = (values.grade || "").trim();
       const rawSection = (values.section || "").trim();
-      const mergedGrade = rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
+      const mergedGrade =
+        rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
       Object.assign(metadata, {
         studentId: values.studentId,
         grade: mergedGrade,
@@ -576,8 +646,8 @@ function OrganizationDetail() {
           useraccessAPI.updateCard(tenantId, card.id, {
             profileImageUrl: card.profileImageUrl || null,
             metadata: card.metadata,
-          })
-        )
+          }),
+        ),
       );
       message.success(`${updated.length} card(s) updated successfully`);
       setBulkDataEditOpen(false);
@@ -592,10 +662,16 @@ function OrganizationDetail() {
 
   // Pick the template to drive column display:
   // prefer the default template, else the first one available
-  const activeTemplate = orgTemplates.find((t) => t.isDefault) || orgTemplates[0] || null;
+  const activeTemplate =
+    orgTemplates.find((t) => t.isDefault) || orgTemplates[0] || null;
 
   // Only truly internal / system keys — never visible as table columns
-  const INTERNAL_META_KEYS = new Set(["_design", "__templateId", "shortCode", "createdBy"]);
+  const INTERNAL_META_KEYS = new Set([
+    "_design",
+    "__templateId",
+    "shortCode",
+    "createdBy",
+  ]);
 
   // ── bulk design handler ──────────────────────────────────────────
   const handleBulkDesignApply = async () => {
@@ -605,7 +681,11 @@ function OrganizationDetail() {
     }
     setBulkApplying(true);
     try {
-      const res = await useraccessAPI.bulkUpdateDesign(tenantId, selectedRowKeys, bulkTheme);
+      const res = await useraccessAPI.bulkUpdateDesign(
+        tenantId,
+        selectedRowKeys,
+        bulkTheme,
+      );
       message.success(res.data.message || "Design applied");
       setBulkDesignOpen(false);
       setSelectedRowKeys([]);
@@ -617,17 +697,29 @@ function OrganizationDetail() {
   };
 
   // ── distinct filter options ──────────────────────────────────────
-  const houseOptions = useMemo(() =>
-    [...new Set(cards.map((c) => c.metadata?.house).filter(Boolean))].map((v) => ({ value: v, label: v })),
-  [cards]);
+  const houseOptions = useMemo(
+    () =>
+      [...new Set(cards.map((c) => c.metadata?.house).filter(Boolean))].map(
+        (v) => ({ value: v, label: v }),
+      ),
+    [cards],
+  );
 
-  const gradeOptions = useMemo(() =>
-    [...new Set(cards.map((c) => c.metadata?.grade).filter(Boolean))].map((v) => ({ value: v, label: v })),
-  [cards]);
+  const gradeOptions = useMemo(
+    () =>
+      [...new Set(cards.map((c) => c.metadata?.grade).filter(Boolean))].map(
+        (v) => ({ value: v, label: v }),
+      ),
+    [cards],
+  );
 
-  const deptOptions = useMemo(() =>
-    [...new Set(cards.map((c) => c.metadata?.department).filter(Boolean))].map((v) => ({ value: v, label: v })),
-  [cards]);
+  const deptOptions = useMemo(
+    () =>
+      [
+        ...new Set(cards.map((c) => c.metadata?.department).filter(Boolean)),
+      ].map((v) => ({ value: v, label: v })),
+    [cards],
+  );
 
   const filteredCards = useMemo(() => {
     let data = cards;
@@ -643,14 +735,27 @@ function OrganizationDetail() {
     }
     if (cardStatusFilter !== "")
       data = data.filter((c) => String(c.isActive) === cardStatusFilter);
-    if (filterHouse) data = data.filter((c) => c.metadata?.house === filterHouse);
-    if (filterGrade) data = data.filter((c) => c.metadata?.grade === filterGrade);
-    if (filterDept)  data = data.filter((c) => c.metadata?.department === filterDept);
+    if (filterHouse)
+      data = data.filter((c) => c.metadata?.house === filterHouse);
+    if (filterGrade)
+      data = data.filter((c) => c.metadata?.grade === filterGrade);
+    if (filterDept)
+      data = data.filter((c) => c.metadata?.department === filterDept);
     return data;
-  }, [cards, cardSearch, cardStatusFilter, filterHouse, filterGrade, filterDept]);
+  }, [
+    cards,
+    cardSearch,
+    cardStatusFilter,
+    filterHouse,
+    filterGrade,
+    filterDept,
+  ]);
 
   useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil(filteredCards.length / tablePagination.pageSize));
+    const maxPage = Math.max(
+      1,
+      Math.ceil(filteredCards.length / tablePagination.pageSize),
+    );
     if (tablePagination.current > maxPage) {
       setTablePagination((prev) => ({ ...prev, current: maxPage }));
     }
@@ -668,9 +773,10 @@ function OrganizationDetail() {
     if (activeTemplate && activeTemplate.fields?.length > 0) {
       const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
       const toTitleT = (k) =>
-        k.replace(/_/g, " ")
-         .replace(/([a-z])([A-Z])/g, "$1 $2")
-         .replace(/\b\w/g, (c) => c.toUpperCase());
+        k
+          .replace(/_/g, " ")
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
       const tplCols = [...activeTemplate.fields]
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .filter((f) => !INTERNAL_META_KEYS.has(f.key))
@@ -678,47 +784,89 @@ function OrganizationDetail() {
           title: f.label,
           key: f.key,
           ellipsis: true,
-          render: (_, r) => r.metadata?.[f.key]
-            ? <span>{r.metadata[f.key]}</span>
-            : <Text type="secondary">—</Text>,
+          render: (_, r) =>
+            r.metadata?.[f.key] ? (
+              <span>{r.metadata[f.key]}</span>
+            ) : (
+              <Text type="secondary">—</Text>
+            ),
           sorter: (a, b) =>
-            String(a.metadata?.[f.key] || "").localeCompare(String(b.metadata?.[f.key] || "")),
+            String(a.metadata?.[f.key] || "").localeCompare(
+              String(b.metadata?.[f.key] || ""),
+            ),
         }));
       // Append any extra keys in card data not part of the template definition
       const extraT = new Set();
-      cards.forEach((c) => Object.keys(c.metadata || {}).forEach((k) => {
-        if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
-      }));
-      return [...tplCols, ...[...extraT].map((k) => ({
-        title: toTitleT(k), key: k, ellipsis: true,
-        render: (_, r) => r.metadata?.[k] ? <span>{r.metadata[k]}</span> : <Text type="secondary">—</Text>,
-        sorter: (a, b) => String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
-      }))];
+      cards.forEach((c) =>
+        Object.keys(c.metadata || {}).forEach((k) => {
+          if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
+        }),
+      );
+      return [
+        ...tplCols,
+        ...[...extraT].map((k) => ({
+          title: toTitleT(k),
+          key: k,
+          ellipsis: true,
+          render: (_, r) =>
+            r.metadata?.[k] ? (
+              <span>{r.metadata[k]}</span>
+            ) : (
+              <Text type="secondary">—</Text>
+            ),
+          sorter: (a, b) =>
+            String(a.metadata?.[k] || "").localeCompare(
+              String(b.metadata?.[k] || ""),
+            ),
+        })),
+      ];
     }
 
     // ── Helper: build a column def for any metadata key ────────────
     const toTitle = (k) =>
-      k.replace(/_/g, " ")
-       .replace(/([a-z])([A-Z])/g, "$1 $2")
-       .replace(/\b\w/g, (c) => c.toUpperCase());
+      k
+        .replace(/_/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
     const metaCol = (k, label) => ({
       title: label || toTitle(k),
       key: k,
       ellipsis: true,
-      render: (_, r) => r.metadata?.[k]
-        ? <span>{r.metadata[k]}</span>
-        : <Text type="secondary">—</Text>,
+      render: (_, r) =>
+        r.metadata?.[k] ? (
+          <span>{r.metadata[k]}</span>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
       sorter: (a, b) =>
-        String(a.metadata?.[k] || "").localeCompare(String(b.metadata?.[k] || "")),
+        String(a.metadata?.[k] || "").localeCompare(
+          String(b.metadata?.[k] || ""),
+        ),
     });
 
     // ── Find extra keys in card metadata not covered by standard cols ──
     const extraKeys = (() => {
       const standardKeys = new Set([
-        "name","title","email","phone","address","studentId","grade",
-        "section","house","guardianName","guardianPhone","employeeId",
-        "department","specialization","licenseNumber","emergencyContact",
-        "company","position","linkedIn","website",
+        "name",
+        "title",
+        "email",
+        "phone",
+        "address",
+        "studentId",
+        "grade",
+        "section",
+        "house",
+        "guardianName",
+        "guardianPhone",
+        "employeeId",
+        "department",
+        "specialization",
+        "licenseNumber",
+        "emergencyContact",
+        "company",
+        "position",
+        "linkedIn",
+        "website",
         ...INTERNAL_META_KEYS,
       ]);
       const seen = new Set();
@@ -738,28 +886,28 @@ function OrganizationDetail() {
     let standard;
     if (orgType === "SCHOOL") {
       standard = [
-        metaCol("name",        "Name"),
-        metaCol("studentId",   "Roll No"),
-        metaCol("grade",       "Class"),
-        metaCol("house",       "House"),
-        metaCol("guardianName","Guardian"),
-        metaCol("phone",       "Contact"),
+        metaCol("name", "Name"),
+        metaCol("studentId", "Roll No"),
+        metaCol("grade", "Class"),
+        metaCol("house", "House"),
+        metaCol("guardianName", "Guardian"),
+        metaCol("phone", "Contact"),
       ];
     } else if (orgType === "HOSPITAL") {
       standard = [
-        metaCol("name",          "Name"),
-        metaCol("employeeId",    "Employee ID"),
-        metaCol("department",    "Department"),
-        metaCol("specialization","Specialization"),
-        metaCol("phone",         "Phone"),
+        metaCol("name", "Name"),
+        metaCol("employeeId", "Employee ID"),
+        metaCol("department", "Department"),
+        metaCol("specialization", "Specialization"),
+        metaCol("phone", "Phone"),
       ];
     } else {
       standard = [
-        metaCol("name",    "Name"),
-        metaCol("position","Position"),
+        metaCol("name", "Name"),
+        metaCol("position", "Position"),
         metaCol("company", "Company"),
-        metaCol("email",   "Email"),
-        metaCol("phone",   "Phone"),
+        metaCol("email", "Email"),
+        metaCol("phone", "Phone"),
       ];
     }
     return [...standard, ...extraKeys.map((k) => metaCol(k))];
@@ -941,6 +1089,13 @@ function OrganizationDetail() {
         <Space wrap>
           <Button
             icon={<DownloadOutlined />}
+            onClick={handleExcelExport}
+            loading={exportingExcel}
+          >
+            Export to Excel
+          </Button>
+          <Button
+            icon={<DownloadOutlined />}
             onClick={handleExport}
             loading={exporting}
           >
@@ -974,10 +1129,7 @@ function OrganizationDetail() {
           )}
           {selectedRowKeys.length > 0 && (
             <Badge count={selectedRowKeys.length} size="small">
-              <Button
-                icon={<EditOutlined />}
-                onClick={openBulkDataEdit}
-              >
+              <Button icon={<EditOutlined />} onClick={openBulkDataEdit}>
                 Edit in Bulk
               </Button>
             </Badge>
@@ -1054,7 +1206,7 @@ function OrganizationDetail() {
             setTablePagination({ current: page, pageSize });
           },
         }}
-        scroll={{ x: 1500 }}
+        scroll={{ x: "max-content", y: isMobile ? 420 : 560 }}
         size={isMobile ? "small" : "middle"}
         rowSelection={{
           selectedRowKeys,
@@ -1067,7 +1219,14 @@ function OrganizationDetail() {
       <Modal
         open={bulkDesignOpen}
         title={
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 32 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingRight: 32,
+            }}
+          >
             <Space>
               <AppstoreOutlined />
               <span>Bulk Card Design ({selectedRowKeys.length} selected)</span>
@@ -1087,13 +1246,27 @@ function OrganizationDetail() {
         confirmLoading={bulkApplying}
         okText={`Apply to ${selectedRowKeys.length} card(s)`}
         width={460}
-        styles={{ body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 4 } }}
+        styles={{
+          body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 4 },
+        }}
         destroyOnClose
       >
         {/* ── Section 1: Card Design (mirrors CardView sidebar) ── */}
-        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 12 }}>
-          <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>Card Design</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
+        <AntCard
+          size="small"
+          style={{
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            marginBottom: 12,
+          }}
+        >
+          <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>
+            Card Design
+          </Typography.Text>
+          <Typography.Text
+            type="secondary"
+            style={{ fontSize: 12, display: "block", marginBottom: 12 }}
+          >
             Select a design to preview instantly.
           </Typography.Text>
           <Select
@@ -1110,12 +1283,26 @@ function OrganizationDetail() {
         </AntCard>
 
         {/* ── Section 2: Accessibility (mirrors CardView sidebar) ── */}
-        <AntCard size="small" style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}>
+        <AntCard
+          size="small"
+          style={{ borderRadius: 12, border: "1px solid #e2e8f0" }}
+        >
           {/* Dark Mode */}
-          <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div
+            style={{
+              marginBottom: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13 }}>{bulkTheme.isDark ? "🌙" : "☀️"}</span>
-              <Typography.Text style={{ fontSize: 13 }}>Dark Mode</Typography.Text>
+              <span style={{ fontSize: 13 }}>
+                {bulkTheme.isDark ? "🌙" : "☀️"}
+              </span>
+              <Typography.Text style={{ fontSize: 13 }}>
+                Dark Mode
+              </Typography.Text>
             </div>
             <Switch
               size="small"
@@ -1126,17 +1313,34 @@ function OrganizationDetail() {
 
           {/* Theme Preset */}
           <div style={{ marginBottom: 14 }}>
-            <Typography.Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>Theme Preset</Typography.Text>
+            <Typography.Text
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              Theme Preset
+            </Typography.Text>
             <Select
-              value={bulkTheme.preset === "custom" ? undefined : bulkTheme.preset}
+              value={
+                bulkTheme.preset === "custom" ? undefined : bulkTheme.preset
+              }
               placeholder="Custom"
-              onChange={(v) => setBulkTheme((prev) => ({ ...prev, ...THEME_PRESETS[v], preset: v }))}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({
+                  ...prev,
+                  ...THEME_PRESETS[v],
+                  preset: v,
+                }))
+              }
               size="middle"
               style={{ width: "100%" }}
               options={[
-                { label: "Ocean",  value: "ocean" },
+                { label: "Ocean", value: "ocean" },
                 { label: "Sunset", value: "sunset" },
-                { label: "Royal",  value: "royal" },
+                { label: "Royal", value: "royal" },
                 { label: "Forest", value: "forest" },
               ]}
             />
@@ -1144,25 +1348,60 @@ function OrganizationDetail() {
 
           {/* Individual Color Pickers */}
           {[
-            { key: "primaryColor",   label: "Primary Color" },
+            { key: "primaryColor", label: "Primary Color" },
             { key: "secondaryColor", label: "Secondary Color" },
-            { key: "accentColor",    label: "Accent Color" },
-            { key: "surfaceColor",   label: "Surface Color" },
+            { key: "accentColor", label: "Accent Color" },
+            { key: "surfaceColor", label: "Surface Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
-              <Typography.Text style={{ display: "block", marginBottom: 6, fontSize: 12, color: "#64748b" }}>{label}</Typography.Text>
+              <Typography.Text
+                style={{
+                  display: "block",
+                  marginBottom: 6,
+                  fontSize: 12,
+                  color: "#64748b",
+                }}
+              >
+                {label}
+              </Typography.Text>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input
                   type="color"
                   value={bulkTheme[key]}
-                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
-                  style={{ width: 36, height: 36, cursor: "pointer", borderRadius: 6, border: "1px solid #e2e8f0", padding: 2 }}
+                  onChange={(e) =>
+                    setBulkTheme((prev) => ({
+                      ...prev,
+                      [key]: e.target.value,
+                      preset: "custom",
+                    }))
+                  }
+                  style={{
+                    width: 36,
+                    height: 36,
+                    cursor: "pointer",
+                    borderRadius: 6,
+                    border: "1px solid #e2e8f0",
+                    padding: 2,
+                  }}
                 />
                 <input
                   type="text"
                   value={bulkTheme[key]}
-                  onChange={(e) => setBulkTheme((prev) => ({ ...prev, [key]: e.target.value, preset: "custom" }))}
-                  style={{ flex: 1, borderRadius: 6, border: "1px solid #e2e8f0", padding: "4px 8px", fontSize: 13, fontFamily: "monospace" }}
+                  onChange={(e) =>
+                    setBulkTheme((prev) => ({
+                      ...prev,
+                      [key]: e.target.value,
+                      preset: "custom",
+                    }))
+                  }
+                  style={{
+                    flex: 1,
+                    borderRadius: 6,
+                    border: "1px solid #e2e8f0",
+                    padding: "4px 8px",
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                  }}
                 />
               </div>
             </div>
@@ -1170,15 +1409,27 @@ function OrganizationDetail() {
 
           {/* Contrast Slider */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <Typography.Text style={{ fontSize: 12, color: "#64748b" }}>Contrast</Typography.Text>
-              <Typography.Text style={{ fontSize: 12, color: "#64748b" }}>{bulkTheme.contrast}%</Typography.Text>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 4,
+              }}
+            >
+              <Typography.Text style={{ fontSize: 12, color: "#64748b" }}>
+                Contrast
+              </Typography.Text>
+              <Typography.Text style={{ fontSize: 12, color: "#64748b" }}>
+                {bulkTheme.contrast}%
+              </Typography.Text>
             </div>
             <Slider
               min={50}
               max={150}
               value={bulkTheme.contrast}
-              onChange={(v) => setBulkTheme((prev) => ({ ...prev, contrast: v }))}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({ ...prev, contrast: v }))
+              }
             />
           </div>
         </AntCard>
@@ -1213,9 +1464,7 @@ function OrganizationDetail() {
                 allowClear
                 loading={nfcTagsLoading}
                 placeholder={
-                  nfcTagsLoading
-                    ? "Loading tags..."
-                    : "None (assign tag later)"
+                  nfcTagsLoading ? "Loading tags..." : "None (assign tag later)"
                 }
                 optionFilterProp="label"
                 notFoundContent={
@@ -1228,7 +1477,9 @@ function OrganizationDetail() {
                 options={[
                   { value: null, label: "None (assign tag later)" },
                   ...nfcTags
-                    .filter((t) => !t.tagId.toUpperCase().startsWith("PENDING-"))
+                    .filter(
+                      (t) => !t.tagId.toUpperCase().startsWith("PENDING-"),
+                    )
                     .map((t) => ({
                       value: t.tagId,
                       label: t.tagId,
@@ -1596,7 +1847,10 @@ function OrganizationDetail() {
       <ExcelImportWizard
         open={templateImportOpen}
         onClose={() => setTemplateImportOpen(false)}
-        onSuccess={() => { setTemplateImportOpen(false); fetchData(); }}
+        onSuccess={() => {
+          setTemplateImportOpen(false);
+          fetchData();
+        }}
         tenantId={tenantId}
         templates={orgTemplates}
       />
@@ -1621,7 +1875,9 @@ function OrganizationDetail() {
             Previous
           </Button>,
           <Text key="counter" style={{ padding: "0 12px", lineHeight: "32px" }}>
-            {bulkDataCards.length > 0 ? `${bulkDataIndex + 1} / ${bulkDataCards.length}` : ""}
+            {bulkDataCards.length > 0
+              ? `${bulkDataIndex + 1} / ${bulkDataCards.length}`
+              : ""}
           </Text>,
           <Button
             key="next"
@@ -1645,58 +1901,198 @@ function OrganizationDetail() {
       >
         <Form form={bulkDataForm} layout="vertical" style={{ marginTop: 12 }}>
           {orgType !== "SCHOOL" && (
-            <Form.Item label="Full Name" name="name" rules={[{ required: true, message: "Required" }]}>
+            <Form.Item
+              label="Full Name"
+              name="name"
+              rules={[{ required: true, message: "Required" }]}
+            >
               <Input placeholder="Full name" />
             </Form.Item>
           )}
 
           {orgType === "SCHOOL" && (
             <>
-              <Form.Item label="Roll No" name="studentId"><Input /></Form.Item>
-              <Form.Item label="Full Name" name="name" rules={[{ required: true, message: "Required" }]}>
+              <Form.Item label="Roll No" name="studentId">
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label="Full Name"
+                name="name"
+                rules={[{ required: true, message: "Required" }]}
+              >
                 <Input placeholder="Full name" />
               </Form.Item>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-                <Form.Item label="Class" name="grade" style={{ marginBottom: 0 }}><Input placeholder="One" /></Form.Item>
-                <Form.Item label="Section" name="section" style={{ marginBottom: 0 }}><Input placeholder="A" /></Form.Item>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <Form.Item
+                  label="Class"
+                  name="grade"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input placeholder="One" />
+                </Form.Item>
+                <Form.Item
+                  label="Section"
+                  name="section"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input placeholder="A" />
+                </Form.Item>
               </div>
-              <Form.Item label="House" name="house" style={{ marginTop: 12 }}><Input /></Form.Item>
-              <Form.Item label="Guardian" name="guardianName"><Input /></Form.Item>
-              <Form.Item label="Address" name="address"><Input /></Form.Item>
-              <Form.Item label="Contact" name="phone"><Input /></Form.Item>
+              <Form.Item label="House" name="house" style={{ marginTop: 12 }}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="Guardian" name="guardianName">
+                <Input />
+              </Form.Item>
+              <Form.Item label="Address" name="address">
+                <Input />
+              </Form.Item>
+              <Form.Item label="Contact" name="phone">
+                <Input />
+              </Form.Item>
             </>
           )}
 
           {orgType === "HOSPITAL" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-                <Form.Item label="Employee ID" name="employeeId" style={{ marginBottom: 0 }}><Input /></Form.Item>
-                <Form.Item label="Department" name="department" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <Form.Item
+                  label="Employee ID"
+                  name="employeeId"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
+                <Form.Item
+                  label="Department"
+                  name="department"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
-                <Form.Item label="Specialization" name="specialization" style={{ marginBottom: 0 }}><Input /></Form.Item>
-                <Form.Item label="License Number" name="licenseNumber" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <Form.Item
+                  label="Specialization"
+                  name="specialization"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
+                <Form.Item
+                  label="License Number"
+                  name="licenseNumber"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
               </div>
-              <Form.Item label="Emergency Contact" name="emergencyContact" style={{ marginTop: 12 }}><Input /></Form.Item>
-              <Form.Item label="Address" name="address"><Input /></Form.Item>
-              <Form.Item label="Email" name="email" rules={[{ type: "email", message: "Invalid email" }]}><Input /></Form.Item>
-              <Form.Item label="Phone" name="phone"><Input /></Form.Item>
+              <Form.Item
+                label="Emergency Contact"
+                name="emergencyContact"
+                style={{ marginTop: 12 }}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item label="Address" name="address">
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[{ type: "email", message: "Invalid email" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item label="Phone" name="phone">
+                <Input />
+              </Form.Item>
             </>
           )}
 
           {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-                <Form.Item label="Position / Title" name="position" style={{ marginBottom: 0 }}><Input /></Form.Item>
-                <Form.Item label="Company" name="company" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <Form.Item
+                  label="Position / Title"
+                  name="position"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
+                <Form.Item
+                  label="Company"
+                  name="company"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 12 }}>
-                <Form.Item label="LinkedIn" name="linkedIn" style={{ marginBottom: 0 }}><Input /></Form.Item>
-                <Form.Item label="Website" name="website" style={{ marginBottom: 0 }}><Input /></Form.Item>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <Form.Item
+                  label="LinkedIn"
+                  name="linkedIn"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
+                <Form.Item
+                  label="Website"
+                  name="website"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input />
+                </Form.Item>
               </div>
-              <Form.Item label="Address" name="address" style={{ marginTop: 12 }}><Input /></Form.Item>
-              <Form.Item label="Email" name="email" rules={[{ type: "email", message: "Invalid email" }]}><Input /></Form.Item>
-              <Form.Item label="Phone" name="phone"><Input /></Form.Item>
+              <Form.Item
+                label="Address"
+                name="address"
+                style={{ marginTop: 12 }}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[{ type: "email", message: "Invalid email" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item label="Phone" name="phone">
+                <Input />
+              </Form.Item>
             </>
           )}
         </Form>
