@@ -447,7 +447,8 @@ function Organizations() {
         rowKey="tenantId"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 920 }}
+        tableLayout="fixed"
+        scroll={{ x: "max-content", y: isMobile ? 420 : 560 }}
         size={isMobile ? "small" : "middle"}
       />
 
