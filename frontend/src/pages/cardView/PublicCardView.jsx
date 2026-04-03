@@ -8,19 +8,14 @@ import { formatFieldLabel } from "./components/SelectCard";
 const { Text } = Typography;
 
 const DEFAULT_THEME = {
+  design: "one",
+  preset: "ocean",
   primaryColor: "#1890ff",
   secondaryColor: "#52c41a",
   accentColor: "#ff6b6b",
   surfaceColor: "#f0f2f5",
   isDark: false,
   contrast: 100,
-  hexToRgba: (hex, opacity) => {
-    if (!hex) return `rgba(0,0,0,${opacity})`;
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${opacity})`;
-  },
 };
 
 const formatFieldName = (key) => formatFieldLabel(key);
@@ -32,15 +27,48 @@ function PublicCardView() {
   const [templateFields, setTemplateFields] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedDesign, setSelectedDesign] = useState("one");
+  const [theme, setTheme] = useState(DEFAULT_THEME);
+
+  const buildThemeContext = (themeConfig) => {
+    const hexToRgba = (hex, opacity, contrast = 100) => {
+      if (!hex) return `rgba(0,0,0,${opacity})`;
+      let r = parseInt(hex.slice(1, 3), 16);
+      let g = parseInt(hex.slice(3, 5), 16);
+      let b = parseInt(hex.slice(5, 7), 16);
+      const factor = contrast / 100;
+      r = Math.min(255, Math.max(0, Math.round(r * factor)));
+      g = Math.min(255, Math.max(0, Math.round(g * factor)));
+      b = Math.min(255, Math.max(0, Math.round(b * factor)));
+      return `rgba(${r},${g},${b},${opacity})`;
+    };
+
+    return {
+      ...themeConfig,
+      hexToRgba: (hex, opacity) =>
+        hexToRgba(hex, opacity, themeConfig?.contrast ?? 100),
+    };
+  };
 
   useEffect(() => {
     const fetchCard = async () => {
       try {
         setLoading(true);
         const res = await publicAPI.getCard(tagId);
-        setCard(res.data.data);
+        const fetchedCard = res.data.data;
+        setCard(fetchedCard);
         setTenant(res.data.tenant);
         setTemplateFields(res.data.templateFields || null);
+
+        const savedDesign = fetchedCard?.metadata?._design;
+        if (savedDesign && typeof savedDesign === "object") {
+          setSelectedDesign(savedDesign.design || "one");
+          setTheme({ ...DEFAULT_THEME, ...savedDesign });
+        } else {
+          setSelectedDesign("one");
+          setTheme(DEFAULT_THEME);
+        }
+
         setError("");
       } catch (err) {
         setError(err.response?.data?.error || "Card not found");
@@ -103,11 +131,11 @@ function PublicCardView() {
       padding: "16px 12px",
     }}>
       <SelectCard
-        design="one"
+        design={selectedDesign}
         card={card}
         tenant={tenant}
         formatFieldName={formatFieldName}
-        theme={DEFAULT_THEME}
+        theme={buildThemeContext(theme)}
         templateFields={templateFields}
       />
       <p style={{ marginTop: 24, fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 500 }}>NFC Digital Card</p>

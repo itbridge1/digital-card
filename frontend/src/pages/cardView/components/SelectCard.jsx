@@ -191,7 +191,7 @@ function CardDesignOne({
           top: 0,
           right: 0,
           width: "100%",
-          height: "130px",
+          height: "100px",
           background: primaryColor,
           clipPath: "polygon(40% 0, 100% 0, 100% 100%, 70% 100%)",
         }}
@@ -204,36 +204,42 @@ function CardDesignOne({
           bottom: 0,
           left: 0,
           width: "100%",
-          height: "130px",
+          height: "100px",
           background: secondaryColor,
           clipPath: "polygon(0 0, 30% 0, 60% 100%, 0% 100%)",
         }}
       />
 
-      {/* 🏢 Company Section with Logo */}
       <div
         style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          display: "flex",
-          alignItems: "flex-start", // ✅ FIXED
-          gap: 6,
-          color: "#fff",
+          width: "100%",
+          height: 90,
+          overflow: "hidden",
+          position: "relative",
+          zIndex: 1,
         }}
       >
-        <Avatar
-          size={20}
-          icon={<UserOutlined />}
-          src={resolveImg(tenant?.logoUrl)}
-          style={{ background: "#fff" }}
-        />
-        <div style={{ textAlign: "right", lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: "bold" }}>
-            {tenant?.name || "Company"}
+        {resolveImg(tenant?.logoUrl) ? (
+          <img
+            src={resolveImg(tenant?.logoUrl)}
+            alt={tenant?.name || "Top image"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: hexToRgba(primaryColor, 0.2),
+              color: primaryColor,
+            }}
+          >
+            <UserOutlined style={{ fontSize: 36 }} />
           </div>
-          <div style={{ fontSize: 10, opacity: 0.8 }}>{tenant?.type}</div>
-        </div>
+        )}
       </div>
 
       {/* 📦 Content */}
@@ -408,26 +414,33 @@ function CardDesignTwo({
         <div
           style={{
             background: hexToRgba(primaryColor, 0.95),
-            padding: "10px 16px",
+            width: "100%",
+            height: 90,
+            overflow: "hidden",
             color: "#fff",
-            textAlign: "center",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-            <Avatar
-              size={22}
-              icon={<UserOutlined />}
+          {resolveImg(tenant?.logoUrl) ? (
+            <img
               src={resolveImg(tenant?.logoUrl)}
+              alt={tenant?.name || "Top image"}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
-            <div>
-              <div style={{ fontSize: 12, fontWeight: "bold" }}>
-                {tenant?.name || "Company Name"}
-              </div>
-              <div style={{ fontSize: 9, opacity: 0.7 }}>
-                {tenant?.type || "Slogan here"}
-              </div>
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: hexToRgba(primaryColor, 0.2),
+                color: primaryColor,
+              }}
+            >
+              <UserOutlined style={{ fontSize: 36 }} />
             </div>
-          </div>
+          )}
         </div>
 
         {/* Red Wave */}
@@ -626,30 +639,44 @@ function CardDesignThree({
       }}
       bodyStyle={{ padding: 0 }}
     >
-      {/* 🔵 Top with Company Logo */}
       <div
         style={{
-          height: 80, // increased height for header
+          width: "100%",
+          height: 80,
+          overflow: "hidden",
           background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-          borderBottomLeftRadius: "100% 45%",
-          borderBottomRightRadius: "100% 45%",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 8,
           color: "#fff",
         }}
       >
-        <Avatar size={28} src={resolveImg(tenant?.logoUrl)} />
-        <div>
-          <div style={{ fontSize: 12, fontWeight: "bold" }}>
-            {tenant?.name || "Company Name"}
+        {resolveImg(tenant?.logoUrl) ? (
+          <img
+            src={resolveImg(tenant?.logoUrl)}
+            alt={tenant?.name || "Top image"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: hexToRgba(primaryColor, 0.2),
+              color: primaryColor,
+            }}
+          >
+            <UserOutlined style={{ fontSize: 36 }} />
           </div>
-          <div style={{ fontSize: 9, opacity: 0.8 }}>
-            {tenant?.type || "Slogan"}
-          </div>
-        </div>
+        )}
       </div>
+      <div
+        style={{
+          width: "100%",
+          height: 8,
+          background: primaryColor,
+        }}
+      />
 
       {/* 🟣 Profile Image (downward) */}
       <div

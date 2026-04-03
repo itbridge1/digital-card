@@ -86,6 +86,17 @@ function CardView() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
+  const applySavedDesign = (fetchedCard) => {
+    const saved = fetchedCard?.metadata?._design;
+    if (saved && typeof saved === "object") {
+      setSelectedDesign(saved.design || "one");
+      setTheme({ ...DEFAULT_THEME, ...saved });
+    } else {
+      setSelectedDesign("one");
+      setTheme(DEFAULT_THEME);
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = localStorage.getItem("token");
@@ -131,12 +142,7 @@ function CardView() {
           if (tenantRes.data.templateFields)
             setTemplateFields(tenantRes.data.templateFields);
           setIsOwner(true); // tenants can customise their own org's cards
-          // Load saved design settings from metadata
-          if (fetchedCard?.metadata?._design) {
-            const d = fetchedCard.metadata._design;
-            setSelectedDesign(d.design || "one");
-            setTheme({ ...DEFAULT_THEME, ...d });
-          }
+          applySavedDesign(fetchedCard);
         } else {
           // Fetch from organization context (admin / manager)
           cardRes = await useraccessAPI.getOrganizationCard(tenantId, tagId);
@@ -153,17 +159,14 @@ function CardView() {
             currentUser.role === "admin" ||
             fetchedTenant?.createdBy === currentUser.id;
           setIsOwner(owned);
-          // Load saved design settings from metadata
-          if (fetchedCard?.metadata?._design) {
-            const d = fetchedCard.metadata._design;
-            setSelectedDesign(d.design || "one");
-            setTheme({ ...DEFAULT_THEME, ...d });
-          }
+          applySavedDesign(fetchedCard);
         }
       } else {
         // Fetch from public context
         cardRes = await cardAPI.getById(tagId);
-        setCard(cardRes.data.data);
+        const fetchedCard = cardRes.data.data;
+        setCard(fetchedCard);
+        applySavedDesign(fetchedCard);
         tenantRes = await tenantAPI.getAll();
         const currentTenant = tenantRes.data.data.find(
           (t) => t.tenantId === tenantId.toUpperCase(),
@@ -236,24 +239,26 @@ function CardView() {
     if (!card) return;
     setSavingDesign(true);
     try {
-      const designSettings = { design: selectedDesign, ...theme };
+      const designSettings = { ...theme, design: selectedDesign };
       const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       if (currentUser.role === "tenant") {
-        await tenantPortalAPI.updateCard(card.id, {
-          metadata: { _design: designSettings },
-        });
+        await tenantPortalAPI.bulkUpdateDesign([card.id], designSettings);
       } else {
         const params = new URLSearchParams(window.location.search);
-        const tenantId = params.get("tenantId");
-        await useraccessAPI.updateCard(tenantId, card.id, {
-          metadata: { _design: designSettings },
-        });
+        const tenantId =
+          params.get("tenantId") || card?.tenantId || localStorage.getItem("selectedTenantId");
+        if (!tenantId) throw new Error("Tenant ID is required to save design");
+        await useraccessAPI.bulkUpdateDesign(tenantId, [card.id], designSettings);
       }
+
+      // Re-fetch from backend so the currently loaded card reflects persisted data.
+      await fetchCard();
+
       const { message: msg } = await import("antd");
       msg.success("Design saved");
-    } catch {
+    } catch (error) {
       const { message: msg } = await import("antd");
-      msg.error("Failed to save design");
+      msg.error(error?.response?.data?.error || error?.message || "Failed to save design");
     } finally {
       setSavingDesign(false);
     }
@@ -752,7 +757,7 @@ function CardView() {
               bodyStyle={{ padding: "16px 24px" }}
             >
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <Avatar
+                {/* <Avatar
                   size={44}
                   src={orgLogoSrc || undefined}
                   shape="square"
@@ -764,7 +769,7 @@ function CardView() {
                   }}
                 >
                   {!orgLogoSrc && tenant.name?.charAt(0).toUpperCase()}
-                </Avatar>
+                </Avatar> */}
                 <div>
                   <div
                     style={{

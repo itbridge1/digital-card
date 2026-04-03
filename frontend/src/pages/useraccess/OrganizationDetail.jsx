@@ -1054,14 +1054,14 @@ function OrganizationDetail() {
           marginBottom: 24,
         }}
       >
-        {organization?.logoUrl && (
+        {/* {organization?.logoUrl && (
           <Avatar
             src={`${API_BASE}${organization.logoUrl}`}
             shape="square"
             size={56}
             style={{ border: "1px solid #e0e0e0" }}
           />
-        )}
+        )} */}
         <div>
           <Title level={4} style={{ margin: 0 }}>
             {organization?.name}
