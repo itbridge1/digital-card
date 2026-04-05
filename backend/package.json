@@ -9,8 +9,11 @@
     "server": "node server.js",
     "reader": "node readerBridge.js",
     "create-db": "node create-db.js",
+    "migrate": "node migrate.js",
+    "migrate:status": "node migrate.js --status",
+    "migrate:undo": "node migrate.js --undo",
     "seed": "node seed.js",
-    "setup": "node create-db.js && node seed.js"
+    "setup": "node create-db.js && node migrate.js && node seed.js"
   },
   "keywords": [
     "nfc",
