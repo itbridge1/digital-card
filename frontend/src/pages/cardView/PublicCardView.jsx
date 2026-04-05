@@ -14,6 +14,9 @@ const DEFAULT_THEME = {
   secondaryColor: "#52c41a",
   accentColor: "#ff6b6b",
   surfaceColor: "#f0f2f5",
+  textColor: "#1f2937",
+  fontFamily:
+    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   isDark: false,
   contrast: 100,
 };

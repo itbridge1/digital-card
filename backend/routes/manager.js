@@ -415,7 +415,7 @@ router.put("/organizations/:tenantId/cards/bulk-design", async (req, res) => {
       return res.status(400).json({ success: false, error: "designSettings must be an object" });
     }
 
-    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "isDark", "contrast"];
+    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "textColor", "fontFamily", "isDark", "contrast"];
     const sanitized = {};
     for (const key of ALLOWED_KEYS) {
       if (key in designSettings) sanitized[key] = designSettings[key];

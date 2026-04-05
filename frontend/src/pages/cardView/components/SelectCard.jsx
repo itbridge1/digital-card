@@ -163,14 +163,18 @@ function CardDesignOne({
     secondaryColor,
     accentColor,
     surfaceColor,
+    textColor,
+    fontFamily,
     isDark,
     hexToRgba,
   } = theme;
-  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
-  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#666";
-  const labelColor = isDark ? DARK_TEXT_MUTED : "#888";
+  const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const mutedTextColor = isDark
+    ? DARK_TEXT_SECONDARY
+    : hexToRgba(bodyTextColor, 0.78);
+  const labelColor = isDark ? DARK_TEXT_MUTED : hexToRgba(bodyTextColor, 0.65);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
-  const valueColor = isDark ? DARK_TEXT_PRIMARY : primaryColor;
+  const valueColor = isDark ? DARK_TEXT_PRIMARY : bodyTextColor;
 
   return (
     <Card
@@ -180,6 +184,7 @@ function CardDesignOne({
         overflow: "hidden",
         position: "relative",
         background: cardSurfaceColor,
+        fontFamily,
         border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
@@ -388,13 +393,22 @@ function CardDesignTwo({
     templateFields,
   );
 
-  const { primaryColor, secondaryColor, surfaceColor, isDark, hexToRgba } =
-    theme;
-  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
-  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#888";
-  const labelColor = isDark ? DARK_TEXT_MUTED : "#777";
+  const {
+    primaryColor,
+    secondaryColor,
+    surfaceColor,
+    textColor,
+    fontFamily,
+    isDark,
+    hexToRgba,
+  } = theme;
+  const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const mutedTextColor = isDark
+    ? DARK_TEXT_SECONDARY
+    : hexToRgba(bodyTextColor, 0.78);
+  const labelColor = isDark ? DARK_TEXT_MUTED : hexToRgba(bodyTextColor, 0.65);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
-  const valueColor = isDark ? DARK_TEXT_PRIMARY : primaryColor;
+  const valueColor = isDark ? DARK_TEXT_PRIMARY : bodyTextColor;
 
   return (
     <Card
@@ -404,6 +418,7 @@ function CardDesignTwo({
         overflow: "hidden",
         position: "relative",
         background: cardSurfaceColor,
+        fontFamily,
         border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
@@ -620,11 +635,15 @@ function CardDesignThree({
     secondaryColor,
     accentColor,
     surfaceColor,
+    textColor,
+    fontFamily,
     isDark,
     hexToRgba,
   } = theme;
-  const bodyTextColor = isDark ? DARK_TEXT_PRIMARY : "#1f2937";
-  const mutedTextColor = isDark ? DARK_TEXT_SECONDARY : "#888";
+  const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const mutedTextColor = isDark
+    ? DARK_TEXT_SECONDARY
+    : hexToRgba(bodyTextColor, 0.78);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
 
   return (
@@ -635,6 +654,7 @@ function CardDesignThree({
         overflow: "hidden",
         position: "relative",
         background: cardSurfaceColor,
+        fontFamily,
         border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
       }}
       bodyStyle={{ padding: 0 }}
