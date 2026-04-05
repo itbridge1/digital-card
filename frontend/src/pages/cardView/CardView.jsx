@@ -36,30 +36,108 @@ import { formatFieldLabel } from "./components/SelectCard";
 
 const { Text } = Typography;
 
+const FONT_FAMILY_OPTIONS = [
+  {
+    label: "Inter",
+    value:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  },
+  {
+    label: "Poppins",
+    value: "'Poppins', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Montserrat",
+    value: "'Montserrat', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Manrope",
+    value: "'Manrope', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Raleway",
+    value: "'Raleway', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Nunito Sans",
+    value: "'Nunito Sans', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Trebuchet MS",
+    value: "'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
+  },
+  {
+    label: "Verdana",
+    value: "Verdana, Geneva, Tahoma, sans-serif",
+  },
+  {
+    label: "Lora",
+    value: "'Lora', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Merriweather",
+    value: "'Merriweather', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Playfair Display",
+    value: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Georgia",
+    value: "Georgia, 'Times New Roman', Times, serif",
+  },
+  {
+    label: "Palatino",
+    value: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif",
+  },
+  {
+    label: "Nunito",
+    value: "'Nunito', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Courier New",
+    value: "'Courier New', Courier, monospace",
+  },
+  {
+    label: "Consolas",
+    value: "Consolas, 'Lucida Console', Monaco, monospace",
+  },
+];
+
+const DEFAULT_FONT_FAMILY = FONT_FAMILY_OPTIONS[0].value;
+
 const THEME_PRESETS = {
   ocean: {
     primaryColor: "#1890ff",
     secondaryColor: "#52c41a",
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
+    textColor: "#1f2937",
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   sunset: {
     primaryColor: "#f97316",
     secondaryColor: "#facc15",
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
+    textColor: "#3f2a1d",
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   royal: {
     primaryColor: "#4f46e5",
     secondaryColor: "#06b6d4",
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
+    textColor: "#1e1b4b",
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   forest: {
     primaryColor: "#166534",
     secondaryColor: "#22c55e",
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
+    textColor: "#1f2937",
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
 };
 
@@ -233,6 +311,9 @@ function CardView() {
       preset: presetName,
     }));
   };
+  const handleFontFamilyChange = (value) => {
+    setTheme((prev) => ({ ...prev, fontFamily: value }));
+  };
   const resetToDefault = () => setTheme(DEFAULT_THEME);
 
   const handleSaveDesign = async () => {
@@ -383,6 +464,7 @@ function CardView() {
           { key: "secondaryColor", label: "Secondary Color" },
           { key: "accentColor", label: "Accent Color" },
           { key: "surfaceColor", label: "Surface Color" },
+          { key: "textColor", label: "Text Color" },
         ].map(({ key, label }) => (
           <div key={key} style={{ marginBottom: 14 }}>
             <Text
@@ -425,6 +507,26 @@ function CardView() {
             </div>
           </div>
         ))}
+
+        <div style={{ marginBottom: 14 }}>
+          <Text
+            style={{
+              display: "block",
+              marginBottom: 6,
+              fontSize: 12,
+              color: "#64748b",
+            }}
+          >
+            Font Family
+          </Text>
+          <Select
+            value={theme.fontFamily || DEFAULT_FONT_FAMILY}
+            onChange={handleFontFamilyChange}
+            size="middle"
+            style={{ width: "100%" }}
+            options={FONT_FAMILY_OPTIONS}
+          />
+        </div>
 
         <div>
           <div

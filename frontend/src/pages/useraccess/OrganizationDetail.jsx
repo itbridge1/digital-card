@@ -42,8 +42,6 @@ import {
   AppstoreOutlined,
   AppstoreAddOutlined,
   ReloadOutlined,
-  LeftOutlined,
-  RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
@@ -63,31 +61,106 @@ const THEME_PRESETS = {
     secondaryColor: "#52c41a",
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
+    textColor: "#1f2937",
   },
   sunset: {
     primaryColor: "#f97316",
     secondaryColor: "#facc15",
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
+    textColor: "#3f2a1d",
   },
   royal: {
     primaryColor: "#4f46e5",
     secondaryColor: "#06b6d4",
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
+    textColor: "#1e1b4b",
   },
   forest: {
     primaryColor: "#166534",
     secondaryColor: "#22c55e",
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
+    textColor: "#1f2937",
   },
 };
+
+const FONT_FAMILY_OPTIONS = [
+  {
+    label: "Inter",
+    value:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  },
+  {
+    label: "Poppins",
+    value: "'Poppins', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Montserrat",
+    value: "'Montserrat', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Manrope",
+    value: "'Manrope', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Raleway",
+    value: "'Raleway', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Nunito Sans",
+    value: "'Nunito Sans', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Trebuchet MS",
+    value: "'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
+  },
+  {
+    label: "Verdana",
+    value: "Verdana, Geneva, Tahoma, sans-serif",
+  },
+  {
+    label: "Lora",
+    value: "'Lora', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Merriweather",
+    value: "'Merriweather', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Playfair Display",
+    value: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Georgia",
+    value: "Georgia, 'Times New Roman', Times, serif",
+  },
+  {
+    label: "Palatino",
+    value: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif",
+  },
+  {
+    label: "Nunito",
+    value: "'Nunito', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Courier New",
+    value: "'Courier New', Courier, monospace",
+  },
+  {
+    label: "Consolas",
+    value: "Consolas, 'Lucida Console', Monaco, monospace",
+  },
+];
+
+const DEFAULT_FONT_FAMILY = FONT_FAMILY_OPTIONS[0].value;
 
 const DEFAULT_BULK_THEME = {
   design: "one",
   preset: "ocean",
   ...THEME_PRESETS.ocean,
+  fontFamily: DEFAULT_FONT_FAMILY,
   isDark: false,
   contrast: 100,
 };
@@ -157,13 +230,12 @@ function OrganizationDetail() {
     current: 1,
     pageSize: 10,
   });
+  const [statusUpdatingIds, setStatusUpdatingIds] = useState([]);
 
   // Bulk data edit state
   const [bulkDataEditOpen, setBulkDataEditOpen] = useState(false);
-  const [bulkDataIndex, setBulkDataIndex] = useState(0);
   const [bulkDataCards, setBulkDataCards] = useState([]);
   const [bulkDataSaving, setBulkDataSaving] = useState(false);
-  const [bulkDataForm] = Form.useForm();
 
   const fetchData = async () => {
     setLoading(true);
@@ -374,6 +446,22 @@ function OrganizationDetail() {
     }
   };
 
+  const handleInlineStatusChange = async (card, isActive) => {
+    if (statusUpdatingIds.includes(card.id)) return;
+    setStatusUpdatingIds((prev) => [...prev, card.id]);
+    try {
+      await useraccessAPI.updateCard(tenantId, card.id, { isActive });
+      setCards((prev) =>
+        prev.map((c) => (c.id === card.id ? { ...c, isActive } : c)),
+      );
+      message.success(`Card marked as ${isActive ? "active" : "inactive"}`);
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to update status");
+    } finally {
+      setStatusUpdatingIds((prev) => prev.filter((id) => id !== card.id));
+    }
+  };
+
   const handleExport = async () => {
     if (cards.length === 0) {
       message.warning("No card holders to export");
@@ -536,120 +624,45 @@ function OrganizationDetail() {
 
   const orgType = organization?.type;
 
-  // ── bulk data edit handlers ─────────────────────────────────────
-  const populateBulkDataForm = (cardsList, idx) => {
-    const card = cardsList[idx];
-    const m = card.metadata || {};
-    let editGrade = m.grade || "";
-    let editSection = "";
-    const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
-    if (sectionMatch) {
-      editGrade = sectionMatch[1];
-      editSection = sectionMatch[2];
-    }
-    bulkDataForm.resetFields();
-    bulkDataForm.setFieldsValue({
-      name: m.name || "",
-      email: m.email || "",
-      phone: m.phone || "",
-      address: m.address || "",
-      studentId: m.studentId || "",
-      grade: editGrade,
-      section: editSection,
-      house: m.house || "",
-      guardianName: m.guardianName || "",
-      employeeId: m.employeeId || "",
-      department: m.department || "",
-      specialization: m.specialization || "",
-      licenseNumber: m.licenseNumber || "",
-      emergencyContact: m.emergencyContact || "",
-      company: m.company || "",
-      position: m.position || "",
-      linkedIn: m.linkedIn || "",
-      website: m.website || "",
-    });
-  };
-
   const openBulkDataEdit = () => {
     const cloned = cards
       .filter((c) => selectedRowKeys.includes(c.id))
       .map((c) => ({ ...c, metadata: { ...(c.metadata || {}) } }));
     setBulkDataCards(cloned);
-    setBulkDataIndex(0);
     setBulkDataEditOpen(true);
-    populateBulkDataForm(cloned, 0);
   };
 
-  const saveBulkDataCurrent = async () => {
-    const values = await bulkDataForm.validateFields();
-    const updated = [...bulkDataCards];
-    const metadata = {
-      ...updated[bulkDataIndex].metadata,
-      name: values.name,
-      email: values.email,
-      phone: values.phone,
-      address: values.address,
-    };
-    if (orgType === "SCHOOL") {
-      const rawGrade = (values.grade || "").trim();
-      const rawSection = (values.section || "").trim();
-      const mergedGrade =
-        rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
-      Object.assign(metadata, {
-        studentId: values.studentId,
-        grade: mergedGrade,
-        house: values.house,
-        guardianName: values.guardianName,
-      });
-      delete metadata.email;
-    } else if (orgType === "HOSPITAL") {
-      Object.assign(metadata, {
-        employeeId: values.employeeId,
-        department: values.department,
-        specialization: values.specialization,
-        licenseNumber: values.licenseNumber,
-        emergencyContact: values.emergencyContact,
-      });
-    } else {
-      Object.assign(metadata, {
-        company: values.company,
-        position: values.position,
-        linkedIn: values.linkedIn,
-        website: values.website,
-      });
-    }
-    updated[bulkDataIndex] = { ...updated[bulkDataIndex], metadata };
-    setBulkDataCards(updated);
-    return updated;
-  };
-
-  const handleBulkDataPrev = async () => {
-    const updated = await saveBulkDataCurrent();
-    const newIdx = bulkDataIndex - 1;
-    setBulkDataIndex(newIdx);
-    populateBulkDataForm(updated, newIdx);
-  };
-
-  const handleBulkDataNext = async () => {
-    const updated = await saveBulkDataCurrent();
-    const newIdx = bulkDataIndex + 1;
-    setBulkDataIndex(newIdx);
-    populateBulkDataForm(updated, newIdx);
+  const handleBulkDataFieldChange = (cardId, fieldKey, value) => {
+    setBulkDataCards((prev) =>
+      prev.map((card) => {
+        if (card.id !== cardId) return card;
+        if (fieldKey === "__isActive") {
+          return { ...card, isActive: value };
+        }
+        return {
+          ...card,
+          metadata: {
+            ...(card.metadata || {}),
+            [fieldKey]: value,
+          },
+        };
+      }),
+    );
   };
 
   const handleBulkDataSaveAll = async () => {
-    const updated = await saveBulkDataCurrent();
     setBulkDataSaving(true);
     try {
       await Promise.all(
-        updated.map((card) =>
+        bulkDataCards.map((card) =>
           useraccessAPI.updateCard(tenantId, card.id, {
             profileImageUrl: card.profileImageUrl || null,
             metadata: card.metadata,
+            isActive: card.isActive,
           }),
         ),
       );
-      message.success(`${updated.length} card(s) updated successfully`);
+      message.success(`${bulkDataCards.length} card(s) updated successfully`);
       setBulkDataEditOpen(false);
       setSelectedRowKeys([]);
       fetchData();
@@ -978,8 +991,18 @@ function OrganizationDetail() {
       title: "Status",
       dataIndex: "isActive",
       width: 110,
-      render: (v) => (
-        <Tag color={v ? "success" : "default"}>{v ? "Active" : "Inactive"}</Tag>
+      render: (v, record) => (
+        <Space size={6}>
+          <Switch
+            size="small"
+            checked={Boolean(v)}
+            loading={statusUpdatingIds.includes(record.id)}
+            onChange={(checked) => handleInlineStatusChange(record, checked)}
+          />
+          <Tag color={v ? "success" : "default"}>
+            {v ? "Active" : "Inactive"}
+          </Tag>
+        </Space>
       ),
       sorter: (a, b) => Number(b.isActive) - Number(a.isActive),
     },
@@ -1024,6 +1047,46 @@ function OrganizationDetail() {
             </Tooltip>
           </Popconfirm>
         </Space>
+      ),
+    },
+  ];
+
+  const bulkEditColumns = [
+    {
+      title: "Tag ID",
+      dataIndex: "tagId",
+      key: "tagId",
+      width: 160,
+      fixed: "left",
+      render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
+    },
+    ...dataColumns.map((col) => ({
+      title: col.title,
+      key: `meta-${col.key}`,
+      width: 200,
+      render: (_, record) => (
+        <Input
+          size="small"
+          value={record.metadata?.[col.key] ?? ""}
+          onChange={(e) =>
+            handleBulkDataFieldChange(record.id, col.key, e.target.value)
+          }
+        />
+      ),
+    })),
+    {
+      title: "Status",
+      key: "isActive",
+      width: 110,
+      fixed: "right",
+      render: (_, record) => (
+        <Switch
+          size="small"
+          checked={Boolean(record.isActive)}
+          onChange={(checked) =>
+            handleBulkDataFieldChange(record.id, "__isActive", checked)
+          }
+        />
       ),
     },
   ];
@@ -1352,6 +1415,7 @@ function OrganizationDetail() {
             { key: "secondaryColor", label: "Secondary Color" },
             { key: "accentColor", label: "Accent Color" },
             { key: "surfaceColor", label: "Surface Color" },
+            { key: "textColor", label: "Text Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <Typography.Text
@@ -1406,6 +1470,32 @@ function OrganizationDetail() {
               </div>
             </div>
           ))}
+
+          <div style={{ marginBottom: 14 }}>
+            <Typography.Text
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              Font Family
+            </Typography.Text>
+            <Select
+              value={bulkTheme.fontFamily || DEFAULT_FONT_FAMILY}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({
+                  ...prev,
+                  fontFamily: v,
+                  preset: "custom",
+                }))
+              }
+              size="middle"
+              style={{ width: "100%" }}
+              options={FONT_FAMILY_OPTIONS}
+            />
+          </div>
 
           {/* Contrast Slider */}
           <div>
@@ -1857,245 +1947,38 @@ function OrganizationDetail() {
 
       {/* Bulk Data Edit modal */}
       <Modal
-        title={
-          bulkDataCards.length > 0
-            ? `Edit Card ${bulkDataIndex + 1} of ${bulkDataCards.length} — ${bulkDataCards[bulkDataIndex]?.metadata?.name || bulkDataCards[bulkDataIndex]?.tagId || ""}`
-            : "Edit in Bulk"
-        }
+        title={`Edit in Bulk (${bulkDataCards.length} selected)`}
         open={bulkDataEditOpen}
         onCancel={() => setBulkDataEditOpen(false)}
-        width={isMobile ? "95%" : 520}
+        width={isMobile ? "98%" : 1200}
         footer={[
-          <Button
-            key="prev"
-            icon={<LeftOutlined />}
-            disabled={bulkDataIndex === 0}
-            onClick={handleBulkDataPrev}
-          >
-            Previous
-          </Button>,
-          <Text key="counter" style={{ padding: "0 12px", lineHeight: "32px" }}>
-            {bulkDataCards.length > 0
-              ? `${bulkDataIndex + 1} / ${bulkDataCards.length}`
-              : ""}
-          </Text>,
-          <Button
-            key="next"
-            icon={<RightOutlined />}
-            iconPosition="end"
-            disabled={bulkDataIndex === bulkDataCards.length - 1}
-            onClick={handleBulkDataNext}
-          >
-            Next
+          <Button key="cancel" onClick={() => setBulkDataEditOpen(false)}>
+            Cancel
           </Button>,
           <Button
-            key="save"
+            key="save-all"
             type="primary"
             loading={bulkDataSaving}
             onClick={handleBulkDataSaveAll}
-            style={{ marginLeft: 8 }}
           >
             Save All
           </Button>,
         ]}
       >
-        <Form form={bulkDataForm} layout="vertical" style={{ marginTop: 12 }}>
-          {orgType !== "SCHOOL" && (
-            <Form.Item
-              label="Full Name"
-              name="name"
-              rules={[{ required: true, message: "Required" }]}
-            >
-              <Input placeholder="Full name" />
-            </Form.Item>
-          )}
-
-          {orgType === "SCHOOL" && (
-            <>
-              <Form.Item label="Roll No" name="studentId">
-                <Input />
-              </Form.Item>
-              <Form.Item
-                label="Full Name"
-                name="name"
-                rules={[{ required: true, message: "Required" }]}
-              >
-                <Input placeholder="Full name" />
-              </Form.Item>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Class"
-                  name="grade"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="One" />
-                </Form.Item>
-                <Form.Item
-                  label="Section"
-                  name="section"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="A" />
-                </Form.Item>
-              </div>
-              <Form.Item label="House" name="house" style={{ marginTop: 12 }}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="Guardian" name="guardianName">
-                <Input />
-              </Form.Item>
-              <Form.Item label="Address" name="address">
-                <Input />
-              </Form.Item>
-              <Form.Item label="Contact" name="phone">
-                <Input />
-              </Form.Item>
-            </>
-          )}
-
-          {orgType === "HOSPITAL" && (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Employee ID"
-                  name="employeeId"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="Department"
-                  name="department"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <Form.Item
-                  label="Specialization"
-                  name="specialization"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="License Number"
-                  name="licenseNumber"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-              </div>
-              <Form.Item
-                label="Emergency Contact"
-                name="emergencyContact"
-                style={{ marginTop: 12 }}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item label="Address" name="address">
-                <Input />
-              </Form.Item>
-              <Form.Item
-                label="Email"
-                name="email"
-                rules={[{ type: "email", message: "Invalid email" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item label="Phone" name="phone">
-                <Input />
-              </Form.Item>
-            </>
-          )}
-
-          {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Position / Title"
-                  name="position"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="Company"
-                  name="company"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <Form.Item
-                  label="LinkedIn"
-                  name="linkedIn"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="Website"
-                  name="website"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-              </div>
-              <Form.Item
-                label="Address"
-                name="address"
-                style={{ marginTop: 12 }}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                label="Email"
-                name="email"
-                rules={[{ type: "email", message: "Invalid email" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item label="Phone" name="phone">
-                <Input />
-              </Form.Item>
-            </>
-          )}
-        </Form>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Edit directly in table cells and click Save All when done."
+        />
+        <Table
+          rowKey="id"
+          size="small"
+          columns={bulkEditColumns}
+          dataSource={bulkDataCards}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
+        />
       </Modal>
 
       {/* Import from Excel modal */}

@@ -59,31 +59,106 @@ const THEME_PRESETS = {
     secondaryColor: "#52c41a",
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
+    textColor: "#1f2937",
   },
   sunset: {
     primaryColor: "#f97316",
     secondaryColor: "#facc15",
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
+    textColor: "#3f2a1d",
   },
   royal: {
     primaryColor: "#4f46e5",
     secondaryColor: "#06b6d4",
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
+    textColor: "#1e1b4b",
   },
   forest: {
     primaryColor: "#166534",
     secondaryColor: "#22c55e",
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
+    textColor: "#1f2937",
   },
 };
+
+const FONT_FAMILY_OPTIONS = [
+  {
+    label: "Inter",
+    value:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  },
+  {
+    label: "Poppins",
+    value: "'Poppins', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Montserrat",
+    value: "'Montserrat', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Manrope",
+    value: "'Manrope', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Raleway",
+    value: "'Raleway', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Nunito Sans",
+    value: "'Nunito Sans', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Trebuchet MS",
+    value: "'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
+  },
+  {
+    label: "Verdana",
+    value: "Verdana, Geneva, Tahoma, sans-serif",
+  },
+  {
+    label: "Lora",
+    value: "'Lora', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Merriweather",
+    value: "'Merriweather', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Playfair Display",
+    value: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  },
+  {
+    label: "Georgia",
+    value: "Georgia, 'Times New Roman', Times, serif",
+  },
+  {
+    label: "Palatino",
+    value: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif",
+  },
+  {
+    label: "Nunito",
+    value: "'Nunito', 'Segoe UI', Roboto, Arial, sans-serif",
+  },
+  {
+    label: "Courier New",
+    value: "'Courier New', Courier, monospace",
+  },
+  {
+    label: "Consolas",
+    value: "Consolas, 'Lucida Console', Monaco, monospace",
+  },
+];
+
+const DEFAULT_FONT_FAMILY = FONT_FAMILY_OPTIONS[0].value;
 
 const DEFAULT_BULK_THEME = {
   design: "one",
   preset: "ocean",
   ...THEME_PRESETS.ocean,
+  fontFamily: DEFAULT_FONT_FAMILY,
   isDark: false,
   contrast: 100,
 };
@@ -126,6 +201,9 @@ export default function TenantCardHolders() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
+  const [bulkDataEditOpen, setBulkDataEditOpen] = useState(false);
+  const [bulkDataCards, setBulkDataCards] = useState([]);
+  const [bulkDataSaving, setBulkDataSaving] = useState(false);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -319,6 +397,52 @@ export default function TenantCardHolders() {
       message.error(err?.response?.data?.error || "Failed to apply design");
     } finally {
       setBulkApplying(false);
+    }
+  };
+
+  const openBulkDataEdit = () => {
+    const cloned = cards
+      .filter((c) => selectedRowKeys.includes(c.id))
+      .map((c) => ({ ...c, metadata: { ...(c.metadata || {}) } }));
+    setBulkDataCards(cloned);
+    setBulkDataEditOpen(true);
+  };
+
+  const handleBulkDataFieldChange = (cardId, fieldKey, value) => {
+    setBulkDataCards((prev) =>
+      prev.map((card) =>
+        card.id === cardId
+          ? {
+              ...card,
+              metadata: {
+                ...(card.metadata || {}),
+                [fieldKey]: value,
+              },
+            }
+          : card,
+      ),
+    );
+  };
+
+  const handleBulkDataSaveAll = async () => {
+    setBulkDataSaving(true);
+    try {
+      await Promise.all(
+        bulkDataCards.map((card) =>
+          tenantPortalAPI.updateCard(card.id, {
+            profileImageUrl: card.profileImageUrl || null,
+            metadata: card.metadata,
+          }),
+        ),
+      );
+      message.success(`${bulkDataCards.length} card(s) updated successfully`);
+      setBulkDataEditOpen(false);
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to update cards");
+    } finally {
+      setBulkDataSaving(false);
     }
   };
 
@@ -840,6 +964,31 @@ export default function TenantCardHolders() {
     },
   ];
 
+  const bulkEditColumns = [
+    {
+      title: "Tag ID",
+      dataIndex: "tagId",
+      key: "tagId",
+      width: 160,
+      fixed: "left",
+      render: (v) => <Text code style={{ fontSize: 11 }}>{v}</Text>,
+    },
+    ...dataColumns.map((col) => ({
+      title: col.title,
+      key: `meta-${col.key}`,
+      width: 200,
+      render: (_, record) => (
+        <Input
+          size="small"
+          value={record.metadata?.[col.key] ?? ""}
+          onChange={(e) =>
+            handleBulkDataFieldChange(record.id, col.key, e.target.value)
+          }
+        />
+      ),
+    })),
+  ];
+
   // ── org-type-specific form fields ────────────────────────────────
   const renderTypeFields = () => {
     const orgType = org?.type;
@@ -996,6 +1145,14 @@ export default function TenantCardHolders() {
               onClick={() => setBulkDesignOpen(true)}
             >
               Bulk Card Design
+            </Button>
+          </Badge>
+        )}
+
+        {selectedRowKeys.length > 0 && (
+          <Badge count={selectedRowKeys.length} size="small">
+            <Button icon={<EditOutlined />} onClick={openBulkDataEdit}>
+              Edit in Bulk
             </Button>
           </Badge>
         )}
@@ -1382,6 +1539,7 @@ export default function TenantCardHolders() {
             { key: "secondaryColor", label: "Secondary Color" },
             { key: "accentColor", label: "Accent Color" },
             { key: "surfaceColor", label: "Surface Color" },
+            { key: "textColor", label: "Text Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <Text
@@ -1437,6 +1595,32 @@ export default function TenantCardHolders() {
             </div>
           ))}
 
+          <div style={{ marginBottom: 14 }}>
+            <Text
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              Font Family
+            </Text>
+            <Select
+              value={bulkTheme.fontFamily || DEFAULT_FONT_FAMILY}
+              onChange={(v) =>
+                setBulkTheme((prev) => ({
+                  ...prev,
+                  fontFamily: v,
+                  preset: "custom",
+                }))
+              }
+              size="middle"
+              style={{ width: "100%" }}
+              options={FONT_FAMILY_OPTIONS}
+            />
+          </div>
+
           {/* Contrast Slider */}
           <div>
             <div
@@ -1467,6 +1651,42 @@ export default function TenantCardHolders() {
           showIcon
           style={{ marginTop: 12 }}
           message={`Design settings will be applied to ${selectedRowKeys.length} card(s). Each card can still be customised individually from the card view.`}
+        />
+      </Modal>
+
+      {/* Bulk Data Edit Modal */}
+      <Modal
+        open={bulkDataEditOpen}
+        title={`Edit in Bulk (${bulkDataCards.length} selected)`}
+        onCancel={() => setBulkDataEditOpen(false)}
+        width={isMobile ? "98%" : 1200}
+        footer={[
+          <Button key="cancel" onClick={() => setBulkDataEditOpen(false)}>
+            Cancel
+          </Button>,
+          <Button
+            key="save-all"
+            type="primary"
+            loading={bulkDataSaving}
+            onClick={handleBulkDataSaveAll}
+          >
+            Save All
+          </Button>,
+        ]}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Edit directly in table cells and click Save All when done."
+        />
+        <Table
+          rowKey="id"
+          size="small"
+          columns={bulkEditColumns}
+          dataSource={bulkDataCards}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
         />
       </Modal>
 

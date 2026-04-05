@@ -268,14 +268,22 @@ function AdminDashboard() {
                 </Tooltip>
               </Popconfirm>
             ) : (
-              <Tooltip title="Activate">
-                <Button
-                  size="small"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => handleActivate(record.id)}
-                  style={{ color: "#3f8600", borderColor: "#3f8600" }}
-                />
-              </Tooltip>
+              <Popconfirm
+                title="Activate this account?"
+                onConfirm={() => handleActivate(record.id)}
+                okText="Yes"
+                cancelText="No"
+                disabled={isSelf}
+              >
+                <Tooltip title="Activate">
+                  <Button
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    disabled={isSelf}
+                    style={{ color: "#3f8600", borderColor: "#3f8600" }}
+                  />
+                </Tooltip>
+              </Popconfirm>
             )}
             <Popconfirm
               title="Permanently delete this account?"
