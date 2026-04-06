@@ -15,6 +15,8 @@ const DEFAULT_THEME = {
   accentColor: "#ff6b6b",
   surfaceColor: "#f0f2f5",
   textColor: "#1f2937",
+  nameTextColor: "#1f2937",
+  valueTextColor: "#1f2937",
   fontFamily:
     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   isDark: false,

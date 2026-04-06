@@ -62,6 +62,8 @@ const THEME_PRESETS = {
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
   sunset: {
     primaryColor: "#f97316",
@@ -69,6 +71,8 @@ const THEME_PRESETS = {
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
     textColor: "#3f2a1d",
+    nameTextColor: "#3f2a1d",
+    valueTextColor: "#3f2a1d",
   },
   royal: {
     primaryColor: "#4f46e5",
@@ -76,6 +80,8 @@ const THEME_PRESETS = {
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
     textColor: "#1e1b4b",
+    nameTextColor: "#1e1b4b",
+    valueTextColor: "#1e1b4b",
   },
   forest: {
     primaryColor: "#166534",
@@ -83,6 +89,8 @@ const THEME_PRESETS = {
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
 };
 
@@ -169,6 +177,7 @@ const DESIGN_OPTIONS = [
   { value: "one", label: "Design 1" },
   { value: "two", label: "Design 2" },
   { value: "three", label: "Design 3" },
+  { value: "four", label: "Design 4" },
 ];
 
 const PRESET_OPTIONS = [
@@ -680,7 +689,10 @@ function OrganizationDetail() {
         bulkDataCards.map((card) => {
           const metadata = { ...(card.metadata || {}) };
           if (orgType === "SCHOOL") {
-            metadata.grade = mergeGradeSection(metadata.grade, metadata.section);
+            metadata.grade = mergeGradeSection(
+              metadata.grade,
+              metadata.section,
+            );
             delete metadata.section;
           }
           return useraccessAPI.updateCard(tenantId, card.id, {
@@ -1087,7 +1099,8 @@ function OrganizationDetail() {
       width: 160,
       fixed: "left",
       render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
-      sorter: (a, b) => String(a.tagId || "").localeCompare(String(b.tagId || "")),
+      sorter: (a, b) =>
+        String(a.tagId || "").localeCompare(String(b.tagId || "")),
     },
     ...dataColumns.flatMap((col) => {
       if (col.key === "photo") return [];
@@ -1139,7 +1152,8 @@ function OrganizationDetail() {
       key: "isActive",
       width: 110,
       fixed: "right",
-      sorter: (a, b) => Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)),
+      sorter: (a, b) =>
+        Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)),
       render: (_, record) => (
         <Switch
           size="small"
@@ -1402,6 +1416,7 @@ function OrganizationDetail() {
               { label: "Design 1", value: "one" },
               { label: "Design 2", value: "two" },
               { label: "Design 3", value: "three" },
+              { label: "Design 4", value: "four" },
             ]}
           />
         </AntCard>
@@ -1476,7 +1491,8 @@ function OrganizationDetail() {
             { key: "secondaryColor", label: "Secondary Color" },
             { key: "accentColor", label: "Accent Color" },
             { key: "surfaceColor", label: "Surface Color" },
-            { key: "textColor", label: "Text Color" },
+            { key: "nameTextColor", label: "Name Text Color" },
+            { key: "valueTextColor", label: "Value Text Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <Typography.Text
