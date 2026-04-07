@@ -312,7 +312,7 @@ export default function TenantCardHolders() {
       if (rawFile.size > 5 * 1024 * 1024) {
         throw new Error("Image must be smaller than 5MB");
       }
-      const res = await uploadAPI.uploadProfile(rawFile);
+      const res = await uploadAPI.uploadProfile(rawFile, org?.tenantId);
       const url = res.data?.url || res.data?.data?.url;
       if (!url) throw new Error("Server did not return uploaded file URL");
       setProfileUrl(url);

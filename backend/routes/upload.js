@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const { protect, authorize } = require('../middleware/auth');
 
-// Ensure upload directories exist
+// Ensure base upload directories exist
 const UPLOAD_DIR = path.join(__dirname, '../uploads');
 const PROFILES_DIR = path.join(UPLOAD_DIR, 'profiles');
 const LOGOS_DIR = path.join(UPLOAD_DIR, 'logos');
@@ -29,12 +29,12 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-const profileStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, PROFILES_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uuidv4()}${ext}`);
-  }
+// Profile uploads use memory storage so the route handler can determine
+// the tenant subdirectory after auth middleware has run.
+const uploadProfileMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter,
 });
 
 const logoStorage = multer.diskStorage({
@@ -45,12 +45,6 @@ const logoStorage = multer.diskStorage({
   }
 });
 
-const uploadProfile = multer({
-  storage: profileStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: imageFilter
-});
-
 const uploadLogo = multer({
   storage: logoStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -59,14 +53,17 @@ const uploadLogo = multer({
 
 /**
  * POST /api/upload/profile
- * Upload a profile image for a card holder
+ * Upload a profile image for a card holder.
+ * Accepts an optional `tenantId` form field (or query param) to store the
+ * image under uploads/profiles/{tenantId}/ — consistent with import-zip.
+ * Filename format: {uuid}_{originalname}  (same as import-zip).
  */
 router.post(
   '/profile',
   protect,
   authorize('admin', 'manager', 'tenant'),
   (req, res, next) => {
-    uploadProfile.single('image')(req, res, (err) => {
+    uploadProfileMemory.single('image')(req, res, (err) => {
       if (err) {
         return res.status(400).json({ success: false, error: err.message });
       }
@@ -77,8 +74,30 @@ router.post(
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
-    const safeFilename = path.basename(req.file.filename);
-    const url = `/uploads/profiles/${safeFilename}`;
+
+    // Resolve tenantId: form field > JWT claim
+    const rawTenantId = (req.body?.tenantId || req.user?.tenantId || '').trim().toUpperCase();
+
+    // Determine destination directory
+    const destDir = rawTenantId
+      ? path.join(PROFILES_DIR, rawTenantId)
+      : PROFILES_DIR;
+    fs.mkdirSync(destDir, { recursive: true });
+
+    // Build filename: {uuid}_{originalname} (same convention as import-zip)
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const safeName = path.basename(req.file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_\-. ]/g, '_')
+      .trim();
+    const filename = `${uuidv4()}_${safeName}${ext}`;
+    const destPath = path.join(destDir, filename);
+
+    fs.writeFileSync(destPath, req.file.buffer);
+
+    const url = rawTenantId
+      ? `/uploads/profiles/${rawTenantId}/${filename}`
+      : `/uploads/profiles/${filename}`;
+
     res.json({ success: true, url });
   }
 );

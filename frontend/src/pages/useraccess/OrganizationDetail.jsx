@@ -370,7 +370,7 @@ function OrganizationDetail() {
         return;
       }
 
-      const res = await uploadAPI.uploadProfile(rawFile);
+      const res = await uploadAPI.uploadProfile(rawFile, tenantId);
       const uploadedUrl = res.data?.url || res.data?.data?.url;
 
       if (!uploadedUrl) {

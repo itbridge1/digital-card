@@ -201,9 +201,10 @@ export const cardTemplateAPI = {
 
 // Upload API methods — uses multipart/form-data
 export const uploadAPI = {
-  uploadProfile: (file) => {
+  uploadProfile: (file, tenantId) => {
     const formData = new FormData();
     formData.append("image", file);
+    if (tenantId) formData.append("tenantId", tenantId);
     return api.post("/upload/profile", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
