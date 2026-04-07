@@ -22,6 +22,7 @@ import {
   PlusOutlined,
   EditOutlined,
   StopOutlined,
+  CheckCircleOutlined,
   EyeOutlined,
   UploadOutlined,
   SearchOutlined,
@@ -67,6 +68,7 @@ function Organizations() {
   const [credSaving, setCredSaving] = useState(false);
   const [otpResult, setOtpResult] = useState(null);            // { email, generatedPassword }
   const [createAccountForm] = Form.useForm();
+  const [statusUpdatingOrgId, setStatusUpdatingOrgId] = useState(null);
 
   const fetchOrgs = async () => {
     setLoading(true);
@@ -263,12 +265,29 @@ function Organizations() {
     }
   };
 
-  const handleDeactivate = async (tenantId) => {    try {
+  const handleDeactivate = async (tenantId) => {
+    setStatusUpdatingOrgId(tenantId);
+    try {
       await useraccessAPI.deleteOrganization(tenantId);
       message.success("Organization deactivated");
       fetchOrgs();
     } catch (err) {
       message.error(err?.response?.data?.error || "Failed to deactivate");
+    } finally {
+      setStatusUpdatingOrgId(null);
+    }
+  };
+
+  const handleActivate = async (tenantId) => {
+    setStatusUpdatingOrgId(tenantId);
+    try {
+      await useraccessAPI.updateOrganization(tenantId, { isActive: true });
+      message.success("Organization activated");
+      fetchOrgs();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to activate");
+    } finally {
+      setStatusUpdatingOrgId(null);
     }
   };
 
@@ -373,7 +392,30 @@ function Organizations() {
               cancelText="No"
             >
               <Tooltip title="Deactivate">
-                <Button size="small" danger icon={<StopOutlined />} />
+                <Button
+                  size="small"
+                  danger
+                  icon={<StopOutlined />}
+                  loading={statusUpdatingOrgId === record.tenantId}
+                />
+              </Tooltip>
+            </Popconfirm>
+          )}
+          {isAdmin && !record.isActive && (
+            <Popconfirm
+              title="Activate this organization?"
+              onConfirm={() => handleActivate(record.tenantId)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Tooltip title="Activate">
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  icon={<CheckCircleOutlined />}
+                  loading={statusUpdatingOrgId === record.tenantId}
+                />
               </Tooltip>
             </Popconfirm>
           )}
