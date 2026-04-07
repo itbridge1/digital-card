@@ -113,6 +113,8 @@ const THEME_PRESETS = {
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
     fontFamily: DEFAULT_FONT_FAMILY,
   },
   sunset: {
@@ -121,6 +123,8 @@ const THEME_PRESETS = {
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
     textColor: "#3f2a1d",
+    nameTextColor: "#3f2a1d",
+    valueTextColor: "#3f2a1d",
     fontFamily: DEFAULT_FONT_FAMILY,
   },
   royal: {
@@ -129,6 +133,8 @@ const THEME_PRESETS = {
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
     textColor: "#1e1b4b",
+    nameTextColor: "#1e1b4b",
+    valueTextColor: "#1e1b4b",
     fontFamily: DEFAULT_FONT_FAMILY,
   },
   forest: {
@@ -137,6 +143,8 @@ const THEME_PRESETS = {
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
     fontFamily: DEFAULT_FONT_FAMILY,
   },
 };
@@ -178,7 +186,6 @@ function CardView() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = localStorage.getItem("token");
-
     // Unauthenticated users accessing a manager-scoped card URL
     // should be redirected to the public read-only view.
     if (params.has("tenantId") && !token) {
@@ -386,6 +393,7 @@ function CardView() {
             { label: "Design 1", value: "one" },
             { label: "Design 2", value: "two" },
             { label: "Design 3", value: "three" },
+            { label: "Design 4", value: "four" },
           ]}
         />
       </Card>
@@ -464,7 +472,8 @@ function CardView() {
           { key: "secondaryColor", label: "Secondary Color" },
           { key: "accentColor", label: "Accent Color" },
           { key: "surfaceColor", label: "Surface Color" },
-          { key: "textColor", label: "Text Color" },
+          { key: "nameTextColor", label: "Name Text Color" },
+          { key: "valueTextColor", label: "Value Text Color" },
         ].map(({ key, label }) => (
           <div key={key} style={{ marginBottom: 14 }}>
             <Text
@@ -635,7 +644,7 @@ function CardView() {
   const cardholderName = card.metadata?.name || "—";
   const cardholderTitle = card.metadata?.title || "";
 
-  const DESIGNS = ["one", "two", "three"];
+  const DESIGNS = ["one", "two", "three", "four"];
 
   return (
     <div

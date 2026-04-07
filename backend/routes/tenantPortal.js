@@ -154,7 +154,7 @@ router.put("/cards/bulk-design", async (req, res) => {
     }
 
     // Whitelist only known design keys to prevent metadata pollution
-    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "textColor", "fontFamily", "isDark", "contrast"];
+    const ALLOWED_KEYS = ["design", "preset", "primaryColor", "secondaryColor", "accentColor", "surfaceColor", "textColor", "nameTextColor", "valueTextColor", "fontFamily", "isDark", "contrast"];
     const sanitized = {};
     for (const key of ALLOWED_KEYS) {
       if (key in designSettings) sanitized[key] = designSettings[key];

@@ -164,17 +164,21 @@ function CardDesignOne({
     accentColor,
     surfaceColor,
     textColor,
+    nameTextColor,
+    valueTextColor,
     fontFamily,
     isDark,
     hexToRgba,
   } = theme;
   const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const nameColor = nameTextColor || bodyTextColor;
   const mutedTextColor = isDark
     ? DARK_TEXT_SECONDARY
     : hexToRgba(bodyTextColor, 0.78);
   const labelColor = isDark ? DARK_TEXT_MUTED : hexToRgba(bodyTextColor, 0.65);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
-  const valueColor = isDark ? DARK_TEXT_PRIMARY : bodyTextColor;
+  const valueColor =
+    valueTextColor || (isDark ? DARK_TEXT_PRIMARY : bodyTextColor);
 
   return (
     <Card
@@ -291,10 +295,10 @@ function CardDesignOne({
         {/* 🧑 Name */}
         <div style={{ textAlign: "center", marginTop: 10 }}>
           <h3 style={{ marginBottom: 0 }}>
-            <span style={{ color: primaryColor }}>
+            <span style={{ color: nameColor || primaryColor }}>
               {displayName?.split(" ")[0] || "Name"}
             </span>{" "}
-            <span style={{ color: secondaryColor }}>
+            <span style={{ color: nameColor || secondaryColor }}>
               {displayName?.split(" ")[1] || ""}
             </span>
           </h3>
@@ -398,17 +402,21 @@ function CardDesignTwo({
     secondaryColor,
     surfaceColor,
     textColor,
+    nameTextColor,
+    valueTextColor,
     fontFamily,
     isDark,
     hexToRgba,
   } = theme;
   const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const nameColor = nameTextColor || bodyTextColor;
   const mutedTextColor = isDark
     ? DARK_TEXT_SECONDARY
     : hexToRgba(bodyTextColor, 0.78);
   const labelColor = isDark ? DARK_TEXT_MUTED : hexToRgba(bodyTextColor, 0.65);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
-  const valueColor = isDark ? DARK_TEXT_PRIMARY : bodyTextColor;
+  const valueColor =
+    valueTextColor || (isDark ? DARK_TEXT_PRIMARY : bodyTextColor);
 
   return (
     <Card
@@ -529,7 +537,7 @@ function CardDesignTwo({
           <h3
             style={{
               marginBottom: 0,
-              color: isDark ? DARK_TEXT_PRIMARY : primaryColor,
+              color: nameColor || (isDark ? DARK_TEXT_PRIMARY : primaryColor),
             }}
           >
             {displayName || "Your Name"}
@@ -636,11 +644,15 @@ function CardDesignThree({
     accentColor,
     surfaceColor,
     textColor,
+    nameTextColor,
+    valueTextColor,
     fontFamily,
     isDark,
     hexToRgba,
   } = theme;
   const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#1f2937");
+  const nameColor = nameTextColor || bodyTextColor;
+  const valueColor = valueTextColor || bodyTextColor;
   const mutedTextColor = isDark
     ? DARK_TEXT_SECONDARY
     : hexToRgba(bodyTextColor, 0.78);
@@ -750,9 +762,7 @@ function CardDesignThree({
       <div style={{ marginTop: 80, padding: "14px" }}>
         {/* Name */}
         <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <div
-            style={{ fontWeight: "bold", fontSize: 14, color: bodyTextColor }}
-          >
+          <div style={{ fontWeight: "bold", fontSize: 14, color: nameColor }}>
             {displayName || "Your Name"}
           </div>
           <div style={{ fontSize: 10, color: mutedTextColor }}>
@@ -777,7 +787,7 @@ function CardDesignThree({
               <span style={{ color: accentColor, fontWeight: 500 }}>
                 {tplLabel || formatFieldName(key)}:
               </span>{" "}
-              <span style={{ color: bodyTextColor }}>{value}</span>
+              <span style={{ color: valueColor }}>{value}</span>
             </div>
           ))}
         </div>
@@ -822,10 +832,194 @@ function CardDesignThree({
     </Card>
   );
 }
+
+function CardDesignFour({
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+}) {
+  const displayRows = getDisplayRows(card, templateFields)
+    .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
+  const { name: displayName } = resolveNameAndTitle(card, templateFields);
+
+  const {
+    primaryColor,
+    secondaryColor,
+    textColor,
+    nameTextColor,
+    valueTextColor,
+    surfaceColor,
+    fontFamily,
+    isDark,
+    hexToRgba,
+  } = theme;
+
+  const labelColor = primaryColor;
+  const fallbackText = textColor || "#111";
+  const nameColor = nameTextColor || fallbackText;
+  const valueColor = valueTextColor || fallbackText;
+  const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+
+  return (
+    <Card
+      style={{
+        width: "min(340px, 100%)",
+        borderRadius: 16,
+        overflow: "hidden",
+        background: cardSurfaceColor,
+        fontFamily,
+        border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
+      }}
+      bodyStyle={{ padding: 0 }}
+    >
+      {/* 🔷 TOP HEADER */}
+      <div
+        style={{
+          background: hexToRgba(primaryColor, 0.95),
+          width: "100%",
+          height: 90,
+          overflow: "hidden",
+          color: "#fff",
+        }}
+      >
+        {resolveImg(tenant?.logoUrl) ? (
+          <img
+            src={resolveImg(tenant?.logoUrl)}
+            alt={tenant?.name || "Top image"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: hexToRgba(primaryColor, 0.2),
+              color: primaryColor,
+            }}
+          >
+            <UserOutlined style={{ fontSize: 36 }} />
+          </div>
+        )}
+      </div>
+
+      {/* Accent strip below top image */}
+      <div
+        style={{
+          height: 8,
+          background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+        }}
+      />
+
+      {/* 📦 CONTENT */}
+      <div className="px-5 pt-5 pb-4 text-center">
+        {/* 👤 Avatar */}
+        <div
+          style={{
+            width: 140,
+            height: 140,
+            borderRadius: "50%",
+            overflow: "hidden",
+            margin: "12px auto 10px auto",
+            border: isDark
+              ? `5px solid ${DARK_SURFACE_ELEVATED}`
+              : "5px solid white",
+            boxShadow: "0 6px 15px rgba(0,0,0,0.25)",
+            background: "#eee",
+          }}
+        >
+          {card.profileImageUrl ? (
+            <img
+              src={resolveImg(card.profileImageUrl)}
+              alt="profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 40,
+                fontWeight: "bold",
+                color: "#fff",
+                background: hexToRgba(primaryColor, 0.6),
+              }}
+            >
+              {card?.metadata?.name?.charAt(0)?.toUpperCase() || "N"}
+            </div>
+          )}
+        </div>
+
+        {/* 👤 Name (centered middle) */}
+        {displayName ? (
+          <div
+            className="mx-auto mb-2 text-center"
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: nameColor,
+            }}
+          >
+            {displayName}
+          </div>
+        ) : null}
+
+        {/* 📋 DETAILS */}
+        <div className="mt-2 text-left">
+          {displayRows.map(([key, value, tplLabel]) => (
+            <div
+              key={key}
+              style={{
+                marginBottom: 6,
+                fontSize: 14,
+                lineHeight: "20px",
+              }}
+            >
+              <span
+                style={{
+                  color: labelColor,
+                  fontWeight: 600,
+                }}
+              >
+                {tplLabel || formatFieldName(key)}:
+              </span>{" "}
+              <span
+                style={{
+                  color: valueColor,
+                  fontWeight: 500,
+                }}
+              >
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom accent using theme colors */}
+      <div
+        style={{
+          height: 26,
+          background: `linear-gradient(135deg, ${secondaryColor}, ${primaryColor})`,
+          opacity: 0.95,
+        }}
+      />
+    </Card>
+  );
+}
 const CARD_DESIGNS = {
   one: CardDesignOne,
   two: CardDesignTwo,
   three: CardDesignThree,
+  four: CardDesignFour,
 };
 
 function SelectCard({

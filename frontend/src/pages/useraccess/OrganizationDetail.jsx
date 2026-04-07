@@ -62,6 +62,8 @@ const THEME_PRESETS = {
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
   sunset: {
     primaryColor: "#f97316",
@@ -69,6 +71,8 @@ const THEME_PRESETS = {
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
     textColor: "#3f2a1d",
+    nameTextColor: "#3f2a1d",
+    valueTextColor: "#3f2a1d",
   },
   royal: {
     primaryColor: "#4f46e5",
@@ -76,6 +80,8 @@ const THEME_PRESETS = {
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
     textColor: "#1e1b4b",
+    nameTextColor: "#1e1b4b",
+    valueTextColor: "#1e1b4b",
   },
   forest: {
     primaryColor: "#166534",
@@ -83,6 +89,8 @@ const THEME_PRESETS = {
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
 };
 
@@ -169,6 +177,7 @@ const DESIGN_OPTIONS = [
   { value: "one", label: "Design 1" },
   { value: "two", label: "Design 2" },
   { value: "three", label: "Design 3" },
+  { value: "four", label: "Design 4" },
 ];
 
 const PRESET_OPTIONS = [
@@ -181,6 +190,21 @@ const PRESET_OPTIONS = [
 const { Title, Text } = Typography;
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+
+const splitGradeSection = (gradeValue) => {
+  const raw = String(gradeValue || "").trim();
+  const match = raw.match(/^(.*?)(?:\((.*?)\))?$/);
+  return {
+    grade: (match?.[1] || "").trim(),
+    section: (match?.[2] || "").trim(),
+  };
+};
+
+const mergeGradeSection = (gradeValue, sectionValue) => {
+  const grade = String(gradeValue || "").trim();
+  const section = String(sectionValue || "").trim();
+  return grade && section ? `${grade}(${section})` : grade;
+};
 
 function OrganizationDetail() {
   const { tenantId } = useParams();
@@ -491,7 +515,7 @@ function OrganizationDetail() {
         if (card.metadata?.photo) {
           // New cards: photo filename stored directly in metadata
           const photoBase = card.metadata.photo.replace(/\.[^.]+$/, "");
-          exportFilename = `${photoBase}_QR.png`;
+          exportFilename = `${photoBase}.png`;
         } else if (card.profileImageUrl) {
           // Legacy cards: extract original filename from stored path.
           // Format: /uploads/profiles/TENANT/uuid(36chars)_originalname.ext
@@ -500,13 +524,13 @@ function OrganizationDetail() {
             basename.length > 37 ? basename.slice(37) : basename;
           const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
           exportFilename = nameBase
-            ? `${nameBase}_QR.png`
-            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_QR.png`;
+            ? `${nameBase}.png`
+            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}.png`;
         } else {
           const safeName = (card.metadata?.name || card.tagId)
             .replace(/[^a-zA-Z0-9_\- ]/g, "_")
             .trim();
-          exportFilename = `${safeName}_QR.png`;
+          exportFilename = `${safeName}.png`;
         }
 
         // 👉 5. Add to zip
@@ -627,7 +651,15 @@ function OrganizationDetail() {
   const openBulkDataEdit = () => {
     const cloned = cards
       .filter((c) => selectedRowKeys.includes(c.id))
-      .map((c) => ({ ...c, metadata: { ...(c.metadata || {}) } }));
+      .map((c) => {
+        const metadata = { ...(c.metadata || {}) };
+        if (orgType === "SCHOOL") {
+          const { grade, section } = splitGradeSection(metadata.grade);
+          metadata.grade = grade;
+          metadata.section = metadata.section || section;
+        }
+        return { ...c, metadata };
+      });
     setBulkDataCards(cloned);
     setBulkDataEditOpen(true);
   };
@@ -654,13 +686,21 @@ function OrganizationDetail() {
     setBulkDataSaving(true);
     try {
       await Promise.all(
-        bulkDataCards.map((card) =>
-          useraccessAPI.updateCard(tenantId, card.id, {
+        bulkDataCards.map((card) => {
+          const metadata = { ...(card.metadata || {}) };
+          if (orgType === "SCHOOL") {
+            metadata.grade = mergeGradeSection(
+              metadata.grade,
+              metadata.section,
+            );
+            delete metadata.section;
+          }
+          return useraccessAPI.updateCard(tenantId, card.id, {
             profileImageUrl: card.profileImageUrl || null,
-            metadata: card.metadata,
+            metadata,
             isActive: card.isActive,
-          }),
-        ),
+          });
+        }),
       );
       message.success(`${bulkDataCards.length} card(s) updated successfully`);
       setBulkDataEditOpen(false);
@@ -1059,26 +1099,61 @@ function OrganizationDetail() {
       width: 160,
       fixed: "left",
       render: (v) => <code style={{ fontSize: 11 }}>{v}</code>,
+      sorter: (a, b) =>
+        String(a.tagId || "").localeCompare(String(b.tagId || "")),
     },
-    ...dataColumns.map((col) => ({
-      title: col.title,
-      key: `meta-${col.key}`,
-      width: 200,
-      render: (_, record) => (
-        <Input
-          size="small"
-          value={record.metadata?.[col.key] ?? ""}
-          onChange={(e) =>
-            handleBulkDataFieldChange(record.id, col.key, e.target.value)
-          }
-        />
-      ),
-    })),
+    ...dataColumns.flatMap((col) => {
+      if (col.key === "photo") return [];
+
+      const cols = [
+        {
+          title: col.title,
+          key: `meta-${col.key}`,
+          width: 200,
+          sorter: col.sorter,
+          render: (_, record) => (
+            <Input
+              size="small"
+              value={record.metadata?.[col.key] ?? ""}
+              onChange={(e) =>
+                handleBulkDataFieldChange(record.id, col.key, e.target.value)
+              }
+            />
+          ),
+        },
+      ];
+
+      const hasSectionColumn = dataColumns.some((c) => c.key === "section");
+      if (orgType === "SCHOOL" && col.key === "grade" && !hasSectionColumn) {
+        cols.push({
+          title: "Section",
+          key: "meta-section",
+          width: 140,
+          sorter: (a, b) =>
+            String(a.metadata?.section || "").localeCompare(
+              String(b.metadata?.section || ""),
+            ),
+          render: (_, record) => (
+            <Input
+              size="small"
+              value={record.metadata?.section ?? ""}
+              onChange={(e) =>
+                handleBulkDataFieldChange(record.id, "section", e.target.value)
+              }
+            />
+          ),
+        });
+      }
+
+      return cols;
+    }),
     {
       title: "Status",
       key: "isActive",
       width: 110,
       fixed: "right",
+      sorter: (a, b) =>
+        Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)),
       render: (_, record) => (
         <Switch
           size="small"
@@ -1341,6 +1416,7 @@ function OrganizationDetail() {
               { label: "Design 1", value: "one" },
               { label: "Design 2", value: "two" },
               { label: "Design 3", value: "three" },
+              { label: "Design 4", value: "four" },
             ]}
           />
         </AntCard>
@@ -1415,7 +1491,8 @@ function OrganizationDetail() {
             { key: "secondaryColor", label: "Secondary Color" },
             { key: "accentColor", label: "Accent Color" },
             { key: "surfaceColor", label: "Surface Color" },
-            { key: "textColor", label: "Text Color" },
+            { key: "nameTextColor", label: "Name Text Color" },
+            { key: "valueTextColor", label: "Value Text Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <Typography.Text
@@ -1976,7 +2053,11 @@ function OrganizationDetail() {
           size="small"
           columns={bulkEditColumns}
           dataSource={bulkDataCards}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
+          pagination={{
+            pageSize: tablePagination.pageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+          }}
           scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
         />
       </Modal>

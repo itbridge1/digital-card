@@ -29,7 +29,6 @@ import {
   StopOutlined,
   UndoOutlined,
   UploadOutlined,
-  DownloadOutlined,
   UserOutlined,
   EyeOutlined,
   CopyOutlined,
@@ -38,17 +37,11 @@ import {
   AppstoreOutlined,
   ReloadOutlined,
   FileExcelOutlined,
-  FolderOpenOutlined,
-  InboxOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import QRCode from "qrcode";
-import JSZip from "jszip";
-import * as XLSX from "xlsx";
 import {
   tenantPortalAPI,
   uploadAPI,
-  cardAPI,
   cardTemplateAPI,
 } from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
@@ -60,6 +53,8 @@ const THEME_PRESETS = {
     accentColor: "#ff6b6b",
     surfaceColor: "#f0f2f5",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
   sunset: {
     primaryColor: "#f97316",
@@ -67,6 +62,8 @@ const THEME_PRESETS = {
     accentColor: "#dc2626",
     surfaceColor: "#fff7ed",
     textColor: "#3f2a1d",
+    nameTextColor: "#3f2a1d",
+    valueTextColor: "#3f2a1d",
   },
   royal: {
     primaryColor: "#4f46e5",
@@ -74,6 +71,8 @@ const THEME_PRESETS = {
     accentColor: "#db2777",
     surfaceColor: "#eef2ff",
     textColor: "#1e1b4b",
+    nameTextColor: "#1e1b4b",
+    valueTextColor: "#1e1b4b",
   },
   forest: {
     primaryColor: "#166534",
@@ -81,6 +80,8 @@ const THEME_PRESETS = {
     accentColor: "#b45309",
     surfaceColor: "#f0fdf4",
     textColor: "#1f2937",
+    nameTextColor: "#1f2937",
+    valueTextColor: "#1f2937",
   },
 };
 
@@ -167,6 +168,7 @@ const DESIGN_OPTIONS = [
   { value: "one", label: "Design 1" },
   { value: "two", label: "Design 2" },
   { value: "three", label: "Design 3" },
+  { value: "four", label: "Design 4" },
 ];
 
 const PRESET_OPTIONS = [
@@ -180,6 +182,21 @@ const { Title, Text } = Typography;
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
+const splitGradeSection = (gradeValue) => {
+  const raw = String(gradeValue || "").trim();
+  const match = raw.match(/^(.*?)(?:\((.*?)\))?$/);
+  return {
+    grade: (match?.[1] || "").trim(),
+    section: (match?.[2] || "").trim(),
+  };
+};
+
+const mergeGradeSection = (gradeValue, sectionValue) => {
+  const grade = String(gradeValue || "").trim();
+  const section = String(sectionValue || "").trim();
+  return grade && section ? `${grade}(${section})` : grade;
+};
+
 export default function TenantCardHolders() {
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
@@ -190,8 +207,6 @@ export default function TenantCardHolders() {
   const [saving, setSaving] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUrl, setProfileUrl] = useState("");
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportingZip, setExportingZip] = useState(false);
   const [search, setSearch] = useState("");
   const [filterHouse, setFilterHouse] = useState("");
   const [filterGrade, setFilterGrade] = useState("");
@@ -205,14 +220,6 @@ export default function TenantCardHolders() {
   const [bulkDataCards, setBulkDataCards] = useState([]);
   const [bulkDataSaving, setBulkDataSaving] = useState(false);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importFile, setImportFile] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState(null);
-  const [zipImportModalOpen, setZipImportModalOpen] = useState(false);
-  const [zipImportFile, setZipImportFile] = useState(null);
-  const [zipImporting, setZipImporting] = useState(false);
-  const [zipImportResult, setZipImportResult] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [tablePagination, setTablePagination] = useState({
     current: 1,
@@ -403,7 +410,15 @@ export default function TenantCardHolders() {
   const openBulkDataEdit = () => {
     const cloned = cards
       .filter((c) => selectedRowKeys.includes(c.id))
-      .map((c) => ({ ...c, metadata: { ...(c.metadata || {}) } }));
+      .map((c) => {
+        const metadata = { ...(c.metadata || {}) };
+        if (org?.type === "SCHOOL") {
+          const { grade, section } = splitGradeSection(metadata.grade);
+          metadata.grade = grade;
+          metadata.section = metadata.section || section;
+        }
+        return { ...c, metadata };
+      });
     setBulkDataCards(cloned);
     setBulkDataEditOpen(true);
   };
@@ -428,12 +443,20 @@ export default function TenantCardHolders() {
     setBulkDataSaving(true);
     try {
       await Promise.all(
-        bulkDataCards.map((card) =>
-          tenantPortalAPI.updateCard(card.id, {
+        bulkDataCards.map((card) => {
+          const metadata = { ...(card.metadata || {}) };
+          if (org?.type === "SCHOOL") {
+            metadata.grade = mergeGradeSection(
+              metadata.grade,
+              metadata.section,
+            );
+            delete metadata.section;
+          }
+          return tenantPortalAPI.updateCard(card.id, {
             profileImageUrl: card.profileImageUrl || null,
-            metadata: card.metadata,
-          }),
-        ),
+            metadata,
+          });
+        }),
       );
       message.success(`${bulkDataCards.length} card(s) updated successfully`);
       setBulkDataEditOpen(false);
@@ -443,152 +466,6 @@ export default function TenantCardHolders() {
       message.error(err?.response?.data?.error || "Failed to update cards");
     } finally {
       setBulkDataSaving(false);
-    }
-  };
-
-  const handleExcelExport = () => {
-    if (cards.length === 0) {
-      message.warning("No card holders to export");
-      return;
-    }
-
-    setExportingExcel(true);
-    try {
-      const rows = cards.map((card) => {
-        const row = {};
-        dataColumns.forEach((col) => {
-          const key = col.key;
-          if (!key) return;
-          const title = typeof col.title === "string" ? col.title : key;
-          row[title] = card.metadata?.[key] ?? "";
-        });
-        row["Tag ID"] = card.tagId || "";
-        row["Status"] = card.isActive ? "Active" : "Inactive";
-        row["Public URL"] = `${window.location.origin}/view/${card.tagId}`;
-        return row;
-      });
-
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
-
-      const safeOrgName = (org?.name || "organization")
-        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
-        .trim();
-      XLSX.writeFile(workbook, `${safeOrgName}_card_holders.xlsx`);
-
-      message.success(`Exported ${rows.length} card holder(s) to Excel`);
-    } catch (err) {
-      console.error(err);
-      message.error("Excel export failed");
-    } finally {
-      setExportingExcel(false);
-    }
-  };
-
-  const handleExportZip = async () => {
-    if (cards.length === 0) {
-      message.warning("No card holders to export");
-      return;
-    }
-
-    setExportingZip(true);
-    const zip = new JSZip();
-
-    try {
-      for (const card of cards) {
-        const cardUrl = `${window.location.origin}/view/${card.tagId}`;
-        const qrDataUrl = await QRCode.toDataURL(cardUrl, {
-          width: 500,
-          margin: 2,
-        });
-
-        const blob = await fetch(qrDataUrl).then((res) => res.blob());
-
-        let exportFilename;
-        if (card.metadata?.photo) {
-          const photoBase = card.metadata.photo.replace(/\.[^.]+$/, "");
-          exportFilename = `${photoBase}_QR.png`;
-        } else if (card.profileImageUrl) {
-          const basename = card.profileImageUrl.split("/").pop() || "";
-          const originalPart =
-            basename.length > 37 ? basename.slice(37) : basename;
-          const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
-          exportFilename = nameBase
-            ? `${nameBase}_QR.png`
-            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_QR.png`;
-        } else {
-          const safeName = (card.metadata?.name || card.tagId)
-            .replace(/[^a-zA-Z0-9_\- ]/g, "_")
-            .trim();
-          exportFilename = `${safeName}_QR.png`;
-        }
-
-        zip.file(exportFilename, blob);
-      }
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(org?.name || "organization").replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}_qr_codes.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      message.success(`Exported ${cards.length} QR codes`);
-    } catch (err) {
-      console.error(err);
-      message.error("ZIP export failed");
-    } finally {
-      setExportingZip(false);
-    }
-  };
-
-  const handleImportOpen = () => {
-    setImportFile(null);
-    setImportResult(null);
-    setImportModalOpen(true);
-  };
-
-  const handleImportConfirm = async () => {
-    if (!importFile) {
-      message.warning("Please select a file first");
-      return;
-    }
-    setImporting(true);
-    try {
-      const res = await cardAPI.importCards(org?.tenantId, importFile);
-      setImportResult(res.data);
-      fetchData();
-    } catch (err) {
-      message.error(err.response?.data?.error || "Import failed");
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const handleZipImportOpen = () => {
-    setZipImportFile(null);
-    setZipImportResult(null);
-    setZipImportModalOpen(true);
-  };
-
-  const handleZipImportConfirm = async () => {
-    if (!zipImportFile) {
-      message.warning("Please select a ZIP file first");
-      return;
-    }
-    setZipImporting(true);
-    try {
-      const res = await cardAPI.importZip(org?.tenantId, zipImportFile);
-      setZipImportResult(res.data);
-      fetchData();
-    } catch (err) {
-      message.error(err.response?.data?.error || "ZIP import failed");
-    } finally {
-      setZipImporting(false);
     }
   };
 
@@ -971,22 +848,59 @@ export default function TenantCardHolders() {
       key: "tagId",
       width: 160,
       fixed: "left",
-      render: (v) => <Text code style={{ fontSize: 11 }}>{v}</Text>,
-    },
-    ...dataColumns.map((col) => ({
-      title: col.title,
-      key: `meta-${col.key}`,
-      width: 200,
-      render: (_, record) => (
-        <Input
-          size="small"
-          value={record.metadata?.[col.key] ?? ""}
-          onChange={(e) =>
-            handleBulkDataFieldChange(record.id, col.key, e.target.value)
-          }
-        />
+      render: (v) => (
+        <Text code style={{ fontSize: 11 }}>
+          {v}
+        </Text>
       ),
-    })),
+      sorter: (a, b) =>
+        String(a.tagId || "").localeCompare(String(b.tagId || "")),
+    },
+    ...dataColumns.flatMap((col) => {
+      if (col.key === "photo") return [];
+
+      const cols = [
+        {
+          title: col.title,
+          key: `meta-${col.key}`,
+          width: 200,
+          sorter: col.sorter,
+          render: (_, record) => (
+            <Input
+              size="small"
+              value={record.metadata?.[col.key] ?? ""}
+              onChange={(e) =>
+                handleBulkDataFieldChange(record.id, col.key, e.target.value)
+              }
+            />
+          ),
+        },
+      ];
+
+      const hasSectionColumn = dataColumns.some((c) => c.key === "section");
+      if (org?.type === "SCHOOL" && col.key === "grade" && !hasSectionColumn) {
+        cols.push({
+          title: "Section",
+          key: "meta-section",
+          width: 140,
+          sorter: (a, b) =>
+            String(a.metadata?.section || "").localeCompare(
+              String(b.metadata?.section || ""),
+            ),
+          render: (_, record) => (
+            <Input
+              size="small"
+              value={record.metadata?.section ?? ""}
+              onChange={(e) =>
+                handleBulkDataFieldChange(record.id, "section", e.target.value)
+              }
+            />
+          ),
+        });
+      }
+
+      return cols;
+    }),
   ];
 
   // ── org-type-specific form fields ────────────────────────────────
@@ -1163,22 +1077,6 @@ export default function TenantCardHolders() {
           </Button>
         )}
 
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleExcelExport}
-          loading={exportingExcel}
-        >
-          Export to Excel
-        </Button>
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleExportZip}
-          loading={exportingZip}
-        >
-          Export as ZIP
-        </Button>
-
         {/* Excel Import — visible when templates are available */}
         {templates.length > 0 && (
           <Button
@@ -1189,10 +1087,6 @@ export default function TenantCardHolders() {
             Import from Excel
           </Button>
         )}
-
-        <Button icon={<FolderOpenOutlined />} onClick={handleZipImportOpen}>
-          Import ZIP
-        </Button>
       </div>
 
       <Table
@@ -1230,179 +1124,6 @@ export default function TenantCardHolders() {
         tenantId={org?.tenantId}
         templates={templates}
       />
-
-      <Modal
-        title="Import Card Holders from Excel"
-        open={importModalOpen}
-        onCancel={() => {
-          if (!importing) setImportModalOpen(false);
-        }}
-        width={isMobile ? "95%" : 520}
-        footer={
-          importResult ? (
-            <Button type="primary" onClick={() => setImportModalOpen(false)}>
-              Close
-            </Button>
-          ) : (
-            <Space>
-              <Button
-                onClick={() => setImportModalOpen(false)}
-                disabled={importing}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="primary"
-                loading={importing}
-                onClick={handleImportConfirm}
-              >
-                Import
-              </Button>
-            </Space>
-          )
-        }
-      >
-        {importResult ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Alert
-              type={importResult.summary.failed > 0 ? "warning" : "success"}
-              message={importResult.message}
-              showIcon
-            />
-            <Descriptions size="small" bordered column={3}>
-              <Descriptions.Item label="Created">
-                {importResult.summary.created}
-              </Descriptions.Item>
-              <Descriptions.Item label="Skipped">
-                {importResult.summary.skipped}
-              </Descriptions.Item>
-              <Descriptions.Item label="Failed">
-                {importResult.summary.failed}
-              </Descriptions.Item>
-            </Descriptions>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <p style={{ margin: 0, color: "#555", fontSize: 13 }}>
-              Upload an <strong>.xlsx</strong>, <strong>.xls</strong>, or{" "}
-              <strong>.csv</strong> file. The first row must be a header row.
-            </p>
-            <Upload.Dragger
-              accept=".xlsx,.xls,.csv"
-              beforeUpload={(file) => {
-                setImportFile(file);
-                return false;
-              }}
-              onRemove={() => setImportFile(null)}
-              maxCount={1}
-              fileList={importFile ? [importFile] : []}
-            >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined />
-              </p>
-              <p className="ant-upload-text">
-                Click or drag file here to upload
-              </p>
-              <p className="ant-upload-hint">.xlsx / .xls / .csv — max 10 MB</p>
-            </Upload.Dragger>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        title="Import Card Holders + Photos (ZIP)"
-        open={zipImportModalOpen}
-        onCancel={() => {
-          if (!zipImporting) setZipImportModalOpen(false);
-        }}
-        width={isMobile ? "95%" : 560}
-        footer={
-          zipImportResult ? (
-            <Button type="primary" onClick={() => setZipImportModalOpen(false)}>
-              Close
-            </Button>
-          ) : (
-            <Space>
-              <Button
-                onClick={() => setZipImportModalOpen(false)}
-                disabled={zipImporting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="primary"
-                loading={zipImporting}
-                onClick={handleZipImportConfirm}
-              >
-                Import
-              </Button>
-            </Space>
-          )
-        }
-      >
-        {zipImportResult ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Alert
-              type={zipImportResult.summary.failed > 0 ? "warning" : "success"}
-              message={zipImportResult.message}
-              showIcon
-            />
-            <Descriptions size="small" bordered column={3}>
-              <Descriptions.Item label="Created">
-                {zipImportResult.summary.created}
-              </Descriptions.Item>
-              <Descriptions.Item label="Skipped">
-                {zipImportResult.summary.skipped}
-              </Descriptions.Item>
-              <Descriptions.Item label="Failed">
-                {zipImportResult.summary.failed}
-              </Descriptions.Item>
-            </Descriptions>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Alert
-              type="info"
-              showIcon
-              message="ZIP file structure"
-              description={
-                <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                  Create a ZIP containing:
-                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
-                    <li>
-                      One <strong>.xlsx / .xls / .csv</strong> spreadsheet (same
-                      columns as Excel import)
-                    </li>
-                    <li>Profile photo images at the same root level</li>
-                    <li>
-                      Add a <strong>Photo</strong> column with the image
-                      filename
-                    </li>
-                  </ul>
-                </div>
-              }
-            />
-            <Upload.Dragger
-              accept=".zip"
-              beforeUpload={(file) => {
-                setZipImportFile(file);
-                return false;
-              }}
-              onRemove={() => setZipImportFile(null)}
-              maxCount={1}
-              fileList={zipImportFile ? [zipImportFile] : []}
-            >
-              <p className="ant-upload-drag-icon">
-                <FolderOpenOutlined />
-              </p>
-              <p className="ant-upload-text">Click or drag ZIP file here</p>
-              <p className="ant-upload-hint">
-                .zip containing Excel + photos — max 50 MB
-              </p>
-            </Upload.Dragger>
-          </div>
-        )}
-      </Modal>
 
       {/* Bulk Card Design Modal */}
       <Modal
@@ -1467,6 +1188,7 @@ export default function TenantCardHolders() {
               { label: "Design 1", value: "one" },
               { label: "Design 2", value: "two" },
               { label: "Design 3", value: "three" },
+              { label: "Design 4", value: "four" },
             ]}
           />
         </AntCard>
@@ -1539,7 +1261,8 @@ export default function TenantCardHolders() {
             { key: "secondaryColor", label: "Secondary Color" },
             { key: "accentColor", label: "Accent Color" },
             { key: "surfaceColor", label: "Surface Color" },
-            { key: "textColor", label: "Text Color" },
+            { key: "nameTextColor", label: "Name Text Color" },
+            { key: "valueTextColor", label: "Value Text Color" },
           ].map(({ key, label }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <Text
@@ -1685,7 +1408,11 @@ export default function TenantCardHolders() {
           size="small"
           columns={bulkEditColumns}
           dataSource={bulkDataCards}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
+          pagination={{
+            pageSize: tablePagination.pageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+          }}
           scroll={{ x: "max-content", y: isMobile ? 360 : 520 }}
         />
       </Modal>

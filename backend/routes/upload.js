@@ -64,7 +64,7 @@ const uploadLogo = multer({
 router.post(
   '/profile',
   protect,
-  authorize('admin', 'manager'),
+  authorize('admin', 'manager', 'tenant'),
   (req, res, next) => {
     uploadProfile.single('image')(req, res, (err) => {
       if (err) {

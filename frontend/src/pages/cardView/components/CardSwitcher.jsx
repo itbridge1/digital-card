@@ -6,6 +6,7 @@ const DESIGN_OPTIONS = [
   { label: "Design 1", value: "one" },
   { label: "Design 2", value: "two" },
   { label: "Design 3", value: "three" },
+  { label: "Design 4", value: "four" },
 ];
 
 function CardSwitcher({ design, onDesignChange }) {
