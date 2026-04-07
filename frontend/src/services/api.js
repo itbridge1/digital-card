@@ -135,6 +135,10 @@ export const useraccessAPI = {
     api.delete(
       `/manager/organizations/${encodeURIComponent(tenantId)}/cards/${cardId}`,
     ),
+  bulkDeleteCards: (tenantId, cardIds) =>
+    api.delete(`/manager/organizations/${encodeURIComponent(tenantId)}/cards/bulk`, {
+      data: { cardIds },
+    }),
   bulkUpdateDesign: (tenantId, cardIds, designSettings) =>
     api.put(
       `/manager/organizations/${encodeURIComponent(tenantId)}/cards/bulk-design`,
@@ -147,11 +151,18 @@ export const useraccessAPI = {
 
   // Tenant login account management
   getTenantAccount: (tenantId) =>
-    api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`),
+    api.get(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`,
+    ),
   createTenantAccount: (tenantId, data) =>
-    api.post(`/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`, data),
+    api.post(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/tenant-account`,
+      data,
+    ),
   resetCredentials: (tenantId) =>
-    api.post(`/manager/organizations/${encodeURIComponent(tenantId)}/reset-credentials`),
+    api.post(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/reset-credentials`,
+    ),
 };
 
 // Public API — no auth token required, used for the read-only public card view
@@ -164,25 +175,25 @@ export const publicAPI = {
 // Card Template API methods
 export const cardTemplateAPI = {
   getAll: (tenantId) =>
-    api.get('/card-templates', { params: tenantId ? { tenantId } : {} }),
+    api.get("/card-templates", { params: tenantId ? { tenantId } : {} }),
   getById: (id, tenantId) =>
     api.get(`/card-templates/${id}`, { params: tenantId ? { tenantId } : {} }),
-  create: (data) => api.post('/card-templates', data),
+  create: (data) => api.post("/card-templates", data),
   update: (id, data) => api.put(`/card-templates/${id}`, data),
   delete: (id, tenantId) =>
     api.delete(`/card-templates/${id}`, { data: { tenantId } }),
   /** Upload Excel and get columns + first-5-row preview. Returns { columns, preview, totalRows } */
   previewExcel: (file) => {
     const form = new FormData();
-    form.append('file', file);
-    return api.post('/card-templates/preview-excel', form);
+    form.append("file", file);
+    return api.post("/card-templates/preview-excel", form);
   },
   /** Import cards using template field mapping */
   importFromExcel: (templateId, tenantId, file, mapping) => {
     const form = new FormData();
-    form.append('file', file);
-    form.append('tenantId', tenantId);
-    form.append('mapping', JSON.stringify(mapping));
+    form.append("file", file);
+    form.append("tenantId", tenantId);
+    form.append("mapping", JSON.stringify(mapping));
     return api.post(`/card-templates/${templateId}/import`, form);
   },
 };
@@ -210,10 +221,12 @@ export const tenantPortalAPI = {
   getMe: () => api.get("/tenant/me"),
   updateLogo: (logoUrl) => api.put("/tenant/me/logo", { logoUrl }),
   getCards: () => api.get("/tenant/cards"),
-  getCardByTag: (tagId) => api.get(`/tenant/cards/by-tag/${encodeURIComponent(tagId)}`),
+  getCardByTag: (tagId) =>
+    api.get(`/tenant/cards/by-tag/${encodeURIComponent(tagId)}`),
   getCard: (cardId) => api.get(`/tenant/cards/${cardId}`),
   updateCard: (cardId, data) => api.put(`/tenant/cards/${cardId}`, data),
   deactivateCard: (cardId) => api.delete(`/tenant/cards/${cardId}`),
+  bulkDeleteCards: (cardIds) => api.delete("/tenant/cards/bulk", { data: { cardIds } }),
   restoreCard: (cardId) => api.patch(`/tenant/cards/${cardId}/restore`),
   bulkUpdateDesign: (cardIds, designSettings) =>
     api.put("/tenant/cards/bulk-design", { cardIds, designSettings }),

@@ -4,6 +4,7 @@ const { body, validationResult } = require("express-validator");
 const { Card, Tenant, CardRegister, User, CardTemplate } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
+const { Op } = require("sequelize");
 
 // All routes require authentication and tenant role
 router.use(protect, authorize("tenant"));
@@ -181,6 +182,47 @@ router.put("/cards/bulk-design", async (req, res) => {
   } catch (error) {
     console.error("Error applying bulk design:", error);
     res.status(500).json({ success: false, error: "Failed to apply bulk design" });
+  }
+});
+
+/**
+ * DELETE /api/tenant/cards/bulk
+ * Soft-delete multiple card holders at once.
+ */
+router.delete("/cards/bulk", async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+
+    if (!Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must be a non-empty array" });
+    }
+
+    const normalizedCardIds = cardIds
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+
+    if (normalizedCardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must contain valid card IDs" });
+    }
+
+    const [deletedCount] = await Card.update(
+      { isActive: false },
+      {
+        where: {
+          tenantId: req.user.tenantId,
+          id: { [Op.in]: normalizedCardIds },
+        },
+      },
+    );
+
+    res.json({
+      success: true,
+      message: `${deletedCount} card holder(s) deactivated successfully`,
+      deleted: deletedCount,
+    });
+  } catch (error) {
+    console.error("Error bulk deactivating cards:", error);
+    res.status(500).json({ success: false, error: "Failed to deactivate card holders" });
   }
 });
 
