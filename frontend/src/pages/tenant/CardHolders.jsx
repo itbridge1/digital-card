@@ -27,8 +27,6 @@ import {
 import {
   EditOutlined,
   DeleteOutlined,
-  StopOutlined,
-  UndoOutlined,
   UploadOutlined,
   UserOutlined,
   EyeOutlined,
@@ -46,6 +44,7 @@ import {
   cardTemplateAPI,
 } from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
+import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 
 const THEME_PRESETS = {
   ocean: {
@@ -230,6 +229,11 @@ export default function TenantCardHolders() {
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+
+  // Credential verification modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single' | 'bulk', id?: number }
+  const [deleteExecuting, setDeleteExecuting] = useState(false);
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const cardTenantId =
     org?.tenantId || currentUser.tenantId || currentUser.selectedTenantId;
@@ -409,22 +413,30 @@ export default function TenantCardHolders() {
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedRowKeys.length === 0) {
       message.warning("Select at least one card first");
       return;
     }
+    setDeleteTarget({ type: "bulk" });
+    setDeleteModalOpen(true);
+  };
 
+  const executeBulkDelete = async () => {
     setBulkDeleting(true);
+    setDeleteExecuting(true);
     try {
       const res = await tenantPortalAPI.bulkDeleteCards(selectedRowKeys);
-      message.success(res.data.message || "Selected card holders deactivated");
+      message.success(res.data.message || "Selected card holders deleted");
       setSelectedRowKeys([]);
       fetchData();
     } catch (err) {
-      message.error(err?.response?.data?.error || "Failed to deactivate selected card holders");
+      message.error(err?.response?.data?.error || "Failed to delete selected card holders");
     } finally {
       setBulkDeleting(false);
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -490,25 +502,14 @@ export default function TenantCardHolders() {
     }
   };
 
-  // ── soft deactivate ──────────────────────────────────────────────
+  // ── delete ──────────────────────────────────────────────────────
   const handleDeactivate = async (cardId) => {
     try {
       await tenantPortalAPI.deactivateCard(cardId);
-      message.success("Card holder deactivated");
+      message.success("Card holder deleted");
       fetchData();
     } catch (err) {
-      message.error(err?.response?.data?.error || "Failed to deactivate");
-    }
-  };
-
-  // ── restore ──────────────────────────────────────────────────────
-  const handleRestore = async (cardId) => {
-    try {
-      await tenantPortalAPI.restoreCard(cardId);
-      message.success("Card holder restored");
-      fetchData();
-    } catch (err) {
-      message.error(err?.response?.data?.error || "Failed to restore");
+      message.error(err?.response?.data?.error || "Failed to delete");
     }
   };
 
@@ -824,39 +825,15 @@ export default function TenantCardHolders() {
               onClick={() => openEdit(record)}
             />
           </Tooltip>
-          {record.isActive ? (
-            <Popconfirm
-              title="Deactivate this card holder?"
-              description="The record is kept but the card will be marked inactive."
-              onConfirm={() => handleDeactivate(record.id)}
-              okText="Deactivate"
-              okButtonProps={{ danger: true }}
-            >
-              <Tooltip title="Deactivate">
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<StopOutlined />}
-                />
-              </Tooltip>
-            </Popconfirm>
-          ) : (
-            <Popconfirm
-              title="Restore this card holder?"
-              onConfirm={() => handleRestore(record.id)}
-              okText="Restore"
-            >
-              <Tooltip title="Restore">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<UndoOutlined />}
-                  style={{ color: "#1677ff" }}
-                />
-              </Tooltip>
-            </Popconfirm>
-          )}
+          <Tooltip title="Delete">
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDeactivate(record.id)}
+              />
+            </Tooltip>
         </Space>
       ),
     },
@@ -1001,7 +978,7 @@ export default function TenantCardHolders() {
       <Alert
         type="info"
         showIcon
-        message="You can edit card holder details and deactivate / restore cards. Adding or permanently deleting cards is managed by your administrator."
+        message="You can edit card holder details and delete cards. Adding cards is managed by your administrator."
         style={{ marginBottom: 16 }}
         closable
       />
@@ -1093,17 +1070,9 @@ export default function TenantCardHolders() {
         )}
 
         {selectedRowKeys.length > 0 && (
-          <Popconfirm
-            title={`Delete ${selectedRowKeys.length} selected card holder(s)?`}
-            description="This will deactivate the selected card holders."
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={handleBulkDelete}
-          >
-            <Button danger icon={<DeleteOutlined />} loading={bulkDeleting}>
-              Delete Selected
-            </Button>
-          </Popconfirm>
+          <Button danger icon={<DeleteOutlined />} loading={bulkDeleting} onClick={handleBulkDelete}>
+            Delete Selected
+          </Button>
         )}
 
         {selectedRowKeys.length > 0 && (
@@ -1518,6 +1487,22 @@ export default function TenantCardHolders() {
           opacity: 0.5;
         }
       `}</style>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => {
+          setDeleteModalOpen(false);
+          setDeleteTarget(null);
+        }}
+        loading={deleteExecuting}
+        title="Confirm Deletion"
+        description={
+          deleteTarget?.type === "bulk"
+            ? `Permanently delete ${selectedRowKeys.length} selected card holder(s)? This cannot be undone.`
+            : "Permanently delete this card holder? This cannot be undone."
+        }
+      />
     </div>
   );
 }

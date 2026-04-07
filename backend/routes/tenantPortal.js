@@ -5,6 +5,19 @@ const { Card, Tenant, CardRegister, User, CardTemplate } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
 const { Op } = require("sequelize");
+const fs = require("fs");
+const path = require("path");
+
+// Helper – silently remove a stored profile image file
+function deleteProfileImage(profileImageUrl) {
+  if (!profileImageUrl) return;
+  try {
+    const filePath = path.join(__dirname, "..", profileImageUrl);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (e) {
+    console.warn("Could not delete profile image:", e.message);
+  }
+}
 
 // All routes require authentication and tenant role
 router.use(protect, authorize("tenant"));
@@ -187,7 +200,7 @@ router.put("/cards/bulk-design", async (req, res) => {
 
 /**
  * DELETE /api/tenant/cards/bulk
- * Soft-delete multiple card holders at once.
+ * Permanently delete multiple card holders and remove their profile images.
  */
 router.delete("/cards/bulk", async (req, res) => {
   try {
@@ -205,24 +218,24 @@ router.delete("/cards/bulk", async (req, res) => {
       return res.status(400).json({ success: false, error: "cardIds must contain valid card IDs" });
     }
 
-    const [deletedCount] = await Card.update(
-      { isActive: false },
-      {
-        where: {
-          tenantId: req.user.tenantId,
-          id: { [Op.in]: normalizedCardIds },
-        },
-      },
-    );
+    const cards = await Card.findAll({
+      where: { tenantId: req.user.tenantId, id: { [Op.in]: normalizedCardIds } },
+    });
+
+    cards.forEach((card) => deleteProfileImage(card.profileImageUrl));
+
+    const deletedCount = await Card.destroy({
+      where: { tenantId: req.user.tenantId, id: { [Op.in]: normalizedCardIds } },
+    });
 
     res.json({
       success: true,
-      message: `${deletedCount} card holder(s) deactivated successfully`,
+      message: `${deletedCount} card holder(s) deleted successfully`,
       deleted: deletedCount,
     });
   } catch (error) {
-    console.error("Error bulk deactivating cards:", error);
-    res.status(500).json({ success: false, error: "Failed to deactivate card holders" });
+    console.error("Error bulk deleting cards:", error);
+    res.status(500).json({ success: false, error: "Failed to delete card holders" });
   }
 });
 
@@ -266,7 +279,7 @@ router.put("/cards/:cardId", async (req, res) => {
 
 /**
  * DELETE /api/tenant/cards/:cardId
- * Soft-delete a card holder — sets isActive to false instead of destroying the record.
+ * Permanently delete a card holder and remove its profile image.
  */
 router.delete("/cards/:cardId", async (req, res) => {
   try {
@@ -278,37 +291,13 @@ router.delete("/cards/:cardId", async (req, res) => {
       return res.status(404).json({ success: false, error: "Card holder not found" });
     }
 
-    card.isActive = false;
-    await card.save();
+    deleteProfileImage(card.profileImageUrl);
+    await card.destroy();
 
-    res.json({ success: true, message: "Card holder deactivated successfully" });
+    res.json({ success: true, message: "Card holder deleted successfully" });
   } catch (error) {
-    console.error("Error deactivating card:", error);
-    res.status(500).json({ success: false, error: "Failed to deactivate card holder" });
-  }
-});
-
-/**
- * PATCH /api/tenant/cards/:cardId/restore
- * Re-activate a previously soft-deleted card holder.
- */
-router.patch("/cards/:cardId/restore", async (req, res) => {
-  try {
-    const card = await Card.findOne({
-      where: { id: req.params.cardId, tenantId: req.user.tenantId },
-    });
-
-    if (!card) {
-      return res.status(404).json({ success: false, error: "Card holder not found" });
-    }
-
-    card.isActive = true;
-    await card.save();
-
-    res.json({ success: true, message: "Card holder restored successfully", data: card });
-  } catch (error) {
-    console.error("Error restoring card:", error);
-    res.status(500).json({ success: false, error: "Failed to restore card holder" });
+    console.error("Error deleting card:", error);
+    res.status(500).json({ success: false, error: "Failed to delete card holder" });
   }
 });
 

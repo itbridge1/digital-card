@@ -47,6 +47,7 @@ export const authAPI = {
   login: (email, password) => api.post("/auth/login", { email, password }),
   register: (userData) => api.post("/auth/register", userData),
   me: () => api.get("/auth/me"),
+  verify: (password) => api.post("/auth/verify", { password }),
   getUsers: (tenantId) =>
     api.get("/auth/users", { params: tenantId ? { tenantId } : {} }),
 };
@@ -227,7 +228,6 @@ export const tenantPortalAPI = {
   updateCard: (cardId, data) => api.put(`/tenant/cards/${cardId}`, data),
   deactivateCard: (cardId) => api.delete(`/tenant/cards/${cardId}`),
   bulkDeleteCards: (cardIds) => api.delete("/tenant/cards/bulk", { data: { cardIds } }),
-  restoreCard: (cardId) => api.patch(`/tenant/cards/${cardId}/restore`),
   bulkUpdateDesign: (cardIds, designSettings) =>
     api.put("/tenant/cards/bulk-design", { cardIds, designSettings }),
   changePassword: (currentPassword, newPassword) =>

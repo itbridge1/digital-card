@@ -54,6 +54,7 @@ import {
   cardTemplateAPI,
 } from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
+import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 
 const THEME_PRESETS = {
   ocean: {
@@ -250,6 +251,11 @@ function OrganizationDetail() {
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
+
+  // Credential verification modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single' | 'bulk', id?: number }
+  const [deleteExecuting, setDeleteExecuting] = useState(false);
   const [orgTemplates, setOrgTemplates] = useState([]);
   const [tablePagination, setTablePagination] = useState({
     current: 1,
@@ -461,23 +467,38 @@ function OrganizationDetail() {
     }
   };
 
-  const handleDelete = async (cardId) => {
+  const handleDelete = (cardId) => {
+    setDeleteTarget({ type: "single", id: cardId });
+    setDeleteModalOpen(true);
+  };
+
+  const executeSingleDelete = async () => {
+    setDeleteExecuting(true);
     try {
-      await useraccessAPI.deleteCard(tenantId, cardId);
+      await useraccessAPI.deleteCard(tenantId, deleteTarget.id);
       message.success("Card holder removed");
       fetchData();
     } catch (err) {
       message.error(err?.response?.data?.error || "Failed to remove");
+    } finally {
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedRowKeys.length === 0) {
       message.warning("Select at least one card first");
       return;
     }
+    setDeleteTarget({ type: "bulk" });
+    setDeleteModalOpen(true);
+  };
 
+  const executeBulkDelete = async () => {
     setBulkDeleting(true);
+    setDeleteExecuting(true);
     try {
       const res = await useraccessAPI.bulkDeleteCards(tenantId, selectedRowKeys);
       message.success(res.data.message || "Selected card holders removed");
@@ -487,7 +508,15 @@ function OrganizationDetail() {
       message.error(err?.response?.data?.error || "Failed to remove selected card holders");
     } finally {
       setBulkDeleting(false);
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
     }
+  };
+
+  const handleDeleteConfirmed = () => {
+    if (deleteTarget?.type === "bulk") executeBulkDelete();
+    else executeSingleDelete();
   };
 
   const handleInlineStatusChange = async (card, isActive) => {
@@ -1096,16 +1125,9 @@ function OrganizationDetail() {
               onClick={() => openEdit(record)}
             />
           </Tooltip>
-          <Popconfirm
-            title="Remove this card holder?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Tooltip title="Remove">
-              <Button size="small" danger icon={<DeleteOutlined />} />
+          <Tooltip title="Remove">
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
             </Tooltip>
-          </Popconfirm>
         </Space>
       ),
     },
@@ -1293,21 +1315,14 @@ function OrganizationDetail() {
             </Badge>
           )}
           {selectedRowKeys.length > 0 && (
-            <Popconfirm
-              title={`Delete ${selectedRowKeys.length} selected card holder(s)?`}
-              description="This will permanently remove the selected card holders from this organization."
-              okText="Delete"
-              okButtonProps={{ danger: true }}
-              onConfirm={handleBulkDelete}
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={bulkDeleting}
+              onClick={handleBulkDelete}
             >
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={bulkDeleting}
-              >
-                Delete Selected
-              </Button>
-            </Popconfirm>
+              Delete Selected
+            </Button>
           )}
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             Add Card Holder
@@ -2244,6 +2259,22 @@ function OrganizationDetail() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => {
+          setDeleteModalOpen(false);
+          setDeleteTarget(null);
+        }}
+        loading={deleteExecuting}
+        title="Confirm Deletion"
+        description={
+          deleteTarget?.type === "bulk"
+            ? `Permanently remove ${selectedRowKeys.length} selected card holder(s)? This cannot be undone.`
+            : "Permanently remove this card holder? This cannot be undone."
+        }
+      />
     </div>
   );
 }

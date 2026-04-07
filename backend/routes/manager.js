@@ -5,6 +5,19 @@ const { protect, authorize } = require("../middleware/auth");
 const { registerNfcCard } = require("../utils/nfcRegistration");
 const { Op } = require("sequelize");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+
+// Helper – silently remove a stored profile image file
+function deleteProfileImage(profileImageUrl) {
+  if (!profileImageUrl) return;
+  try {
+    const filePath = path.join(__dirname, "..", profileImageUrl);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (e) {
+    console.warn("Could not delete profile image:", e.message);
+  }
+}
 
 /** Generates a human-readable one-time password */
 function generateOTP() {
@@ -468,6 +481,9 @@ router.delete("/organizations/:tenantId/cards/bulk", async (req, res) => {
       return res.status(400).json({ success: false, error: "cardIds must contain valid card IDs" });
     }
 
+    const cards = await Card.findAll({ where: { tenantId, id: { [Op.in]: normalizedCardIds } } });
+    cards.forEach((card) => deleteProfileImage(card.profileImageUrl));
+
     const deletedCount = await Card.destroy({
       where: {
         tenantId,
@@ -568,6 +584,7 @@ router.delete("/organizations/:tenantId/cards/:cardId", async (req, res) => {
         .json({ success: false, error: "Card holder not found" });
     }
 
+    deleteProfileImage(card.profileImageUrl);
     await card.destroy();
     res.json({ success: true, message: "Card holder removed successfully" });
   } catch (error) {

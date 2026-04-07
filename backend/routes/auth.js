@@ -312,6 +312,41 @@ router.get("/managers", protect, authorize("admin"), async (req, res) => {
 });
 
 /**
+ * POST /api/auth/verify
+ * Verify the current user's password without issuing a new token.
+ * Used for sensitive destructive actions (e.g. bulk delete confirmation).
+ */
+router.post(
+  "/verify",
+  authLimiter,
+  protect,
+  [body("password").notEmpty().withMessage("Password is required")],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+      }
+
+      const user = await User.findByPk(req.user.id, { attributes: ["id", "password", "isActive"] });
+      if (!user || !user.isActive) {
+        return res.status(401).json({ success: false, error: "Account not found or inactive" });
+      }
+
+      const isMatch = await user.matchPassword(req.body.password);
+      if (!isMatch) {
+        return res.status(401).json({ success: false, error: "Incorrect password" });
+      }
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Verify password error:", error);
+      return res.status(500).json({ success: false, error: "Failed to verify password" });
+    }
+  },
+);
+
+/**
  * GET /api/auth/users
  * List users (admin only), optionally filter by tenantId
  */

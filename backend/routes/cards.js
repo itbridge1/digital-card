@@ -42,6 +42,17 @@ function buildBusinessUrl(tagId) {
   return `${base}/${encodeURIComponent(tagId)}`;
 }
 
+// Helper – silently remove a stored profile image file
+function deleteProfileImage(profileImageUrl) {
+  if (!profileImageUrl) return;
+  try {
+    const filePath = path.join(__dirname, "..", profileImageUrl);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (e) {
+    console.warn("Could not delete profile image:", e.message);
+  }
+}
+
 // Protect all routes - require authentication
 router.use(protect);
 
@@ -785,6 +796,9 @@ router.post(
 
           created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId, hasPhoto: !!profileImageUrl });
         } catch (err) {
+          // Clean up the written profile image — the card record was not created
+          if (profileImageUrl) deleteProfileImage(profileImageUrl);
+
           if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
             skipped.push({ row: rowNum, tagId, reason: "Tag ID already registered" });
           } else {
@@ -934,7 +948,7 @@ router.put("/:tagId", async (req, res) => {
 
 /**
  * DELETE /api/cards/bulk
- * Bulk deactivate cards by tagId (soft delete)
+ * Permanently delete multiple cards by tagId and remove their profile images
  */
 router.delete("/bulk", async (req, res) => {
   try {
@@ -958,33 +972,40 @@ router.delete("/bulk", async (req, res) => {
       });
     }
 
-    const [count] = await Card.update(
-      { isActive: false },
-      {
-        where: {
-          tenantId: req.tenantId,
-          tagId: { [Op.in]: normalizedTagIds },
-        },
-      }
-    );
+    const cards = await Card.findAll({
+      where: {
+        tenantId: req.tenantId,
+        tagId: { [Op.in]: normalizedTagIds },
+      },
+    });
+
+    // Delete physical files before destroying records
+    cards.forEach((card) => deleteProfileImage(card.profileImageUrl));
+
+    const count = await Card.destroy({
+      where: {
+        tenantId: req.tenantId,
+        tagId: { [Op.in]: normalizedTagIds },
+      },
+    });
 
     res.json({
       success: true,
-      message: `${count} card(s) deactivated successfully`,
-      deactivated: count,
+      message: `${count} card(s) deleted successfully`,
+      deleted: count,
     });
   } catch (error) {
     console.error("Error bulk deleting cards:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to bulk deactivate cards",
+      error: "Failed to bulk delete cards",
     });
   }
 });
 
 /**
  * DELETE /api/cards/:tagId
- * Delete a card (soft delete by setting isActive to false)
+ * Permanently delete a card and remove its profile image
  */
 router.delete("/:tagId", async (req, res) => {
   try {
@@ -1002,12 +1023,12 @@ router.delete("/:tagId", async (req, res) => {
       });
     }
 
-    card.isActive = false;
-    await card.save();
+    deleteProfileImage(card.profileImageUrl);
+    await card.destroy();
 
     res.json({
       success: true,
-      message: "Card deactivated successfully",
+      message: "Card deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting card:", error);

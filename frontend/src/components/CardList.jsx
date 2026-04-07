@@ -4,8 +4,7 @@ import { cardAPI } from "../services/api";
 import { Button, Table, Tag, Popconfirm, message, Space, Modal, Form, Input, Typography } from "antd";
 import { DeleteOutlined, EditOutlined, EyeOutlined, EditFilled, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { ExclamationCircleFilled } from "@ant-design/icons";
-
-const { confirm } = Modal;
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 
 const { Text } = Typography;
 
@@ -20,6 +19,11 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedCards, setSelectedCards] = useState([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Credential verification modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single' | 'bulk', tagId?: string }
+  const [deleteExecuting, setDeleteExecuting] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditIndex, setBulkEditIndex] = useState(0);
   const [bulkEditCards, setBulkEditCards] = useState([]);
@@ -143,39 +147,53 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   };
 
   const handleBulkDelete = () => {
-    confirm({
-      title: `Deactivate ${selectedRowKeys.length} card(s)?`,
-      icon: <ExclamationCircleFilled />,
-      content: "Selected cards will be marked as inactive. This action can be reversed by editing each card.",
-      okText: "Deactivate",
-      okType: "danger",
-      cancelText: "Cancel",
-      onOk: async () => {
-        setBulkDeleting(true);
-        try {
-          const tagIds = selectedCards.map((c) => c.tagId);
-          const res = await cardAPI.bulkDelete(tagIds);
-          message.success(res.data.message || `${tagIds.length} card(s) deactivated`);
-          setSelectedRowKeys([]);
-          setSelectedCards([]);
-          fetchCards();
-        } catch (err) {
-          message.error(err.response?.data?.error || "Failed to deactivate cards");
-        } finally {
-          setBulkDeleting(false);
-        }
-      },
-    });
+    setDeleteTarget({ type: "bulk" });
+    setDeleteModalOpen(true);
   };
 
-  const handleDelete = async (tagId) => {
+  const executeBulkDelete = async () => {
+    setBulkDeleting(true);
+    setDeleteExecuting(true);
     try {
-      await cardAPI.delete(tagId);
-      message.success("Card deactivated successfully");
+      const tagIds = selectedCards.map((c) => c.tagId);
+      const res = await cardAPI.bulkDelete(tagIds);
+      message.success(res.data.message || `${tagIds.length} card(s) deleted`);
+      setSelectedRowKeys([]);
+      setSelectedCards([]);
+      fetchCards();
+    } catch (err) {
+      message.error(err.response?.data?.error || "Failed to delete cards");
+    } finally {
+      setBulkDeleting(false);
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleDelete = (tagId) => {
+    setDeleteTarget({ type: "single", tagId });
+    setDeleteModalOpen(true);
+  };
+
+  const executeSingleDelete = async () => {
+    setDeleteExecuting(true);
+    try {
+      await cardAPI.delete(deleteTarget.tagId);
+      message.success("Card deleted successfully");
       fetchCards();
     } catch (err) {
       message.error(err.response?.data?.error || "Failed to delete card");
+    } finally {
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
     }
+  };
+
+  const handleDeleteConfirmed = () => {
+    if (deleteTarget?.type === "bulk") executeBulkDelete();
+    else executeSingleDelete();
   };
 
   const copyToClipboard = (text) => {
@@ -290,20 +308,14 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
             title="Edit"
           />
 
-          <Popconfirm
-            title="Are you sure you want to deactivate this card?"
-            onConfirm={() => handleDelete(record.tagId)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button
+          <Button
               danger
               size="small"
               icon={<DeleteOutlined />}
               className="text-xs"
               title="Delete"
+              onClick={() => handleDelete(record.tagId)}
             />
-          </Popconfirm>
         </Space>
       ),
     },
@@ -400,6 +412,22 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
           {renderBulkFormFields()}
         </Form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => {
+          setDeleteModalOpen(false);
+          setDeleteTarget(null);
+        }}
+        loading={deleteExecuting}
+        title="Confirm Deletion"
+        description={
+          deleteTarget?.type === "bulk"
+            ? `Permanently delete ${selectedCards.length} selected card(s)? This cannot be undone.`
+            : "Permanently delete this card? This cannot be undone."
+        }
+      />
     </div>
   );
 }
