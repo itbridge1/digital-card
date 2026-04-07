@@ -933,6 +933,56 @@ router.put("/:tagId", async (req, res) => {
 });
 
 /**
+ * DELETE /api/cards/bulk
+ * Bulk deactivate cards by tagId (soft delete)
+ */
+router.delete("/bulk", async (req, res) => {
+  try {
+    const tagIds = req.body.tagIds;
+
+    if (!Array.isArray(tagIds) || tagIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "tagIds must be a non-empty array",
+      });
+    }
+
+    const normalizedTagIds = tagIds.map((id) =>
+      String(id || "").trim().toUpperCase()
+    ).filter(Boolean);
+
+    if (normalizedTagIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "tagIds must contain valid tag IDs",
+      });
+    }
+
+    const [count] = await Card.update(
+      { isActive: false },
+      {
+        where: {
+          tenantId: req.tenantId,
+          tagId: { [Op.in]: normalizedTagIds },
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `${count} card(s) deactivated successfully`,
+      deactivated: count,
+    });
+  } catch (error) {
+    console.error("Error bulk deleting cards:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to bulk deactivate cards",
+    });
+  }
+});
+
+/**
  * DELETE /api/cards/:tagId
  * Delete a card (soft delete by setting isActive to false)
  */

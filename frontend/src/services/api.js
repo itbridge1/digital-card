@@ -80,6 +80,7 @@ export const cardAPI = {
   update: (tagId, cardData) =>
     api.put(`/cards/${encodeURIComponent(tagId)}`, cardData),
   delete: (tagId) => api.delete(`/cards/${encodeURIComponent(tagId)}`),
+  bulkDelete: (tagIds) => api.delete("/cards/bulk", { data: { tagIds } }),
   getAnalytics: (tagId) =>
     api.get(`/cards/${encodeURIComponent(tagId)}/analytics`),
   importCards: (tenantId, file) => {

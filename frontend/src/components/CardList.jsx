@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { cardAPI } from "../services/api";
 import { Button, Table, Tag, Popconfirm, message, Space, Modal, Form, Input, Typography } from "antd";
 import { DeleteOutlined, EditOutlined, EyeOutlined, EditFilled, LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { ExclamationCircleFilled } from "@ant-design/icons";
+
+const { confirm } = Modal;
 
 const { Text } = Typography;
 
@@ -13,9 +16,10 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
   const [error, setError] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  // Bulk edit state
+  // Bulk selection state
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [selectedCards, setSelectedCards] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditIndex, setBulkEditIndex] = useState(0);
   const [bulkEditCards, setBulkEditCards] = useState([]);
@@ -136,6 +140,32 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
         <Input />
       </Form.Item>
     ));
+  };
+
+  const handleBulkDelete = () => {
+    confirm({
+      title: `Deactivate ${selectedRowKeys.length} card(s)?`,
+      icon: <ExclamationCircleFilled />,
+      content: "Selected cards will be marked as inactive. This action can be reversed by editing each card.",
+      okText: "Deactivate",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: async () => {
+        setBulkDeleting(true);
+        try {
+          const tagIds = selectedCards.map((c) => c.tagId);
+          const res = await cardAPI.bulkDelete(tagIds);
+          message.success(res.data.message || `${tagIds.length} card(s) deactivated`);
+          setSelectedRowKeys([]);
+          setSelectedCards([]);
+          fetchCards();
+        } catch (err) {
+          message.error(err.response?.data?.error || "Failed to deactivate cards");
+        } finally {
+          setBulkDeleting(false);
+        }
+      },
+    });
   };
 
   const handleDelete = async (tagId) => {
@@ -289,7 +319,16 @@ export default function CardList({ tenantId, onEdit, refreshTrigger }) {
 
   return (
     <div className="cards-table-container overflow-x-auto">
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+        <Button
+          danger
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+          loading={bulkDeleting}
+          onClick={handleBulkDelete}
+        >
+          Delete Selected{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+        </Button>
         <Button
           type="primary"
           icon={<EditFilled />}
