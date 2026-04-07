@@ -223,6 +223,7 @@ function OrganizationDetail() {
   const [profileUrl, setProfileUrl] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingZipSheet, setExportingZipSheet] = useState(false);
   const [nfcTags, setNfcTags] = useState([]);
   const [nfcTagsLoading, setNfcTagsLoading] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -560,25 +561,26 @@ function OrganizationDetail() {
         const blob = await fetch(qrDataUrl).then((res) => res.blob());
 
         // 👉 4. Determine filename (priority: metadata.photo → profileImageUrl → name)
+        const safeName = (card.metadata?.name || card.tagId)
+          .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+          .trim();
         let exportFilename;
         if (card.metadata?.photo) {
-          // New cards: photo filename stored directly in metadata
+          // ZIP-import cards: use stored original filename (swap extension to .png)
           const photoBase = card.metadata.photo.replace(/\.[^.]+$/, "");
           exportFilename = `${photoBase}.png`;
         } else if (card.profileImageUrl) {
-          // Legacy cards: extract original filename from stored path.
-          // Format: /uploads/profiles/TENANT/uuid(36chars)_originalname.ext
           const basename = card.profileImageUrl.split("/").pop() || "";
-          const originalPart =
-            basename.length > 37 ? basename.slice(37) : basename;
-          const nameBase = originalPart.replace(/\.[^.]+$/, "").trim();
-          exportFilename = nameBase
-            ? `${nameBase}.png`
-            : `${(card.metadata?.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim()}.png`;
+          let nameBase;
+          if (basename.length > 36 && basename[36] === "_") {
+            // ZIP-import storage format: {uuid(36)}_{originalname.ext}
+            nameBase = basename.slice(37).replace(/\.[^.]+$/, "").trim();
+          } else {
+            // Direct-upload format: {uuid}.ext — use card name
+            nameBase = safeName;
+          }
+          exportFilename = nameBase ? `${nameBase}.png` : `${safeName}.png`;
         } else {
-          const safeName = (card.metadata?.name || card.tagId)
-            .replace(/[^a-zA-Z0-9_\- ]/g, "_")
-            .trim();
           exportFilename = `${safeName}.png`;
         }
 
@@ -605,6 +607,128 @@ function OrganizationDetail() {
       message.error("Export failed");
     } finally {
       setExporting(false);
+    }
+  };
+
+  /**
+   * Export ZIP as Sheet
+   * Produces a ZIP containing:
+   *   - card_holders.xlsx  (all metadata + a "Photo" column = original filename)
+   *   - one image file per card that has a profileImageUrl (fetched from the server)
+   * Mirror image of what import-zip expects.
+   */
+  const handleExportZipSheet = async () => {
+    if (cards.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+    setExportingZipSheet(true);
+    const zip = new JSZip();
+    try {
+      const rows = [];
+      for (const card of cards) {
+        const meta = card.metadata || {};
+        // Build row matching the import-zip column expectations
+        const row = {
+          "Tag ID": card.tagId || "",
+          Name: meta.name || "",
+          Title: meta.title || "",
+          Email: meta.email || "",
+          Phone: meta.phone || "",
+          Address: meta.address || "",
+          // School
+          "Roll No": meta.studentId || "",
+          Class: meta.grade || "",
+          Section: meta.section || "",
+          House: meta.house || "",
+          Guardian: meta.guardianName || "",
+          "Guardian Phone": meta.guardianPhone || "",
+          // Hospital
+          "Employee ID": meta.employeeId || "",
+          Department: meta.department || "",
+          Specialization: meta.specialization || "",
+          "License Number": meta.licenseNumber || "",
+          "Emergency Contact": meta.emergencyContact || "",
+          // Business
+          Company: meta.company || "",
+          Position: meta.position || "",
+          LinkedIn: meta.linkedIn || "",
+          Website: meta.website || "",
+          "Business URL": card.businessUrl || "",
+          Photo: "",
+        };
+
+        // Any extra metadata keys not already captured
+        const knownKeys = new Set([
+          "name", "title", "email", "phone", "address", "studentId", "grade",
+          "section", "house", "guardianName", "guardianPhone", "employeeId",
+          "department", "specialization", "licenseNumber", "emergencyContact",
+          "company", "position", "linkedIn", "website", "photo", "_design",
+          "__templateId", "shortCode", "createdBy",
+        ]);
+        Object.entries(meta).forEach(([k, v]) => {
+          if (!knownKeys.has(k) && v) row[k] = v;
+        });
+
+        // Resolve photo filename and fetch the image
+        if (card.profileImageUrl) {
+          let photoFilename;
+          if (meta.photo) {
+            // ZIP-import cards store the original filename in metadata.photo
+            photoFilename = meta.photo;
+          } else {
+            const basename = card.profileImageUrl.split("/").pop() || "";
+            const safeName = (meta.name || card.tagId).replace(/[^a-zA-Z0-9_\- ]/g, "_").trim();
+            if (basename.length > 36 && basename[36] === "_") {
+              // ZIP-import storage format: {uuid(36)}_{originalname.ext}
+              photoFilename = basename.slice(37) || `${safeName}.jpg`;
+            } else {
+              // Direct-upload storage format: {uuid(36)}.ext  — keep name + original extension
+              const ext = basename.match(/\.([^.]+)$/)?.[1] || "jpg";
+              photoFilename = `${safeName}.${ext}`;
+            }
+          }
+          row["Photo"] = photoFilename;
+          try {
+            const imgUrl = card.profileImageUrl.startsWith("http")
+              ? card.profileImageUrl
+              : `${API_BASE}${card.profileImageUrl}`;
+            const imgBlob = await fetch(imgUrl).then((r) => r.blob());
+            zip.file(photoFilename, imgBlob);
+          } catch {
+            // image fetch failed — keep the filename in the sheet but skip the file
+          }
+        }
+
+        rows.push(row);
+      }
+
+      // Build Excel sheet
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
+      const xlsxBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+      zip.file("card_holders.xlsx", xlsxBuffer);
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeOrgName = (organization?.name || tenantId || "organization")
+        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+        .trim();
+      a.download = `${safeOrgName}_card_holders_sheet.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      message.success(`Exported ${rows.length} card holder(s) with images`);
+    } catch (err) {
+      console.error(err);
+      message.error("Export ZIP as Sheet failed");
+    } finally {
+      setExportingZipSheet(false);
     }
   };
 
@@ -1279,7 +1403,14 @@ function OrganizationDetail() {
             onClick={handleExport}
             loading={exporting}
           >
-            Export as ZIP
+            Export ZIP as QR
+          </Button>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExportZipSheet}
+            loading={exportingZipSheet}
+          >
+            Export ZIP as Sheet
           </Button>
           <Button icon={<UploadOutlined />} onClick={handleImportOpen}>
             Import from Excel
