@@ -248,6 +248,7 @@ function OrganizationDetail() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [orgTemplates, setOrgTemplates] = useState([]);
   const [tablePagination, setTablePagination] = useState({
@@ -467,6 +468,25 @@ function OrganizationDetail() {
       fetchData();
     } catch (err) {
       message.error(err?.response?.data?.error || "Failed to remove");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("Select at least one card first");
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const res = await useraccessAPI.bulkDeleteCards(tenantId, selectedRowKeys);
+      message.success(res.data.message || "Selected card holders removed");
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to remove selected card holders");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -1271,6 +1291,23 @@ function OrganizationDetail() {
                 Edit in Bulk
               </Button>
             </Badge>
+          )}
+          {selectedRowKeys.length > 0 && (
+            <Popconfirm
+              title={`Delete ${selectedRowKeys.length} selected card holder(s)?`}
+              description="This will permanently remove the selected card holders from this organization."
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              onConfirm={handleBulkDelete}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={bulkDeleting}
+              >
+                Delete Selected
+              </Button>
+            </Popconfirm>
           )}
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             Add Card Holder

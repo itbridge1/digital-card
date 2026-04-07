@@ -443,6 +443,50 @@ router.put("/organizations/:tenantId/cards/bulk-design", async (req, res) => {
 });
 
 /**
+ * DELETE /api/manager/organizations/:tenantId/cards/bulk
+ * Remove multiple card holders from an organization at once.
+ */
+router.delete("/organizations/:tenantId/cards/bulk", async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId.toUpperCase();
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
+
+    const { cardIds } = req.body;
+    if (!Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must be a non-empty array" });
+    }
+
+    const normalizedCardIds = cardIds
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+
+    if (normalizedCardIds.length === 0) {
+      return res.status(400).json({ success: false, error: "cardIds must contain valid card IDs" });
+    }
+
+    const deletedCount = await Card.destroy({
+      where: {
+        tenantId,
+        id: { [Op.in]: normalizedCardIds },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `${deletedCount} card holder(s) removed successfully`,
+      deleted: deletedCount,
+    });
+  } catch (error) {
+    console.error("Error bulk removing card holders:", error);
+    res.status(500).json({ success: false, error: "Failed to remove card holders" });
+  }
+});
+
+/**
  * PUT /api/manager/organizations/:tenantId/cards/:cardId
  * Update a card holder
  */

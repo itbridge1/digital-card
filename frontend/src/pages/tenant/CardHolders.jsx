@@ -26,6 +26,7 @@ import {
 } from "antd";
 import {
   EditOutlined,
+  DeleteOutlined,
   StopOutlined,
   UndoOutlined,
   UploadOutlined,
@@ -216,6 +217,7 @@ export default function TenantCardHolders() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDataEditOpen, setBulkDataEditOpen] = useState(false);
   const [bulkDataCards, setBulkDataCards] = useState([]);
   const [bulkDataSaving, setBulkDataSaving] = useState(false);
@@ -404,6 +406,25 @@ export default function TenantCardHolders() {
       message.error(err?.response?.data?.error || "Failed to apply design");
     } finally {
       setBulkApplying(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("Select at least one card first");
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const res = await tenantPortalAPI.bulkDeleteCards(selectedRowKeys);
+      message.success(res.data.message || "Selected card holders deactivated");
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to deactivate selected card holders");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -1069,6 +1090,20 @@ export default function TenantCardHolders() {
               Edit in Bulk
             </Button>
           </Badge>
+        )}
+
+        {selectedRowKeys.length > 0 && (
+          <Popconfirm
+            title={`Delete ${selectedRowKeys.length} selected card holder(s)?`}
+            description="This will deactivate the selected card holders."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            onConfirm={handleBulkDelete}
+          >
+            <Button danger icon={<DeleteOutlined />} loading={bulkDeleting}>
+              Delete Selected
+            </Button>
+          </Popconfirm>
         )}
 
         {selectedRowKeys.length > 0 && (
