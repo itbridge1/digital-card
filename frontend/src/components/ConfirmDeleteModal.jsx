@@ -57,7 +57,8 @@ export default function ConfirmDeleteModal({
   };
 
   const handleCancel = () => {
-    form.resetFields();
+    // Only reset password field, keep email visible - don't clear it
+    form.setFieldsValue({ password: "" });
     setCredError("");
     onCancel();
   };
@@ -79,8 +80,11 @@ export default function ConfirmDeleteModal({
       maskClosable={false}
       width={420}
       afterClose={() => {
-        form.resetFields();
-        setCredError("");
+        // Clear form and error only when modal fully closes
+        if (!open) {
+          form.resetFields();
+          setCredError("");
+        }
       }}
     >
       {description && (

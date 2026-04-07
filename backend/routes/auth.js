@@ -335,7 +335,7 @@ router.post(
 
       const isMatch = await user.matchPassword(req.body.password);
       if (!isMatch) {
-        return res.status(401).json({ success: false, error: "Incorrect password" });
+        return res.status(400).json({ success: false, error: "Incorrect password" });
       }
 
       return res.json({ success: true });
