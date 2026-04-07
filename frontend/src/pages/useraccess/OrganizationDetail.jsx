@@ -690,13 +690,18 @@ function OrganizationDetail() {
           }
           row["Photo"] = photoFilename;
           try {
+            // Use a relative URL so the request goes through the Vite proxy
+            // (avoids cross-origin fetch failures to the backend port)
             const imgUrl = card.profileImageUrl.startsWith("http")
               ? card.profileImageUrl
-              : `${API_BASE}${card.profileImageUrl}`;
-            const imgBlob = await fetch(imgUrl).then((r) => r.blob());
-            zip.file(photoFilename, imgBlob);
-          } catch {
-            // image fetch failed — keep the filename in the sheet but skip the file
+              : card.profileImageUrl;
+            const imgResp = await fetch(imgUrl);
+            if (imgResp.ok) {
+              const imgBlob = await imgResp.blob();
+              zip.file(photoFilename, imgBlob);
+            }
+          } catch (fetchErr) {
+            console.warn("Could not fetch profile image:", card.profileImageUrl, fetchErr);
           }
         }
 
