@@ -38,6 +38,7 @@ import {
   ShareAltOutlined,
   InboxOutlined,
   FolderOpenOutlined,
+  FileImageOutlined,
   SearchOutlined,
   AppstoreOutlined,
   AppstoreAddOutlined,
@@ -234,6 +235,10 @@ function OrganizationDetail() {
   const [zipImportFile, setZipImportFile] = useState(null);
   const [zipImporting, setZipImporting] = useState(false);
   const [zipImportResult, setZipImportResult] = useState(null);
+  const [photosZipModalOpen, setPhotosZipModalOpen] = useState(false);
+  const [photosZipFile, setPhotosZipFile] = useState(null);
+  const [photosZipUploading, setPhotosZipUploading] = useState(false);
+  const [photosZipResult, setPhotosZipResult] = useState(null);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -763,6 +768,35 @@ function OrganizationDetail() {
       message.error(err.response?.data?.error || "ZIP import failed");
     } finally {
       setZipImporting(false);
+    }
+  };
+
+  const handlePhotosZipOpen = () => {
+    setPhotosZipFile(null);
+    setPhotosZipResult(null);
+    setPhotosZipModalOpen(true);
+  };
+
+  const handlePhotosZipConfirm = async () => {
+    if (!photosZipFile) {
+      message.warning("Please select a ZIP file first");
+      return;
+    }
+    setPhotosZipUploading(true);
+    try {
+      const res = await useraccessAPI.uploadPhotosZip(tenantId, photosZipFile);
+      setPhotosZipResult(res.data);
+      fetchData();
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.unmatched) {
+        // 422 — validation rejection: show unmatched list inside the modal
+        setPhotosZipResult({ _rejected: true, error: data.error, unmatched: data.unmatched });
+      } else {
+        message.error(data?.error || "Photo upload failed");
+      }
+    } finally {
+      setPhotosZipUploading(false);
     }
   };
 
@@ -1432,6 +1466,9 @@ function OrganizationDetail() {
           )}
           <Button icon={<FolderOpenOutlined />} onClick={handleZipImportOpen}>
             Import ZIP
+          </Button>
+          <Button icon={<FileImageOutlined />} onClick={handlePhotosZipOpen}>
+            Upload Photos ZIP
           </Button>
           {selectedRowKeys.length > 0 && (
             <Badge count={selectedRowKeys.length} size="small">
@@ -2192,6 +2229,138 @@ function OrganizationDetail() {
               <p className="ant-upload-text">Click or drag ZIP file here</p>
               <p className="ant-upload-hint">
                 .zip containing Excel + photos — max 50 MB
+              </p>
+            </Upload.Dragger>
+          </div>
+        )}
+      </Modal>
+
+      {/* Upload Photos ZIP modal */}
+      <Modal
+        title="Upload Photos ZIP"
+        open={photosZipModalOpen}
+        onCancel={() => {
+          if (!photosZipUploading) setPhotosZipModalOpen(false);
+        }}
+        width={isMobile ? "95%" : 560}
+        footer={
+          photosZipResult ? (
+            photosZipResult._rejected ? (
+              // Rejection — let user fix their ZIP and try again
+              <Space>
+                <Button onClick={() => setPhotosZipResult(null)}>
+                  Try Again
+                </Button>
+                <Button onClick={() => setPhotosZipModalOpen(false)}>
+                  Close
+                </Button>
+              </Space>
+            ) : (
+              <Button type="primary" onClick={() => setPhotosZipModalOpen(false)}>
+                Close
+              </Button>
+            )
+          ) : (
+            <Space>
+              <Button
+                onClick={() => setPhotosZipModalOpen(false)}
+                disabled={photosZipUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                loading={photosZipUploading}
+                onClick={handlePhotosZipConfirm}
+              >
+                Upload
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {photosZipResult ? (
+          photosZipResult._rejected ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Alert
+                type="error"
+                showIcon
+                message="Upload rejected — unmatched images"
+                description={photosZipResult.error}
+              />
+              <div style={{ fontSize: 12, color: "#cf1322" }}>
+                <strong>
+                  The following images have no matching card holder (fix your ZIP
+                  and try again):
+                </strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {photosZipResult.unmatched.map((name, i) => (
+                    <li key={i}>{name}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Alert
+                type="success"
+                message={photosZipResult.message}
+                showIcon
+              />
+              <Descriptions size="small" bordered column={2}>
+                <Descriptions.Item label="Linked">
+                  {photosZipResult.summary.linked}
+                </Descriptions.Item>
+                <Descriptions.Item label="Skipped (no image in ZIP)">
+                  {photosZipResult.summary.skipped}
+                </Descriptions.Item>
+              </Descriptions>
+            </div>
+          )
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="Photos-only ZIP upload"
+              description={
+                <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                  Upload a ZIP containing only profile photos. Each image will
+                  be matched to an existing card holder by its filename:
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                    <li>
+                      The image filename must match the{" "}
+                      <strong>Photo</strong> column value used during import
+                      (e.g. <code>_DSC0036.jpg</code>)
+                    </li>
+                    <li>
+                      Existing profile photos for matched cards will be
+                      replaced
+                    </li>
+                    <li>
+                      Cards with no matching image in the ZIP are left
+                      unchanged
+                    </li>
+                  </ul>
+                </div>
+              }
+            />
+            <Upload.Dragger
+              accept=".zip"
+              beforeUpload={(file) => {
+                setPhotosZipFile(file);
+                return false;
+              }}
+              onRemove={() => setPhotosZipFile(null)}
+              maxCount={1}
+              fileList={photosZipFile ? [photosZipFile] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <FileImageOutlined />
+              </p>
+              <p className="ant-upload-text">Click or drag photos ZIP here</p>
+              <p className="ant-upload-hint">
+                .zip containing images only — max 100 MB
               </p>
             </Upload.Dragger>
           </div>

@@ -149,6 +149,14 @@ export const useraccessAPI = {
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/export`),
   getAvailableNfcTags: (tenantId) =>
     api.get(`/manager/organizations/${encodeURIComponent(tenantId)}/nfc-tags`),
+  uploadPhotosZip: (tenantId, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post(
+      `/manager/organizations/${encodeURIComponent(tenantId)}/upload-photos`,
+      form,
+    );
+  },
 
   // Tenant login account management
   getTenantAccount: (tenantId) =>

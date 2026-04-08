@@ -7,6 +7,18 @@ const { Op } = require("sequelize");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const AdmZip = require("adm-zip");
+const multer = require("multer");
+const { v4: uuidv4 } = require("uuid");
+
+const photoZipUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith(".zip")) cb(null, true);
+    else cb(new Error("Only .zip files are allowed"));
+  },
+});
 
 // Helper – silently remove a stored profile image file
 function deleteProfileImage(profileImageUrl) {
@@ -803,5 +815,125 @@ router.post("/organizations/:tenantId/reset-credentials", async (req, res) => {
     res.status(500).json({ success: false, error: "Failed to reset credentials" });
   }
 });
+
+// POST /api/manager/organizations/:tenantId/upload-photos
+// Upload a ZIP of photos only and link them to existing card holders
+// by matching each image filename (case-insensitive) against metadata.photo
+router.post(
+  "/organizations/:tenantId/upload-photos",
+  protect,
+  authorize("manager", "admin"),
+  photoZipUpload.single("file"),
+  async (req, res) => {
+    const { tenantId } = req.params;
+
+    const denied = await denyIfNotOwner(req, res, tenantId);
+    if (denied) return;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No ZIP file provided" });
+    }
+
+    const IMAGE_EXTS = new Set([
+      "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif", "heic", "avif",
+    ]);
+
+    let zip;
+    try {
+      zip = new AdmZip(req.file.buffer);
+    } catch {
+      return res.status(400).json({ error: "Invalid or corrupt ZIP file" });
+    }
+
+    // Build a map: normalised filename (lowercase) → zip entry
+    const imageMap = {};
+    for (const entry of zip.getEntries()) {
+      if (entry.isDirectory) continue;
+      const entryName = path.basename(entry.entryName);
+      const ext = entryName.split(".").pop().toLowerCase();
+      if (!IMAGE_EXTS.has(ext)) continue;
+      imageMap[entryName.toLowerCase()] = { entry, originalName: entryName };
+    }
+
+    if (Object.keys(imageMap).length === 0) {
+      return res
+        .status(400)
+        .json({ error: "No supported image files found in ZIP" });
+    }
+
+    // Fetch all cards for this tenant
+    const cards = await Card.findAll({ where: { tenantId } });
+
+    // Build a lookup key for each card (what filename it expects)
+    function cardLookupKey(card) {
+      const meta = card.metadata || {};
+      if (meta.photo) return meta.photo.toLowerCase();
+      if (card.profileImageUrl) {
+        const stored = path.basename(card.profileImageUrl);
+        if (stored.length > 37 && stored[36] === "_") {
+          return stored.slice(37).toLowerCase();
+        }
+      }
+      return null;
+    }
+
+    // --- Validation pass: every image must match a card ---
+    const unmatchedImages = [];
+    for (const key of Object.keys(imageMap)) {
+      const matched = cards.some((c) => cardLookupKey(c) === key);
+      if (!matched) unmatchedImages.push(imageMap[key].originalName);
+    }
+
+    if (unmatchedImages.length > 0) {
+      return res.status(422).json({
+        error: "Upload rejected: some images have no matching card holder",
+        unmatched: unmatchedImages,
+      });
+    }
+
+    // --- All images validated — now write files and update DB ---
+    const profilesDir = path.join(
+      __dirname,
+      "..",
+      "uploads",
+      "profiles",
+      String(tenantId),
+    );
+    if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
+
+    let linked = 0;
+    let skipped = 0;
+
+    for (const card of cards) {
+      const key = cardLookupKey(card);
+
+      if (!key || !imageMap[key]) {
+        // Card has no photo reference or its image wasn't in this ZIP — skip
+        skipped++;
+        continue;
+      }
+
+      const { entry, originalName } = imageMap[key];
+      const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filename = `${uuidv4()}_${safeName}`;
+      const destPath = path.join(profilesDir, filename);
+
+      const imgBuffer = entry.getData();
+      fs.writeFileSync(destPath, imgBuffer);
+
+      // Delete old profile image if present
+      deleteProfileImage(card.profileImageUrl);
+
+      const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
+      await card.update({ profileImageUrl: newUrl });
+      linked++;
+    }
+
+    return res.json({
+      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP`,
+      summary: { linked, skipped },
+    });
+  },
+);
 
 module.exports = router;
