@@ -823,12 +823,25 @@ router.post(
   "/organizations/:tenantId/upload-photos",
   protect,
   authorize("manager", "admin"),
-  photoZipUpload.single("file"),
+  (req, res, next) => {
+    photoZipUpload.single("file")(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          error: err.message || "File upload rejected",
+        });
+      }
+      next();
+    });
+  },
   async (req, res) => {
-    const { tenantId } = req.params;
+    const tenantId = req.params.tenantId.toUpperCase();
 
-    const denied = await denyIfNotOwner(req, res, tenantId);
-    if (denied) return;
+    // Look up the tenant so denyIfNotOwner receives the full object
+    const tenant = await Tenant.findOne({ where: { tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+    if (denyIfNotOwner(req, res, tenant)) return;
 
     if (!req.file) {
       return res.status(400).json({ error: "No ZIP file provided" });
@@ -846,10 +859,13 @@ router.post(
     }
 
     // Build a map: normalised filename (lowercase) → zip entry
+    // Skip __MACOSX artefacts and hidden dot-files that end up in some ZIPs
     const imageMap = {};
     for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
+      if (entry.entryName.startsWith("__MACOSX") || entry.entryName.startsWith(".")) continue;
       const entryName = path.basename(entry.entryName);
+      if (!entryName || entryName.startsWith(".")) continue;
       const ext = entryName.split(".").pop().toLowerCase();
       if (!IMAGE_EXTS.has(ext)) continue;
       imageMap[entryName.toLowerCase()] = { entry, originalName: entryName };
@@ -862,14 +878,27 @@ router.post(
     }
 
     // Fetch all cards for this tenant
-    const cards = await Card.findAll({ where: { tenantId } });
+    let cards;
+    try {
+      cards = await Card.findAll({ where: { tenantId } });
+    } catch (dbErr) {
+      console.error("DB error fetching cards:", dbErr);
+      return res.status(500).json({ error: "Failed to load card records" });
+    }
+
+    if (cards.length === 0) {
+      return res.status(404).json({ error: "No card holders found for this organization" });
+    }
 
     // Build a lookup key for each card (what filename it expects)
     function cardLookupKey(card) {
       const meta = card.metadata || {};
+      // Primary: metadata.photo stores the original filename from import
       if (meta.photo) return meta.photo.toLowerCase();
+      // Fallback: derive from the stored profileImageUrl
       if (card.profileImageUrl) {
         const stored = path.basename(card.profileImageUrl);
+        // Format: {36-char-uuid}_{originalname}
         if (stored.length > 37 && stored[36] === "_") {
           return stored.slice(37).toLowerCase();
         }
@@ -877,7 +906,7 @@ router.post(
       return null;
     }
 
-    // --- Validation pass: every image must match a card ---
+    // --- Validation pass: every image in the ZIP must match a card ---
     const unmatchedImages = [];
     for (const key of Object.keys(imageMap)) {
       const matched = cards.some((c) => cardLookupKey(c) === key);
@@ -891,18 +920,24 @@ router.post(
       });
     }
 
-    // --- All images validated — now write files and update DB ---
+    // --- All images validated — write files and update DB ---
     const profilesDir = path.join(
       __dirname,
       "..",
       "uploads",
       "profiles",
-      String(tenantId),
+      tenantId,
     );
-    if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
+    try {
+      if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
+    } catch (mkdirErr) {
+      console.error("Could not create profiles directory:", mkdirErr);
+      return res.status(500).json({ error: "Server storage error" });
+    }
 
     let linked = 0;
     let skipped = 0;
+    const writeErrors = [];
 
     for (const card of cards) {
       const key = cardLookupKey(card);
@@ -918,20 +953,35 @@ router.post(
       const filename = `${uuidv4()}_${safeName}`;
       const destPath = path.join(profilesDir, filename);
 
-      const imgBuffer = entry.getData();
-      fs.writeFileSync(destPath, imgBuffer);
+      let imgBuffer;
+      try {
+        imgBuffer = entry.getData();
+        if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
+        fs.writeFileSync(destPath, imgBuffer);
+      } catch (writeErr) {
+        console.warn(`Failed to write image for card ${card.id} (${originalName}):`, writeErr.message);
+        writeErrors.push({ filename: originalName, reason: writeErr.message });
+        continue;
+      }
 
-      // Delete old profile image if present
-      deleteProfileImage(card.profileImageUrl);
-
-      const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
-      await card.update({ profileImageUrl: newUrl });
-      linked++;
+      try {
+        deleteProfileImage(card.profileImageUrl);
+        const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
+        await card.update({ profileImageUrl: newUrl });
+        linked++;
+      } catch (dbErr) {
+        // Roll back the written file on DB failure
+        try { fs.unlinkSync(destPath); } catch {}
+        console.warn(`DB update failed for card ${card.id}:`, dbErr.message);
+        writeErrors.push({ filename: originalName, reason: "Database update failed" });
+      }
     }
 
-    return res.json({
-      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP`,
-      summary: { linked, skipped },
+    const status = writeErrors.length > 0 ? 207 : 200;
+    return res.status(status).json({
+      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
+      summary: { linked, skipped, failed: writeErrors.length },
+      ...(writeErrors.length > 0 && { errors: writeErrors }),
     });
   },
 );

@@ -833,9 +833,14 @@ function OrganizationDetail() {
       fetchData();
     } catch (err) {
       const data = err.response?.data;
-      if (data?.unmatched) {
-        // 422 — validation rejection: show unmatched list inside the modal
+      const status = err.response?.status;
+      if (status === 422 && data?.unmatched) {
+        // Validation rejection — show unmatched list inside the modal
         setPhotosZipResult({ _rejected: true, error: data.error, unmatched: data.unmatched });
+      } else if (status === 207 && data?.summary) {
+        // Partial success — show result inside the modal
+        setPhotosZipResult(data);
+        fetchData();
       } else {
         message.error(data?.error || "Photo upload failed");
       }
@@ -2443,18 +2448,31 @@ function OrganizationDetail() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Alert
-                type="success"
+                type={photosZipResult.summary?.failed > 0 ? "warning" : "success"}
                 message={photosZipResult.message}
                 showIcon
               />
-              <Descriptions size="small" bordered column={2}>
+              <Descriptions size="small" bordered column={3}>
                 <Descriptions.Item label="Linked">
                   {photosZipResult.summary.linked}
                 </Descriptions.Item>
                 <Descriptions.Item label="Skipped (no image in ZIP)">
                   {photosZipResult.summary.skipped}
                 </Descriptions.Item>
+                <Descriptions.Item label="Failed">
+                  {photosZipResult.summary.failed ?? 0}
+                </Descriptions.Item>
               </Descriptions>
+              {photosZipResult.errors?.length > 0 && (
+                <div style={{ fontSize: 12, color: "#cf1322" }}>
+                  <strong>Write errors:</strong>
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                    {photosZipResult.errors.map((e, i) => (
+                      <li key={i}>{e.filename}: {e.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )
         ) : (
