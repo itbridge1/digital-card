@@ -149,9 +149,11 @@ function CardDesignOne({
   formatFieldName,
   theme,
   templateFields,
+  hiddenFields,
 }) {
   const displayRows = getDisplayRows(card, templateFields)
     .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .filter(([key]) => !hiddenFields?.has(key))
     .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
   const { name: displayName, title: displayTitle } = resolveNameAndTitle(
     card,
@@ -388,9 +390,11 @@ function CardDesignTwo({
   formatFieldName,
   theme,
   templateFields,
+  hiddenFields,
 }) {
   const displayRows = getDisplayRows(card, templateFields)
     .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .filter(([key]) => !hiddenFields?.has(key))
     .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
   const { name: displayName, title: displayTitle } = resolveNameAndTitle(
     card,
@@ -629,9 +633,11 @@ function CardDesignThree({
   formatFieldName,
   theme,
   templateFields,
+  hiddenFields,
 }) {
   const displayRows = getDisplayRows(card, templateFields)
     .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .filter(([key]) => !hiddenFields?.has(key))
     .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
   const { name: displayName, title: displayTitle } = resolveNameAndTitle(
     card,
@@ -839,9 +845,11 @@ function CardDesignFour({
   formatFieldName,
   theme,
   templateFields,
+  hiddenFields,
 }) {
   const displayRows = getDisplayRows(card, templateFields)
     .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .filter(([key]) => !hiddenFields?.has(key))
     .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
   const { name: displayName } = resolveNameAndTitle(card, templateFields);
 
@@ -1029,6 +1037,7 @@ function SelectCard({
   formatFieldName,
   theme,
   templateFields,
+  hiddenFields,
 }) {
   const SelectedDesign = CARD_DESIGNS[design] || CARD_DESIGNS.one;
 
@@ -1040,6 +1049,7 @@ function SelectCard({
         formatFieldName={formatFieldName}
         theme={theme}
         templateFields={templateFields}
+        hiddenFields={hiddenFields}
       />
     </div>
   );

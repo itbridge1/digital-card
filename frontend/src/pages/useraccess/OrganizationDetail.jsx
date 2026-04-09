@@ -24,6 +24,8 @@ import {
   Badge,
   Slider,
   Card as AntCard,
+  Dropdown,
+  Checkbox,
 } from "antd";
 import {
   PlusOutlined,
@@ -43,6 +45,7 @@ import {
   AppstoreOutlined,
   AppstoreAddOutlined,
   ReloadOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import QRCode from "qrcode";
@@ -239,6 +242,28 @@ function OrganizationDetail() {
   const [photosZipFile, setPhotosZipFile] = useState(null);
   const [photosZipUploading, setPhotosZipUploading] = useState(false);
   const [photosZipResult, setPhotosZipResult] = useState(null);
+
+  // Column visibility: set of column keys that are HIDDEN
+  const [hiddenColumns, setHiddenColumns] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`hiddenCols_${tenantId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleColumn = (key) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(`hiddenCols_${tenantId}`, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  };
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
@@ -831,12 +856,13 @@ function OrganizationDetail() {
         dataColumns.forEach((col) => {
           const key = col.key;
           if (!key) return;
+          if (hiddenColumns.has(key)) return;
           const title = typeof col.title === "string" ? col.title : key;
           row[title] = card.metadata?.[key] ?? "";
         });
-        row["Tag ID"] = card.tagId || "";
-        row["Status"] = card.isActive ? "Active" : "Inactive";
-        row["Public URL"] = `${window.location.origin}/view/${card.tagId}`;
+        if (!hiddenColumns.has("_col_tagId")) row["Tag ID"] = card.tagId || "";
+        if (!hiddenColumns.has("_col_status")) row["Status"] = card.isActive ? "Active" : "Inactive";
+        if (!hiddenColumns.has("_col_publicUrl")) row["Public URL"] = `${window.location.origin}/view/${card.tagId}`;
         return row;
       });
 
@@ -1181,6 +1207,7 @@ function OrganizationDetail() {
   const columns = [
     {
       title: "Photo",
+      key: "_col_photo",
       dataIndex: "profileImageUrl",
       width: 84,
       render: (url) =>
@@ -1193,6 +1220,7 @@ function OrganizationDetail() {
     ...dataColumns,
     {
       title: "Tag ID",
+      key: "_col_tagId",
       dataIndex: "tagId",
       width: 150,
       ellipsis: true,
@@ -1201,7 +1229,7 @@ function OrganizationDetail() {
     },
     {
       title: "Public URL",
-      key: "publicUrl",
+      key: "_col_publicUrl",
       width: 220,
       ellipsis: true,
       render: (_, record) => {
@@ -1241,6 +1269,7 @@ function OrganizationDetail() {
     },
     {
       title: "Status",
+      key: "_col_status",
       dataIndex: "isActive",
       width: 110,
       render: (v, record) => (
@@ -1294,7 +1323,22 @@ function OrganizationDetail() {
         </Space>
       ),
     },
-  ];
+  ].filter((col) => !hiddenColumns.has(col.key ?? col.dataIndex));
+
+  // All toggleable column descriptors for the visibility menu
+  const allToggleableCols = useMemo(() => {
+    const fixed = [
+      { key: "_col_photo", label: "Photo" },
+      { key: "_col_tagId", label: "Tag ID" },
+      { key: "_col_publicUrl", label: "Public URL" },
+      { key: "_col_status", label: "Status" },
+    ];
+    const data = dataColumns.map((c) => ({
+      key: c.key,
+      label: typeof c.title === "string" ? c.title : c.key,
+    }));
+    return [...data, ...fixed];
+  }, [dataColumns]);
 
   const bulkEditColumns = [
     {
@@ -1470,6 +1514,89 @@ function OrganizationDetail() {
           <Button icon={<FileImageOutlined />} onClick={handlePhotosZipOpen}>
             Upload Photos ZIP
           </Button>
+          <Dropdown
+            trigger={["click"]}
+            dropdownRender={() => (
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                  padding: "8px 0",
+                  minWidth: 200,
+                  maxHeight: 360,
+                  overflowY: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "4px 12px 8px",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    color: "#555",
+                    borderBottom: "1px solid #f0f0f0",
+                    marginBottom: 4,
+                  }}
+                >
+                  Show / hide columns
+                </div>
+                {allToggleableCols.map((col) => (
+                  <div
+                    key={col.key}
+                    style={{
+                      padding: "5px 12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                    onClick={() => toggleColumn(col.key)}
+                  >
+                    <Checkbox checked={!hiddenColumns.has(col.key)} />
+                    <span style={{ fontSize: 13 }}>{col.label}</span>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    borderTop: "1px solid #f0f0f0",
+                    marginTop: 4,
+                    padding: "6px 12px 2px",
+                    display: "flex",
+                    gap: 8,
+                  }}
+                >
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setHiddenColumns(new Set());
+                      try {
+                        localStorage.removeItem(`hiddenCols_${tenantId}`);
+                      } catch {}
+                    }}
+                  >
+                    Show all
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const allKeys = new Set(allToggleableCols.map((c) => c.key));
+                      setHiddenColumns(allKeys);
+                      try {
+                        localStorage.setItem(
+                          `hiddenCols_${tenantId}`,
+                          JSON.stringify([...allKeys]),
+                        );
+                      } catch {}
+                    }}
+                  >
+                    Hide all
+                  </Button>
+                </div>
+              </div>
+            )}
+          >
+            <Button icon={<SettingOutlined />}>Columns</Button>
+          </Dropdown>
           {selectedRowKeys.length > 0 && (
             <Badge count={selectedRowKeys.length} size="small">
               <Button

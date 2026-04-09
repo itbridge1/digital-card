@@ -22,6 +22,8 @@ import {
   Statistic,
   Row,
   Col,
+  Dropdown,
+  Checkbox,
 } from "antd";
 import {
   FaArrowLeft,
@@ -30,6 +32,7 @@ import {
   FaMoon,
   FaRedo,
   FaSlidersH,
+  FaEye,
 } from "react-icons/fa";
 import SelectCard from "./components/SelectCard";
 import { formatFieldLabel } from "./components/SelectCard";
@@ -171,6 +174,28 @@ function CardView() {
   const [templateFields, setTemplateFields] = useState(null);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+
+  // Field visibility — persisted per card in localStorage
+  const [hiddenFields, setHiddenFields] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`hiddenFields_${tagId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleField = (key) => {
+    setHiddenFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(`hiddenFields_${tagId}`, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  };
 
   const applySavedDesign = (fetchedCard) => {
     const saved = fetchedCard?.metadata?._design;
@@ -641,6 +666,16 @@ function CardView() {
     ([key]) => !INTERNAL_KEYS.includes(key),
   );
 
+  // All fields toggleable in the Fields menu
+  const allToggleableFields = [
+    ...displayRows.map(([key]) => ({
+      key,
+      label: formatFieldName(key),
+    })),
+    { key: "_field_tagId", label: "Tag ID" },
+    ...(card.businessUrl ? [{ key: "_field_businessUrl", label: "Business URL" }] : []),
+  ];
+
   const cardholderName = card.metadata?.name || "—";
   const cardholderTitle = card.metadata?.title || "";
 
@@ -703,6 +738,96 @@ function CardView() {
             >
               Save Design
             </Button>
+            <Dropdown
+              trigger={["click"]}
+              dropdownRender={() => (
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: 8,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                    padding: "8px 0",
+                    minWidth: 200,
+                    maxHeight: 360,
+                    overflowY: "auto",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "4px 12px 8px",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      color: "#555",
+                      borderBottom: "1px solid #f0f0f0",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Show / hide fields
+                  </div>
+                  {allToggleableFields.map((f) => (
+                    <div
+                      key={f.key}
+                      style={{
+                        padding: "5px 12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                      onClick={() => toggleField(f.key)}
+                    >
+                      <Checkbox checked={!hiddenFields.has(f.key)} />
+                      <span style={{ fontSize: 13 }}>{f.label}</span>
+                    </div>
+                  ))}
+                  <div
+                    style={{
+                      borderTop: "1px solid #f0f0f0",
+                      marginTop: 4,
+                      padding: "6px 12px 2px",
+                      display: "flex",
+                      gap: 8,
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setHiddenFields(new Set());
+                        try { localStorage.removeItem(`hiddenFields_${tagId}`); } catch {}
+                      }}
+                    >
+                      Show all
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const all = new Set(allToggleableFields.map((f) => f.key));
+                        setHiddenFields(all);
+                        try {
+                          localStorage.setItem(`hiddenFields_${tagId}`, JSON.stringify([...all]));
+                        } catch {}
+                      }}
+                    >
+                      Hide all
+                    </Button>
+                  </div>
+                </div>
+              )}
+            >
+              <Button
+                icon={<FaEye style={{ fontSize: 12 }} />}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  borderRadius: 8,
+                  fontWeight: 500,
+                  height: 36,
+                }}
+              >
+                Fields
+              </Button>
+            </Dropdown>
             <Button
               icon={<FaSlidersH style={{ fontSize: 12 }} />}
               onClick={() => setSidebarOpen(true)}
@@ -747,6 +872,7 @@ function CardView() {
             formatFieldName={formatFieldName}
             theme={themeContext}
             templateFields={templateFields}
+            hiddenFields={hiddenFields}
           />
 
           {/* Design switcher pills */}
@@ -942,6 +1068,7 @@ function CardView() {
             }}
           >
             {/* Tag ID */}
+            {!hiddenFields.has("_field_tagId") && (
             <div
               style={{
                 display: "flex",
@@ -964,13 +1091,15 @@ function CardView() {
                 {card.tagId}
               </Text>
             </div>
+            )}
 
             {/* Metadata rows */}
             {displayRows.map(
               ([key, value], idx) =>
                 value !== null &&
                 value !== undefined &&
-                value !== "" && (
+                value !== "" &&
+                !hiddenFields.has(key) && (
                   <div
                     key={key}
                     style={{
@@ -1010,7 +1139,7 @@ function CardView() {
             )}
 
             {/* Business URL */}
-            {card.businessUrl && (
+            {card.businessUrl && !hiddenFields.has("_field_businessUrl") && (
               <div
                 style={{ padding: "12px 24px", borderTop: "1px solid #f8fafc" }}
               >
