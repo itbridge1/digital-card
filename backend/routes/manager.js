@@ -907,17 +907,28 @@ router.post(
     }
 
     // --- Validation pass: every image in the ZIP must match a card ---
+    // If skipUnmatched=true is passed the client has acknowledged the warning
+    // and wants to proceed with only the matched images.
+    const skipUnmatched = req.body.skipUnmatched === true ||
+      req.body.skipUnmatched === "true" ||
+      req.query.skipUnmatched === "true";
+
     const unmatchedImages = [];
     for (const key of Object.keys(imageMap)) {
       const matched = cards.some((c) => cardLookupKey(c) === key);
       if (!matched) unmatchedImages.push(imageMap[key].originalName);
     }
 
-    if (unmatchedImages.length > 0) {
+    if (unmatchedImages.length > 0 && !skipUnmatched) {
       return res.status(422).json({
         error: "Upload rejected: some images have no matching card holder",
         unmatched: unmatchedImages,
       });
+    }
+
+    // Remove unmatched entries so the write loop only sees matched images
+    for (const name of unmatchedImages) {
+      delete imageMap[name.toLowerCase()];
     }
 
     // --- All images validated — write files and update DB ---
@@ -979,8 +990,9 @@ router.post(
 
     const status = writeErrors.length > 0 ? 207 : 200;
     return res.status(status).json({
-      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
-      summary: { linked, skipped, failed: writeErrors.length },
+      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP${unmatchedImages.length > 0 ? `, ${unmatchedImages.length} image(s) skipped (no matching card)` : ""}${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
+      summary: { linked, skipped, skippedImages: unmatchedImages.length, failed: writeErrors.length },
+      ...(unmatchedImages.length > 0 && { skippedImages: unmatchedImages }),
       ...(writeErrors.length > 0 && { errors: writeErrors }),
     });
   },

@@ -503,14 +503,29 @@ export default function TenantCardHolders() {
   };
 
   // ── delete ──────────────────────────────────────────────────────
-  const handleDeactivate = async (cardId) => {
+  const handleDeactivate = (cardId) => {
+    setDeleteTarget({ type: "single", id: cardId });
+    setDeleteModalOpen(true);
+  };
+
+  const executeSingleDelete = async () => {
+    setDeleteExecuting(true);
     try {
-      await tenantPortalAPI.deactivateCard(cardId);
+      await tenantPortalAPI.deactivateCard(deleteTarget.id);
       message.success("Card holder deleted");
       fetchData();
     } catch (err) {
       message.error(err?.response?.data?.error || "Failed to delete");
+    } finally {
+      setDeleteExecuting(false);
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
     }
+  };
+
+  const handleDeleteConfirmed = () => {
+    if (deleteTarget?.type === "bulk") executeBulkDelete();
+    else executeSingleDelete();
   };
 
   // ── distinct filter options ──────────────────────────────────────

@@ -821,21 +821,21 @@ function OrganizationDetail() {
     setPhotosZipModalOpen(true);
   };
 
-  const handlePhotosZipConfirm = async () => {
+  const handlePhotosZipConfirm = async (skipUnmatched = false) => {
     if (!photosZipFile) {
       message.warning("Please select a ZIP file first");
       return;
     }
     setPhotosZipUploading(true);
     try {
-      const res = await useraccessAPI.uploadPhotosZip(tenantId, photosZipFile);
+      const res = await useraccessAPI.uploadPhotosZip(tenantId, photosZipFile, skipUnmatched);
       setPhotosZipResult(res.data);
       fetchData();
     } catch (err) {
       const data = err.response?.data;
       const status = err.response?.status;
       if (status === 422 && data?.unmatched) {
-        // Validation rejection — show unmatched list inside the modal
+        // Validation warning — show unmatched list with Skip option inside the modal
         setPhotosZipResult({ _rejected: true, error: data.error, unmatched: data.unmatched });
       } else if (status === 207 && data?.summary) {
         // Partial success — show result inside the modal
@@ -2391,13 +2391,21 @@ function OrganizationDetail() {
         footer={
           photosZipResult ? (
             photosZipResult._rejected ? (
-              // Rejection — let user fix their ZIP and try again
+              // Warning — let user skip unmatched or fix and retry
               <Space>
                 <Button onClick={() => setPhotosZipResult(null)}>
-                  Try Again
+                  Fix & Retry
+                </Button>
+                <Button
+                  type="primary"
+                  danger
+                  loading={photosZipUploading}
+                  onClick={() => handlePhotosZipConfirm(true)}
+                >
+                  Skip Unmatched & Upload
                 </Button>
                 <Button onClick={() => setPhotosZipModalOpen(false)}>
-                  Close
+                  Cancel
                 </Button>
               </Space>
             ) : (
@@ -2428,16 +2436,13 @@ function OrganizationDetail() {
           photosZipResult._rejected ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Alert
-                type="error"
+                type="warning"
                 showIcon
-                message="Upload rejected — unmatched images"
-                description={photosZipResult.error}
+                message="Some images have no matching card holder"
+                description="You can skip these images and upload the rest, or fix your ZIP and retry."
               />
-              <div style={{ fontSize: 12, color: "#cf1322" }}>
-                <strong>
-                  The following images have no matching card holder (fix your ZIP
-                  and try again):
-                </strong>
+              <div style={{ fontSize: 12, color: "#d46b08" }}>
+                <strong>Unmatched images (will be skipped if you proceed):</strong>
                 <ul style={{ marginTop: 4, paddingLeft: 16 }}>
                   {photosZipResult.unmatched.map((name, i) => (
                     <li key={i}>{name}</li>
