@@ -24,8 +24,11 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log("MySQL Connected:", sequelize.config.host);
 
-    // Sync strategy (safe by default to avoid duplicate key/index explosions)
-    const shouldSync = String(process.env.DB_SYNC || "true") === "true";
+    // Sync strategy — disabled by default because this project uses migrate.js.
+    // Enabling sync alongside migrations causes duplicate indexes to accumulate
+    // (Sequelize names them differently from the migration-created ones) and
+    // will eventually hit MySQL's 64-key-per-table limit.
+    const shouldSync = String(process.env.DB_SYNC || "false") === "true";
     const shouldAlter = String(process.env.DB_SYNC_ALTER || "false") === "true";
 
     if (process.env.NODE_ENV === "development" && shouldSync) {
