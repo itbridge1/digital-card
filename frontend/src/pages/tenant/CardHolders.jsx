@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Table,
   Button,
@@ -8,7 +8,6 @@ import {
   Space,
   Typography,
   message,
-  Popconfirm,
   Avatar,
   Upload,
   Tag,
@@ -18,15 +17,18 @@ import {
   Grid,
   Select,
   Switch,
-  Divider,
   Badge,
   Slider,
   Card as AntCard,
-  Descriptions,
+  Dropdown,
+  Checkbox,
 } from "antd";
 import {
+  PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  DownloadOutlined,
+  SettingOutlined,
   UploadOutlined,
   UserOutlined,
   EyeOutlined,
@@ -38,10 +40,12 @@ import {
   FileExcelOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import JSZip from "jszip";
+import * as XLSX from "xlsx";
 import {
   tenantPortalAPI,
   uploadAPI,
-  cardTemplateAPI,
+  authAPI,
 } from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
@@ -164,20 +168,6 @@ const DEFAULT_BULK_THEME = {
   contrast: 100,
 };
 
-const DESIGN_OPTIONS = [
-  { value: "one", label: "Design 1" },
-  { value: "two", label: "Design 2" },
-  { value: "three", label: "Design 3" },
-  { value: "four", label: "Design 4" },
-];
-
-const PRESET_OPTIONS = [
-  { value: "ocean", label: "Ocean" },
-  { value: "sunset", label: "Sunset" },
-  { value: "royal", label: "Royal" },
-  { value: "forest", label: "Forest" },
-];
-
 const { Title, Text } = Typography;
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
@@ -216,10 +206,11 @@ export default function TenantCardHolders() {
   const [bulkDesignOpen, setBulkDesignOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkTheme, setBulkTheme] = useState(DEFAULT_BULK_THEME);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDataEditOpen, setBulkDataEditOpen] = useState(false);
   const [bulkDataCards, setBulkDataCards] = useState([]);
   const [bulkDataSaving, setBulkDataSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [tablePagination, setTablePagination] = useState({
@@ -230,9 +221,18 @@ export default function TenantCardHolders() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
+  const [hiddenColumns, setHiddenColumns] = useState(() => {
+    try {
+      const stored = localStorage.getItem("hiddenCols_tenant_cards");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
   // Credential verification modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single' | 'bulk', id?: number }
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteExecuting, setDeleteExecuting] = useState(false);
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const cardTenantId =
@@ -258,6 +258,60 @@ export default function TenantCardHolders() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!org?.tenantId) return;
+    authAPI
+      .getUiSettings()
+      .then((res) => {
+        const serverCols = res.data?.data?.hiddenCols?.[org.tenantId];
+        if (Array.isArray(serverCols)) {
+          const next = new Set(serverCols);
+          setHiddenColumns(next);
+          try {
+            localStorage.setItem(
+              "hiddenCols_tenant_cards",
+              JSON.stringify(serverCols),
+            );
+          } catch {
+            // no-op
+          }
+        }
+      })
+      .catch(() => {
+        // Keep local preference if settings fetch fails.
+      });
+  }, [org?.tenantId]);
+
+  const saveHiddenColumns = (next) => {
+    if (!org?.tenantId) return;
+    const arr = [...next];
+    try {
+      localStorage.setItem("hiddenCols_tenant_cards", JSON.stringify(arr));
+    } catch {
+      // no-op
+    }
+    authAPI
+      .setUiSettings({ hiddenCols: { [org.tenantId]: arr } })
+      .catch(() => {});
+  };
+
+  const toggleColumn = (key) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      saveHiddenColumns(next);
+      return next;
+    });
+  };
+
+  const openCreate = () => {
+    setEditingCard(null);
+    setProfileUrl("");
+    form.resetFields();
+    setModalOpen(true);
+  };
 
   // ── edit modal ──────────────────────────────────────────────────
   const openEdit = (card) => {
@@ -375,11 +429,20 @@ export default function TenantCardHolders() {
         });
       }
 
-      await tenantPortalAPI.updateCard(editingCard.id, {
-        profileImageUrl: profileUrl || null,
-        metadata,
-      });
-      message.success("Card holder updated");
+      if (editingCard) {
+        await tenantPortalAPI.updateCard(editingCard.id, {
+          profileImageUrl: profileUrl || null,
+          metadata,
+        });
+        message.success("Card holder updated");
+      } else {
+        await tenantPortalAPI.addCard({
+          tagId: values.tagId,
+          profileImageUrl: profileUrl || null,
+          metadata,
+        });
+        message.success("Card holder added");
+      }
       setModalOpen(false);
       fetchData();
     } catch (err) {
@@ -410,33 +473,6 @@ export default function TenantCardHolders() {
       message.error(err?.response?.data?.error || "Failed to apply design");
     } finally {
       setBulkApplying(false);
-    }
-  };
-
-  const handleBulkDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      message.warning("Select at least one card first");
-      return;
-    }
-    setDeleteTarget({ type: "bulk" });
-    setDeleteModalOpen(true);
-  };
-
-  const executeBulkDelete = async () => {
-    setBulkDeleting(true);
-    setDeleteExecuting(true);
-    try {
-      const res = await tenantPortalAPI.bulkDeleteCards(selectedRowKeys);
-      message.success(res.data.message || "Selected card holders deleted");
-      setSelectedRowKeys([]);
-      fetchData();
-    } catch (err) {
-      message.error(err?.response?.data?.error || "Failed to delete selected card holders");
-    } finally {
-      setBulkDeleting(false);
-      setDeleteExecuting(false);
-      setDeleteModalOpen(false);
-      setDeleteTarget(null);
     }
   };
 
@@ -524,8 +560,195 @@ export default function TenantCardHolders() {
   };
 
   const handleDeleteConfirmed = () => {
-    if (deleteTarget?.type === "bulk") executeBulkDelete();
-    else executeSingleDelete();
+    executeSingleDelete();
+  };
+
+  const handleExcelExport = () => {
+    const exportData =
+      selectedRowKeys.length > 0
+        ? cards.filter((c) => selectedRowKeys.includes(c.id))
+        : filtered;
+    if (exportData.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+
+    setExportingExcel(true);
+    try {
+      const rows = exportData.map((card) => {
+        const row = {};
+        dataColumns.forEach((col) => {
+          const key = col.key;
+          if (!key || hiddenColumns.has(key)) return;
+          const title = typeof col.title === "string" ? col.title : key;
+          row[title] = card.metadata?.[key] ?? "";
+        });
+        if (!hiddenColumns.has("tagId")) row["Tag ID"] = card.tagId || "";
+        if (!hiddenColumns.has("status")) {
+          row["Status"] = card.isActive ? "Active" : "Inactive";
+        }
+        return row;
+      });
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
+
+      const safeOrgName = (org?.name || org?.tenantId || "organization")
+        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+        .trim();
+      XLSX.writeFile(workbook, `${safeOrgName}_card_holders.xlsx`);
+
+      message.success(`Exported ${rows.length} card holder(s) to Excel`);
+    } catch (err) {
+      console.error(err);
+      message.error("Excel export failed");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportZip = async () => {
+    const exportCards =
+      selectedRowKeys.length > 0
+        ? cards.filter((c) => selectedRowKeys.includes(c.id))
+        : cards;
+    if (exportCards.length === 0) {
+      message.warning("No card holders to export");
+      return;
+    }
+
+    setExporting(true);
+    const zip = new JSZip();
+
+    try {
+      const rows = [];
+      for (const card of exportCards) {
+        const meta = card.metadata || {};
+        const row = {
+          "Tag ID": card.tagId || "",
+          Name: meta.name || "",
+          Title: meta.title || "",
+          Email: meta.email || "",
+          Phone: meta.phone || "",
+          Address: meta.address || "",
+          "Roll No": meta.studentId || "",
+          Class: meta.grade || "",
+          Section: meta.section || "",
+          House: meta.house || "",
+          Guardian: meta.guardianName || "",
+          "Guardian Phone": meta.guardianPhone || "",
+          "Employee ID": meta.employeeId || "",
+          Department: meta.department || "",
+          Specialization: meta.specialization || "",
+          "License Number": meta.licenseNumber || "",
+          "Emergency Contact": meta.emergencyContact || "",
+          Company: meta.company || "",
+          Position: meta.position || "",
+          LinkedIn: meta.linkedIn || "",
+          Website: meta.website || "",
+          "Business URL": card.businessUrl || "",
+          Photo: "",
+        };
+
+        const knownKeys = new Set([
+          "name",
+          "title",
+          "email",
+          "phone",
+          "address",
+          "studentId",
+          "grade",
+          "section",
+          "house",
+          "guardianName",
+          "guardianPhone",
+          "employeeId",
+          "department",
+          "specialization",
+          "licenseNumber",
+          "emergencyContact",
+          "company",
+          "position",
+          "linkedIn",
+          "website",
+          "photo",
+          "_design",
+          "__templateId",
+          "shortCode",
+          "createdBy",
+        ]);
+
+        Object.entries(meta).forEach(([k, v]) => {
+          if (!knownKeys.has(k) && v) row[k] = v;
+        });
+
+        if (card.profileImageUrl) {
+          let photoFilename;
+          if (meta.photo) {
+            photoFilename = meta.photo;
+          } else {
+            const basename = card.profileImageUrl.split("/").pop() || "";
+            const safeName = (meta.name || card.tagId)
+              .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+              .trim();
+            if (basename.length > 36 && basename[36] === "_") {
+              photoFilename = basename.slice(37) || `${safeName}.jpg`;
+            } else {
+              const ext = basename.match(/\.([^.]+)$/)?.[1] || "jpg";
+              photoFilename = `${safeName}.${ext}`;
+            }
+          }
+
+          row.Photo = photoFilename;
+          try {
+            const imgUrl = card.profileImageUrl;
+            const imgResp = await fetch(imgUrl);
+            if (imgResp.ok) {
+              const imgBlob = await imgResp.blob();
+              zip.file(photoFilename, imgBlob);
+            }
+          } catch (fetchErr) {
+            console.warn(
+              "Could not fetch profile image:",
+              card.profileImageUrl,
+              fetchErr,
+            );
+          }
+        }
+
+        rows.push(row);
+      }
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Card Holders");
+      const xlsxBuffer = XLSX.write(workbook, {
+        type: "array",
+        bookType: "xlsx",
+      });
+      zip.file("card_holders.xlsx", xlsxBuffer);
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeOrgName = (org?.name || org?.tenantId || "organization")
+        .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+        .trim();
+      a.download = `${safeOrgName}_card_holders_sheet.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      message.success(`Exported ${rows.length} card holder(s) with images`);
+    } catch (err) {
+      console.error(err);
+      message.error("Export ZIP as Sheet failed");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // ── distinct filter options ──────────────────────────────────────
@@ -852,6 +1075,15 @@ export default function TenantCardHolders() {
         </Space>
       ),
     },
+  ].filter((col) => !hiddenColumns.has(col.key ?? col.dataIndex));
+
+  const allToggleableCols = [
+    ...dataColumns.map((col) => ({
+      key: col.key,
+      label: typeof col.title === "string" ? col.title : String(col.key),
+    })),
+    { key: "tagId", label: "Tag ID" },
+    { key: "status", label: "Status" },
   ];
 
   const bulkEditColumns = [
@@ -993,119 +1225,219 @@ export default function TenantCardHolders() {
       <Alert
         type="info"
         showIcon
-        message="You can edit card holder details and delete cards. Adding cards is managed by your administrator."
+        message="Manage card holders for your organization, including add, export, and table visibility settings."
         style={{ marginBottom: 16 }}
         closable
       />
 
       <div
         style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: 12,
+        }}
+      >
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          Add Card Holder
+        </Button>
+      </div>
+
+      <div
+        style={{
           marginBottom: 12,
           display: "flex",
           flexWrap: "wrap",
-          gap: 8,
-          alignItems: "center",
+          gap: 12,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
         }}
       >
-        <Input
-          placeholder="Search by name, email, ID or tag…"
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{ maxWidth: 240 }}
-        />
-
-        {/* Status filter — always visible */}
-        <Select
-          placeholder="Status"
-          allowClear
-          style={{ width: 120 }}
-          value={filterStatus || undefined}
-          onChange={(v) => setFilterStatus(v || "")}
-          options={[
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-          ]}
-        />
-
-        {/* SCHOOL-specific filters */}
-        {org?.type === "SCHOOL" && houseOptions.length > 0 && (
-          <Select
-            placeholder="House"
+        <Space wrap size={8} style={{ flex: 1, minWidth: isMobile ? "100%" : 340 }}>
+          <Input
+            placeholder="Search by name, email, ID or tag…"
+            prefix={<SearchOutlined />}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             allowClear
-            style={{ width: 130 }}
-            value={filterHouse || undefined}
-            onChange={(v) => setFilterHouse(v || "")}
-            options={houseOptions}
+            style={{ width: 260 }}
           />
-        )}
-        {org?.type === "SCHOOL" && gradeOptions.length > 0 && (
+
           <Select
-            placeholder="Class / Grade"
+            placeholder="Status"
             allowClear
-            style={{ width: 150 }}
-            value={filterGrade || undefined}
-            onChange={(v) => setFilterGrade(v || "")}
-            options={gradeOptions}
+            style={{ width: 120 }}
+            value={filterStatus || undefined}
+            onChange={(v) => setFilterStatus(v || "")}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
           />
-        )}
 
-        {/* HOSPITAL-specific filter */}
-        {org?.type === "HOSPITAL" && deptOptions.length > 0 && (
-          <Select
-            placeholder="Department"
-            allowClear
-            style={{ width: 160 }}
-            value={filterDept || undefined}
-            onChange={(v) => setFilterDept(v || "")}
-            options={deptOptions}
-          />
-        )}
+          {org?.type === "SCHOOL" && houseOptions.length > 0 && (
+            <Select
+              placeholder="House"
+              allowClear
+              style={{ width: 130 }}
+              value={filterHouse || undefined}
+              onChange={(v) => setFilterHouse(v || "")}
+              options={houseOptions}
+            />
+          )}
 
-        {/* Bulk design button — shown when rows are selected */}
-        {selectedRowKeys.length > 0 && (
-          <Badge count={selectedRowKeys.length} size="small">
-            <Button
-              icon={<AppstoreOutlined />}
-              type="primary"
-              onClick={() => setBulkDesignOpen(true)}
-            >
-              Bulk Card Design
-            </Button>
-          </Badge>
-        )}
+          {org?.type === "SCHOOL" && gradeOptions.length > 0 && (
+            <Select
+              placeholder="Class / Grade"
+              allowClear
+              style={{ width: 150 }}
+              value={filterGrade || undefined}
+              onChange={(v) => setFilterGrade(v || "")}
+              options={gradeOptions}
+            />
+          )}
 
-        {selectedRowKeys.length > 0 && (
-          <Badge count={selectedRowKeys.length} size="small">
-            <Button icon={<EditOutlined />} onClick={openBulkDataEdit}>
-              Edit in Bulk
-            </Button>
-          </Badge>
-        )}
+          {org?.type === "HOSPITAL" && deptOptions.length > 0 && (
+            <Select
+              placeholder="Department"
+              allowClear
+              style={{ width: 160 }}
+              value={filterDept || undefined}
+              onChange={(v) => setFilterDept(v || "")}
+              options={deptOptions}
+            />
+          )}
+        </Space>
 
-        {selectedRowKeys.length > 0 && (
-          <Button danger icon={<DeleteOutlined />} loading={bulkDeleting} onClick={handleBulkDelete}>
-            Delete Selected
-          </Button>
-        )}
-
-        {selectedRowKeys.length > 0 && (
-          <Button size="small" onClick={() => setSelectedRowKeys([])}>
-            Clear selection
-          </Button>
-        )}
-
-        {/* Excel Import — visible when templates are available */}
-        {templates.length > 0 && (
+        <Space wrap size={8}>
           <Button
-            icon={<FileExcelOutlined />}
-            onClick={() => setImportWizardOpen(true)}
-            style={{ marginLeft: "auto" }}
+            icon={<DownloadOutlined />}
+            onClick={handleExcelExport}
+            loading={exportingExcel}
           >
-            Import from Excel
+            Export to Excel
           </Button>
-        )}
+
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExportZip}
+            loading={exporting}
+          >
+            Export ZIP as Sheet
+          </Button>
+
+          <Dropdown
+            trigger={["click"]}
+            dropdownRender={() => (
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                  padding: "8px 0",
+                  minWidth: 200,
+                  maxHeight: 360,
+                  overflowY: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "4px 12px 8px",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    color: "#555",
+                    borderBottom: "1px solid #f0f0f0",
+                    marginBottom: 4,
+                  }}
+                >
+                  Show / hide columns
+                </div>
+                {allToggleableCols.map((col) => (
+                  <div
+                    key={col.key}
+                    style={{
+                      padding: "5px 12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                    onClick={() => toggleColumn(col.key)}
+                  >
+                    <Checkbox checked={!hiddenColumns.has(col.key)} />
+                    <span style={{ fontSize: 13 }}>{col.label}</span>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    borderTop: "1px solid #f0f0f0",
+                    marginTop: 4,
+                    padding: "6px 12px 2px",
+                    display: "flex",
+                    gap: 8,
+                  }}
+                >
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const next = new Set();
+                      setHiddenColumns(next);
+                      saveHiddenColumns(next);
+                    }}
+                  >
+                    Show all
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const allKeys = new Set(allToggleableCols.map((c) => c.key));
+                      setHiddenColumns(allKeys);
+                      saveHiddenColumns(allKeys);
+                    }}
+                  >
+                    Hide all
+                  </Button>
+                </div>
+              </div>
+            )}
+          >
+            <Button icon={<SettingOutlined />}>Columns</Button>
+          </Dropdown>
+
+          {templates.length > 0 && (
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={() => setImportWizardOpen(true)}
+            >
+              Import from Excel
+            </Button>
+          )}
+
+          {selectedRowKeys.length > 0 && (
+            <Badge count={selectedRowKeys.length} size="small">
+              <Button
+                icon={<AppstoreOutlined />}
+                type="primary"
+                onClick={() => setBulkDesignOpen(true)}
+              >
+                Bulk Card Design
+              </Button>
+            </Badge>
+          )}
+
+          {selectedRowKeys.length > 0 && (
+            <Badge count={selectedRowKeys.length} size="small">
+              <Button icon={<EditOutlined />} onClick={openBulkDataEdit}>
+                Edit in Bulk
+              </Button>
+            </Badge>
+          )}
+
+          {selectedRowKeys.length > 0 && (
+            <Button size="small" onClick={() => setSelectedRowKeys([])}>
+              Clear selection
+            </Button>
+          )}
+        </Space>
       </div>
 
       <Table
@@ -1439,15 +1771,21 @@ export default function TenantCardHolders() {
       {/* Edit Modal */}
       <Modal
         open={modalOpen}
-        title="Edit Card Holder"
+        title={editingCard ? "Edit Card Holder" : "Add Card Holder"}
         onCancel={() => setModalOpen(false)}
         onOk={handleSave}
         confirmLoading={saving}
-        okText="Save"
+        okText={editingCard ? "Save" : "Add"}
         width={520}
         destroyOnClose
       >
         <Form form={form} layout="vertical" size="small">
+          {!editingCard && (
+            <Form.Item label="Tag ID (optional)" name="tagId">
+              <Input placeholder="Leave empty to auto-generate PENDING tag" />
+            </Form.Item>
+          )}
+
           {/* Profile photo upload */}
           <Form.Item label="Profile Photo">
             <Space align="start">
@@ -1512,11 +1850,7 @@ export default function TenantCardHolders() {
         }}
         loading={deleteExecuting}
         title="Confirm Deletion"
-        description={
-          deleteTarget?.type === "bulk"
-            ? `Permanently delete ${selectedRowKeys.length} selected card holder(s)? This cannot be undone.`
-            : "Permanently delete this card holder? This cannot be undone."
-        }
+        description="Permanently delete this card holder? This cannot be undone."
       />
     </div>
   );
