@@ -8,6 +8,8 @@
  *   users          — admin + manager accounts
  *                   tenantId is nullable: admin/manager accounts may have no
  *                   assigned organization
+ *                   ui_settings (JSON, nullable): per-user UI preferences
+ *                   (e.g. hidden table columns per org, persists across devices)
  *   cards          — NFC card holders
  *                   tagId may be a real NFC UID or a PENDING-<hex> placeholder
  *                   when no physical tag has been assigned yet.

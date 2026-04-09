@@ -50,6 +50,8 @@ export const authAPI = {
   verify: (password) => api.post("/auth/verify", { password }),
   getUsers: (tenantId) =>
     api.get("/auth/users", { params: tenantId ? { tenantId } : {} }),
+  getUiSettings: () => api.get("/auth/ui-settings"),
+  setUiSettings: (patch) => api.put("/auth/ui-settings", patch),
 };
 
 // Manager account management (admin only)

@@ -56,6 +56,7 @@ import {
   uploadAPI,
   cardAPI,
   cardTemplateAPI,
+  authAPI,
 } from "../../services/api";
 import ExcelImportWizard from "../../components/ExcelImportWizard";
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
@@ -243,7 +244,7 @@ function OrganizationDetail() {
   const [photosZipUploading, setPhotosZipUploading] = useState(false);
   const [photosZipResult, setPhotosZipResult] = useState(null);
 
-  // Column visibility: set of column keys that are HIDDEN
+  // Column visibility — initialised from localStorage cache, then synced from server
   const [hiddenColumns, setHiddenColumns] = useState(() => {
     try {
       const stored = localStorage.getItem(`hiddenCols_${tenantId}`);
@@ -253,14 +254,32 @@ function OrganizationDetail() {
     }
   });
 
+  // Sync hidden-columns preference from server on mount
+  useEffect(() => {
+    authAPI.getUiSettings().then((res) => {
+      const serverCols = res.data?.data?.hiddenCols?.[tenantId];
+      if (Array.isArray(serverCols)) {
+        const next = new Set(serverCols);
+        setHiddenColumns(next);
+        try {
+          localStorage.setItem(`hiddenCols_${tenantId}`, JSON.stringify(serverCols));
+        } catch {}
+      }
+    }).catch(() => { /* keep localStorage value on error */ });
+  }, [tenantId]);
+
+  const saveHiddenColumns = (next) => {
+    const arr = [...next];
+    try { localStorage.setItem(`hiddenCols_${tenantId}`, JSON.stringify(arr)); } catch {}
+    authAPI.setUiSettings({ hiddenCols: { [tenantId]: arr } }).catch(() => {});
+  };
+
   const toggleColumn = (key) => {
     setHiddenColumns((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      try {
-        localStorage.setItem(`hiddenCols_${tenantId}`, JSON.stringify([...next]));
-      } catch {}
+      saveHiddenColumns(next);
       return next;
     });
   };
@@ -1568,10 +1587,9 @@ function OrganizationDetail() {
                   <Button
                     size="small"
                     onClick={() => {
-                      setHiddenColumns(new Set());
-                      try {
-                        localStorage.removeItem(`hiddenCols_${tenantId}`);
-                      } catch {}
+                      const next = new Set();
+                      setHiddenColumns(next);
+                      saveHiddenColumns(next);
                     }}
                   >
                     Show all
@@ -1581,12 +1599,7 @@ function OrganizationDetail() {
                     onClick={() => {
                       const allKeys = new Set(allToggleableCols.map((c) => c.key));
                       setHiddenColumns(allKeys);
-                      try {
-                        localStorage.setItem(
-                          `hiddenCols_${tenantId}`,
-                          JSON.stringify([...allKeys]),
-                        );
-                      } catch {}
+                      saveHiddenColumns(allKeys);
                     }}
                   >
                     Hide all

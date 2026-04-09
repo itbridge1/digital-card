@@ -44,6 +44,13 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
     comment: 'Forces user to set a new password on next login'
+  },
+  uiSettings: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+    field: 'ui_settings',
+    comment: 'Per-user UI preferences (e.g. hidden table columns per org)'
   }
 }, {
   tableName: 'users',

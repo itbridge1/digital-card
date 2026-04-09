@@ -8,6 +8,7 @@
  *   users          — admin + manager accounts
  *                   tenantId is nullable: admin/manager accounts may not belong
  *                   to any organization (e.g. the seeded manager has tenantId: null)
+ *                   ui_settings seeded as NULL (populated at runtime by users)
  *   cards          — NFC card holders
  *                    metadata shape varies by tenant type:
  *                    SCHOOL   : name, studentId (Roll No), grade (Class or "Class(Section)"),

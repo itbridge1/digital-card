@@ -175,24 +175,14 @@ function CardView() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
-  // Field visibility — persisted per card in localStorage
-  const [hiddenFields, setHiddenFields] = useState(() => {
-    try {
-      const stored = localStorage.getItem(`hiddenFields_${tagId}`);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  // Field visibility — persisted inside metadata._design on the server
+  const [hiddenFields, setHiddenFields] = useState(new Set());
 
   const toggleField = (key) => {
     setHiddenFields((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      try {
-        localStorage.setItem(`hiddenFields_${tagId}`, JSON.stringify([...next]));
-      } catch {}
       return next;
     });
   };
@@ -202,9 +192,11 @@ function CardView() {
     if (saved && typeof saved === "object") {
       setSelectedDesign(saved.design || "one");
       setTheme({ ...DEFAULT_THEME, ...saved });
+      setHiddenFields(new Set(Array.isArray(saved.hiddenFields) ? saved.hiddenFields : []));
     } else {
       setSelectedDesign("one");
       setTheme(DEFAULT_THEME);
+      setHiddenFields(new Set());
     }
   };
 
@@ -352,7 +344,7 @@ function CardView() {
     if (!card) return;
     setSavingDesign(true);
     try {
-      const designSettings = { ...theme, design: selectedDesign };
+      const designSettings = { ...theme, design: selectedDesign, hiddenFields: [...hiddenFields] };
       const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       if (currentUser.role === "tenant") {
         await tenantPortalAPI.bulkUpdateDesign([card.id], designSettings);
@@ -364,8 +356,16 @@ function CardView() {
         await useraccessAPI.bulkUpdateDesign(tenantId, [card.id], designSettings);
       }
 
-      // Re-fetch from backend so the currently loaded card reflects persisted data.
-      await fetchCard();
+      // Patch the local card state so it reflects what was just saved,
+      // without triggering a full re-fetch (which causes a loading flash
+      // and risks accidentally resetting the current designer state).
+      setCard((prev) => ({
+        ...prev,
+        metadata: {
+          ...(prev?.metadata || {}),
+          _design: designSettings,
+        },
+      }));
 
       const { message: msg } = await import("antd");
       msg.success("Design saved");
@@ -793,7 +793,6 @@ function CardView() {
                       size="small"
                       onClick={() => {
                         setHiddenFields(new Set());
-                        try { localStorage.removeItem(`hiddenFields_${tagId}`); } catch {}
                       }}
                     >
                       Show all
@@ -803,9 +802,6 @@ function CardView() {
                       onClick={() => {
                         const all = new Set(allToggleableFields.map((f) => f.key));
                         setHiddenFields(all);
-                        try {
-                          localStorage.setItem(`hiddenFields_${tagId}`, JSON.stringify([...all]));
-                        } catch {}
                       }}
                     >
                       Hide all

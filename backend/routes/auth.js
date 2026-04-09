@@ -471,4 +471,52 @@ router.delete(
   },
 );
 
+/**
+ * GET /api/auth/ui-settings
+ * Return the current user's stored UI preferences.
+ */
+router.get("/ui-settings", protect, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ["uiSettings"],
+    });
+    res.json({ success: true, data: user?.uiSettings || {} });
+  } catch (error) {
+    console.error("Get UI settings error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch UI settings" });
+  }
+});
+
+/**
+ * PUT /api/auth/ui-settings
+ * Merge-update the current user's UI preferences.
+ * Body: { hiddenCols: { [tenantId]: [colKey, ...] } }
+ */
+router.put("/ui-settings", protect, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ success: false, error: "User not found" });
+
+    const existing = user.uiSettings || {};
+    // Shallow-merge top-level keys (e.g. hiddenCols) so other preference
+    // groups are not overwritten by a partial update.
+    const incoming = req.body || {};
+    const merged = { ...existing };
+    for (const [key, value] of Object.entries(incoming)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        merged[key] = { ...(existing[key] || {}), ...value };
+      } else {
+        merged[key] = value;
+      }
+    }
+
+    user.uiSettings = merged;
+    await user.save();
+    res.json({ success: true, data: merged });
+  } catch (error) {
+    console.error("Put UI settings error:", error);
+    res.status(500).json({ success: false, error: "Failed to save UI settings" });
+  }
+});
+
 module.exports = router;

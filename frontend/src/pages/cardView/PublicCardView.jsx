@@ -34,6 +34,7 @@ function PublicCardView() {
   const [error, setError] = useState("");
   const [selectedDesign, setSelectedDesign] = useState("one");
   const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [hiddenFields, setHiddenFields] = useState(new Set());
 
   const buildThemeContext = (themeConfig) => {
     const hexToRgba = (hex, opacity, contrast = 100) => {
@@ -69,9 +70,11 @@ function PublicCardView() {
         if (savedDesign && typeof savedDesign === "object") {
           setSelectedDesign(savedDesign.design || "one");
           setTheme({ ...DEFAULT_THEME, ...savedDesign });
+          setHiddenFields(new Set(Array.isArray(savedDesign.hiddenFields) ? savedDesign.hiddenFields : []));
         } else {
           setSelectedDesign("one");
           setTheme(DEFAULT_THEME);
+          setHiddenFields(new Set());
         }
 
         setError("");
@@ -142,6 +145,7 @@ function PublicCardView() {
         formatFieldName={formatFieldName}
         theme={buildThemeContext(theme)}
         templateFields={templateFields}
+        hiddenFields={hiddenFields}
       />
       <p style={{ marginTop: 24, fontSize: 11, color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 500 }}>NFC Digital Card</p>
     </div>
