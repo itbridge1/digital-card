@@ -56,7 +56,6 @@ function CardRegistration() {
   const [regSearch, setRegSearch] = useState("");
   const [regStatusFilter, setRegStatusFilter] = useState("");
   const [regTenantFilter, setRegTenantFilter] = useState("");
-  const [showPending, setShowPending] = useState(false);
 
   const watchedTagId = Form.useWatch("tagId", form);
   const socketRef = useRef(null);
@@ -327,7 +326,7 @@ function CardRegistration() {
       await cardAPI.updateRegistration(editingRow.tagId, {
         status: values.status,
         redirectUrl: values.redirectUrl || null,
-        tenantId: values.tenantId || undefined,
+        tenantId: values.tenantId || undefined,   
       });
 
       message.success(`Updated tag: ${editingRow.tagId}`);
@@ -455,8 +454,6 @@ function CardRegistration() {
 
   const filteredRegistrations = useMemo(() => {
     let data = registrations;
-    if (!showPending)
-      data = data.filter((r) => !r.tagId?.toUpperCase().startsWith("PENDING-"));
     if (regSearch) {
       const q = regSearch.toLowerCase();
       data = data.filter(
@@ -472,7 +469,7 @@ function CardRegistration() {
     if (regTenantFilter)
       data = data.filter((r) => r.tenantId === regTenantFilter);
     return data;
-  }, [registrations, regSearch, regStatusFilter, regTenantFilter, showPending]);
+  }, [registrations, regSearch, regStatusFilter, regTenantFilter]);
 
   const isBusy = saving || editing;
 
@@ -560,14 +557,6 @@ function CardRegistration() {
                 label: `${t.name} (${t.tenantId})`,
               }))}
             />
-            <Space size={6}>
-              <Switch
-                size="small"
-                checked={showPending}
-                onChange={setShowPending}
-              />
-              <Text type="secondary" style={{ fontSize: 13 }}>Show Pending</Text>
-            </Space>
           </Space>
           <Table
             rowKey="id"
