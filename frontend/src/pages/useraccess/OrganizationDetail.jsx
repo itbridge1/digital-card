@@ -586,7 +586,11 @@ function OrganizationDetail() {
   };
 
   const handleExport = async () => {
-    if (cards.length === 0) {
+    const exportCards =
+      selectedRowKeys.length > 0
+        ? cards.filter((c) => selectedRowKeys.includes(c.id))
+        : cards;
+    if (exportCards.length === 0) {
       message.warning("No card holders to export");
       return;
     }
@@ -595,7 +599,7 @@ function OrganizationDetail() {
     const zip = new JSZip();
 
     try {
-      for (const card of cards) {
+      for (const card of exportCards) {
         // 👉 1. Create your card URL (public view)
         const cardUrl = `${window.location.origin}/view/${card.tagId}`;
         // change this if your route is different
@@ -650,7 +654,7 @@ function OrganizationDetail() {
 
       URL.revokeObjectURL(url);
 
-      message.success(`Exported ${cards.length} QR codes`);
+      message.success(`Exported ${exportCards.length} QR codes`);
     } catch (err) {
       console.error(err);
       message.error("Export failed");
@@ -667,7 +671,11 @@ function OrganizationDetail() {
    * Mirror image of what import-zip expects.
    */
   const handleExportZipSheet = async () => {
-    if (cards.length === 0) {
+    const exportCards =
+      selectedRowKeys.length > 0
+        ? cards.filter((c) => selectedRowKeys.includes(c.id))
+        : cards;
+    if (exportCards.length === 0) {
       message.warning("No card holders to export");
       return;
     }
@@ -675,7 +683,7 @@ function OrganizationDetail() {
     const zip = new JSZip();
     try {
       const rows = [];
-      for (const card of cards) {
+      for (const card of exportCards) {
         const meta = card.metadata || {};
         // Build row matching the import-zip column expectations
         const row = {
@@ -867,7 +875,10 @@ function OrganizationDetail() {
   };
 
   const handleExcelExport = () => {
-    const exportData = filteredCards;
+    const exportData =
+      selectedRowKeys.length > 0
+        ? cards.filter((c) => selectedRowKeys.includes(c.id))
+        : filteredCards;
     if (exportData.length === 0) {
       message.warning("No card holders to export");
       return;
