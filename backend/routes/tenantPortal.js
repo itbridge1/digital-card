@@ -7,6 +7,7 @@ const bcrypt = require("bcryptjs");
 const { Op } = require("sequelize");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 // Helper – silently remove a stored profile image file
 function deleteProfileImage(profileImageUrl) {
@@ -147,6 +148,69 @@ router.get("/cards/:cardId", async (req, res) => {
   } catch (error) {
     console.error("Error fetching card:", error);
     res.status(500).json({ success: false, error: "Failed to fetch card holder" });
+  }
+});
+
+/**
+ * POST /api/tenant/cards
+ * Add a new card holder in the authenticated tenant's organization.
+ * tagId is optional; when missing, a PENDING placeholder is generated.
+ */
+router.post("/cards", async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const tenant = await Tenant.findOne({ where: { tenantId, isActive: true } });
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: "Organization not found or inactive" });
+    }
+
+    const { tagId: rawTagId, profileImageUrl, metadata, businessUrl } = req.body;
+    const tagIdUpper = rawTagId
+      ? String(rawTagId).trim().toUpperCase()
+      : `PENDING-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
+
+    if (!tagIdUpper) {
+      return res.status(400).json({ success: false, error: "tagId is invalid" });
+    }
+
+    const existingCard = await Card.findOne({ where: { tagId: tagIdUpper } });
+    if (existingCard && existingCard.metadata && existingCard.metadata.name) {
+      return res.status(400).json({ success: false, error: "This card is already assigned to a user." });
+    }
+
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3030").replace(/\/$/, "");
+    const publicUrl = `${frontendBase}/view/${encodeURIComponent(tagIdUpper)}`;
+
+    let card;
+    if (existingCard) {
+      existingCard.tenantId = tenantId;
+      existingCard.metadata = { ...(existingCard.metadata || {}), ...(metadata || {}) };
+      existingCard.businessUrl = businessUrl || existingCard.businessUrl || publicUrl;
+      existingCard.publicUrl = existingCard.publicUrl || publicUrl;
+      if (profileImageUrl !== undefined) {
+        existingCard.profileImageUrl = profileImageUrl;
+      }
+      await existingCard.save();
+      card = existingCard;
+    } else {
+      card = await Card.create({
+        tagId: tagIdUpper,
+        tenantId,
+        businessUrl: businessUrl || publicUrl,
+        publicUrl,
+        profileImageUrl: profileImageUrl || null,
+        metadata: { ...(metadata || {}) },
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Card holder added successfully",
+      data: card,
+    });
+  } catch (error) {
+    console.error("Error creating card holder:", error);
+    res.status(500).json({ success: false, error: "Failed to add card holder" });
   }
 });
 
