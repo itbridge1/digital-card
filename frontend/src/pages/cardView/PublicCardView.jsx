@@ -69,7 +69,14 @@ function PublicCardView() {
         const savedDesign = fetchedCard?.metadata?._design;
         if (savedDesign && typeof savedDesign === "object") {
           setSelectedDesign(savedDesign.design || "one");
-          setTheme({ ...DEFAULT_THEME, ...savedDesign });
+          setTheme({
+            ...DEFAULT_THEME,
+            ...savedDesign,
+            layout: {
+              ...DEFAULT_THEME.layout,
+              ...(savedDesign.layout || {}),
+            },
+          });
           setHiddenFields(new Set(Array.isArray(savedDesign.hiddenFields) ? savedDesign.hiddenFields : []));
         } else {
           setSelectedDesign("one");
