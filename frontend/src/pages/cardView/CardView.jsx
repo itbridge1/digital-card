@@ -200,6 +200,14 @@ function CardView() {
     const saved = fetchedCard?.metadata?._design;
     if (saved && typeof saved === "object") {
       setSelectedDesign(saved.design || "one");
+      setTheme({
+        ...DEFAULT_THEME,
+        ...saved,
+        layout: {
+          ...DEFAULT_THEME.layout,
+          ...(saved.layout || {}),
+        },
+      });
       setHiddenFields(new Set(Array.isArray(saved.hiddenFields) ? saved.hiddenFields : []));
     } else {
       setSelectedDesign("one");
