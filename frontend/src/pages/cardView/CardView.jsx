@@ -157,6 +157,15 @@ const DEFAULT_THEME = {
   preset: "ocean",
   isDark: false,
   contrast: 100,
+  layout: {
+    avatarTop: 22,
+    avatarSize: 116,
+    nameTop: 14,
+    contentTop: 12,
+    contentGap: 8,
+    contentLeftPadding: 6,
+    contentRightPadding: 6,
+  },
 };
 
 function CardView() {
@@ -191,7 +200,6 @@ function CardView() {
     const saved = fetchedCard?.metadata?._design;
     if (saved && typeof saved === "object") {
       setSelectedDesign(saved.design || "one");
-      setTheme({ ...DEFAULT_THEME, ...saved });
       setHiddenFields(new Set(Array.isArray(saved.hiddenFields) ? saved.hiddenFields : []));
     } else {
       setSelectedDesign("one");
@@ -204,7 +212,6 @@ function CardView() {
     const params = new URLSearchParams(window.location.search);
     const token = localStorage.getItem("token");
     // Unauthenticated users accessing a manager-scoped card URL
-    // should be redirected to the public read-only view.
     if (params.has("tenantId") && !token) {
       navigate(`/view/${tagId}`, { replace: true });
       return;
@@ -278,7 +285,6 @@ function CardView() {
 
       setError("");
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to fetch card");
     } finally {
       setLoading(false);
     }
@@ -337,6 +343,15 @@ function CardView() {
   };
   const handleFontFamilyChange = (value) => {
     setTheme((prev) => ({ ...prev, fontFamily: value }));
+  };
+  const handleLayoutChange = (key, value) => {
+    setTheme((prev) => ({
+      ...prev,
+      layout: {
+        ...(prev.layout || DEFAULT_THEME.layout),
+        [key]: value,
+      },
+    }));
   };
   const resetToDefault = () => setTheme(DEFAULT_THEME);
 
@@ -419,6 +434,7 @@ function CardView() {
             { label: "Design 2", value: "two" },
             { label: "Design 3", value: "three" },
             { label: "Design 4", value: "four" },
+            { label: "Design 5", value: "five" },
           ]}
         />
       </Card>
@@ -582,6 +598,38 @@ function CardView() {
             onChange={handleContrastChange}
           />
         </div>
+
+        <Card
+          size="small"
+          style={{ marginTop: 16, borderRadius: 12, border: "1px solid #e2e8f0" }}
+        >
+          <Text strong style={{ display: "block", marginBottom: 12 }}>
+            Layout
+          </Text>
+
+          {[
+            { key: "avatarTop", label: "Avatar Top Spacing", min: 0, max: 60 },
+            { key: "avatarSize", label: "Avatar Size", min: 80, max: 160 },
+            { key: "nameTop", label: "Name Spacing", min: 0, max: 36 },
+            { key: "contentTop", label: "Content Spacing", min: 0, max: 40 },
+            { key: "contentGap", label: "Content Row Gap", min: 4, max: 20 },
+            { key: "contentLeftPadding", label: "Content Left Padding", min: 0, max: 32 },
+            { key: "contentRightPadding", label: "Content Right Padding", min: 0, max: 32 },
+          ].map(({ key, label, min, max }) => (
+            <div key={key} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <Text style={{ fontSize: 12, color: "#64748b" }}>{label}</Text>
+                <Text style={{ fontSize: 12, color: "#64748b" }}>{theme.layout?.[key] ?? DEFAULT_THEME.layout[key]}px</Text>
+              </div>
+              <Slider
+                min={min}
+                max={max}
+                value={theme.layout?.[key] ?? DEFAULT_THEME.layout[key]}
+                onChange={(value) => handleLayoutChange(key, value)}
+              />
+            </div>
+          ))}
+        </Card>
       </Card>
     </div>
   );
@@ -679,7 +727,7 @@ function CardView() {
   const cardholderName = card.metadata?.name || "—";
   const cardholderTitle = card.metadata?.title || "";
 
-  const DESIGNS = ["one", "two", "three", "four"];
+  const DESIGNS = ["one", "two", "three", "four", "five"];
 
   return (
     <div

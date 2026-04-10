@@ -181,6 +181,15 @@ function CardDesignOne({
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
   const valueColor =
     valueTextColor || (isDark ? DARK_TEXT_PRIMARY : bodyTextColor);
+  const layout = theme.layout || {};
+  const avatarTop = layout.avatarTop ?? 22;
+  const avatarSize = Math.max(72, (layout.avatarSize ?? 116) - 16);
+  const nameTop = Math.max(0, (layout.nameTop ?? 14) - 4);
+  const contentTop = layout.contentTop ?? 12;
+  const contentGap = Math.max(4, Math.round((layout.contentGap ?? 8) * 0.6));
+  const baseSidePadding = layout.contentSidePadding ?? 6;
+  const contentLeftPadding = layout.contentLeftPadding ?? baseSidePadding;
+  const contentRightPadding = layout.contentRightPadding ?? baseSidePadding;
 
   return (
     <Card
@@ -254,15 +263,23 @@ function CardDesignOne({
       </div>
 
       {/* 📦 Content */}
-      <div style={{ padding: "20px", position: "relative" }}>
+      <div
+        style={{
+          paddingTop: contentTop + 8,
+          paddingBottom: 20,
+          paddingLeft: `calc(20px + ${contentLeftPadding}px)`,
+          paddingRight: `calc(20px + ${contentRightPadding}px)`,
+          position: "relative",
+        }}
+      >
         {/* 👤 BIGGER Avatar */}
         <div
           style={{
-            width: 100, // 🔥 increased
-            height: 100, // 🔥 increased
+            width: avatarSize,
+            height: avatarSize,
             borderRadius: "50%",
             overflow: "hidden",
-            margin: "20px auto",
+            margin: `${avatarTop}px auto 0`,
             border: isDark
               ? `3px solid ${DARK_BORDER_SOFT}`
               : "4px solid white",
@@ -295,7 +312,7 @@ function CardDesignOne({
         </div>
 
         {/* 🧑 Name */}
-        <div style={{ textAlign: "center", marginTop: 10 }}>
+        <div style={{ textAlign: "center", marginTop: nameTop }}>
           <h3 style={{ marginBottom: 0 }}>
             <span style={{ color: nameColor || primaryColor }}>
               {displayName?.split(" ")[0] || "Name"}
@@ -311,26 +328,33 @@ function CardDesignOne({
         </div>
 
         {/* 📋 Data */}
-        <div style={{ marginTop: 12, fontSize: 12 }}>
+        <div
+          style={{
+            marginTop: contentTop,
+            fontSize: 12,
+            paddingLeft: `clamp(0px, 1.6vw, ${contentLeftPadding}px)`,
+            paddingRight: `clamp(0px, 1.6vw, ${contentRightPadding}px)`,
+          }}
+        >
           {/* ID */}
           {/* <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: labelColor }}>ID</span>
             <strong style={{ color: accentColor }}>{card.tagId}</strong>
           </div> */}
           {/* Dynamic Rows */}
-          {displayRows.map(([key, value, tplLabel]) => (
+          {displayRows.map(([key, value, tplLabel], idx) => (
             <div
               key={key}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                marginTop: 4,
+                marginTop: idx === 0 ? 0 : `clamp(3px, 1.2vw, ${contentGap}px)`,
               }}
             >
               <span style={{ color: labelColor }}>
                 {tplLabel || formatFieldName(key)}
               </span>
-              <strong style={{ color: valueColor }}>{value}</strong>
+              <strong style={{ color: valueColor, marginLeft: 6 }}>{value}</strong>
             </div>
           ))}
         </div>
@@ -421,6 +445,15 @@ function CardDesignTwo({
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
   const valueColor =
     valueTextColor || (isDark ? DARK_TEXT_PRIMARY : bodyTextColor);
+  const layout = theme.layout || {};
+  const avatarTop = Math.max(0, (layout.avatarTop ?? 22) - 22);
+  const avatarSize = Math.max(84, (layout.avatarSize ?? 116) + 4);
+  const nameTop = Math.max(0, (layout.nameTop ?? 14) - 14);
+  const contentTop = Math.max(0, (layout.contentTop ?? 12) - 2);
+  const contentGap = Math.max(4, Math.round((layout.contentGap ?? 8) * 0.6));
+  const baseSidePadding = layout.contentSidePadding ?? 6;
+  const contentLeftPadding = layout.contentLeftPadding ?? baseSidePadding;
+  const contentRightPadding = layout.contentRightPadding ?? baseSidePadding;
 
   return (
     <Card
@@ -499,11 +532,11 @@ function CardDesignTwo({
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            width: 120,
-            height: 120,
+            width: avatarSize,
+            height: avatarSize,
             borderRadius: "50%",
             overflow: "hidden",
-            margin: "0 auto",
+            margin: `${avatarTop}px auto 0`,
             border: `4px solid ${primaryColor}`,
             background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
           }}
@@ -535,9 +568,16 @@ function CardDesignTwo({
       </div>
 
       {/* 📦 CONTENT */}
-      <div style={{ padding: "16px" }}>
+      <div
+        style={{
+          paddingTop: 16 + contentTop,
+          paddingBottom: 16,
+          paddingLeft: `calc(16px + ${contentLeftPadding}px)`,
+          paddingRight: `calc(16px + ${contentRightPadding}px)`,
+        }}
+      >
         {/* Name */}
-        <div style={{ textAlign: "center" }}>
+        <div style={{ textAlign: "center", marginTop: nameTop }}>
           <h3
             style={{
               marginBottom: 0,
@@ -559,14 +599,21 @@ function CardDesignTwo({
         </div> */}
 
         {/* 📋 Dynamic Fields */}
-        <div style={{ marginTop: 10, fontSize: 12 }}>
+        <div
+          style={{
+            marginTop: contentTop,
+            fontSize: 12,
+            paddingLeft: `clamp(0px, 1.6vw, ${contentLeftPadding}px)`,
+            paddingRight: `clamp(0px, 1.6vw, ${contentRightPadding}px)`,
+          }}
+        >
           {displayRows.map(([key, value, tplLabel]) => (
             <div
               key={key}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                marginBottom: 4,
+                marginBottom: `clamp(3px, 1.2vw, ${contentGap}px)`,
                 borderBottom: `1px dashed ${hexToRgba(primaryColor, 0.2)}`,
                 paddingBottom: 2,
               }}
@@ -574,7 +621,7 @@ function CardDesignTwo({
               <span style={{ color: labelColor }}>
                 {tplLabel || formatFieldName(key)}
               </span>
-              <strong style={{ color: valueColor }}>{value}</strong>
+              <strong style={{ color: valueColor, marginLeft: 6 }}>{value}</strong>
             </div>
           ))}
         </div>
@@ -663,6 +710,16 @@ function CardDesignThree({
     ? DARK_TEXT_SECONDARY
     : hexToRgba(bodyTextColor, 0.78);
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+  const layout = theme.layout || {};
+  const avatarTop = layout.avatarTop ?? 22;
+  const avatarSize = Math.max(64, (layout.avatarSize ?? 116) - 36);
+  const nameTop = Math.max(0, (layout.nameTop ?? 14) - 14);
+  const contentTop = layout.contentTop ?? 12;
+  const contentGap = Math.max(4, Math.round((layout.contentGap ?? 8) * 0.6));
+  const baseSidePadding = layout.contentSidePadding ?? 6;
+  const contentLeftPadding = layout.contentLeftPadding ?? baseSidePadding;
+  const contentRightPadding = layout.contentRightPadding ?? baseSidePadding;
+  const profileTop = 68 + avatarTop;
 
   return (
     <Card
@@ -720,7 +777,7 @@ function CardDesignThree({
       <div
         style={{
           position: "absolute",
-          top: 90, // moved image below header
+          top: profileTop,
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
@@ -728,8 +785,8 @@ function CardDesignThree({
       >
         <div
           style={{
-            width: 80, // increased image size
-            height: 80,
+            width: avatarSize,
+            height: avatarSize,
             borderRadius: "50%",
             overflow: "hidden",
             border: `3px solid ${accentColor}`,
@@ -765,9 +822,17 @@ function CardDesignThree({
       </div>
 
       {/* ⚪ Content */}
-      <div style={{ marginTop: 80, padding: "14px" }}>
+      <div
+        style={{
+          marginTop: avatarSize + contentTop,
+          paddingTop: 14,
+          paddingBottom: 14,
+          paddingLeft: `calc(14px + ${contentLeftPadding}px)`,
+          paddingRight: `calc(14px + ${contentRightPadding}px)`,
+        }}
+      >
         {/* Name */}
-        <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <div style={{ textAlign: "center", marginBottom: 8, marginTop: nameTop }}>
           <div style={{ fontWeight: "bold", fontSize: 14, color: nameColor }}>
             {displayName || "Your Name"}
           </div>
@@ -787,13 +852,23 @@ function CardDesignThree({
         </div> */}
 
         {/* Simple Fields */}
-        <div style={{ fontSize: 11, lineHeight: "18px" }}>
+        <div
+          style={{
+            fontSize: 11,
+            lineHeight: "18px",
+            paddingLeft: `clamp(0px, 1.6vw, ${contentLeftPadding}px)`,
+            paddingRight: `clamp(0px, 1.6vw, ${contentRightPadding}px)`,
+            display: "flex",
+            flexDirection: "column",
+            gap: `clamp(3px, 1.2vw, ${contentGap}px)`,
+          }}
+        >
           {displayRows.map(([key, value, tplLabel]) => (
             <div key={key}>
               <span style={{ color: accentColor, fontWeight: 500 }}>
                 {tplLabel || formatFieldName(key)}:
               </span>{" "}
-              <span style={{ color: valueColor }}>{value}</span>
+              <span style={{ color: valueColor, marginLeft: 4 }}>{value}</span>
             </div>
           ))}
         </div>
@@ -870,6 +945,15 @@ function CardDesignFour({
   const nameColor = nameTextColor || fallbackText;
   const valueColor = valueTextColor || fallbackText;
   const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+  const layout = theme.layout || {};
+  const avatarTop = Math.max(0, (layout.avatarTop ?? 22) - 10);
+  const avatarSize = Math.max(100, (layout.avatarSize ?? 116) + 24);
+  const nameTop = Math.max(0, (layout.nameTop ?? 14) - 14);
+  const contentTop = Math.max(0, (layout.contentTop ?? 12) - 4);
+  const contentGap = Math.max(4, Math.round((layout.contentGap ?? 8) * 0.75));
+  const baseSidePadding = layout.contentSidePadding ?? 6;
+  const contentLeftPadding = layout.contentLeftPadding ?? baseSidePadding;
+  const contentRightPadding = layout.contentRightPadding ?? baseSidePadding;
 
   return (
     <Card
@@ -925,15 +1009,23 @@ function CardDesignFour({
       />
 
       {/* 📦 CONTENT */}
-      <div className="px-5 pt-5 pb-4 text-center">
+      <div
+        className="text-center"
+        style={{
+          paddingTop: 20 + contentTop,
+          paddingBottom: 16,
+          paddingLeft: `calc(20px + ${contentLeftPadding}px)`,
+          paddingRight: `calc(20px + ${contentRightPadding}px)`,
+        }}
+      >
         {/* 👤 Avatar */}
         <div
           style={{
-            width: 140,
-            height: 140,
+            width: avatarSize,
+            height: avatarSize,
             borderRadius: "50%",
             overflow: "hidden",
-            margin: "12px auto 10px auto",
+            margin: `${avatarTop}px auto 10px auto`,
             border: isDark
               ? `5px solid ${DARK_SURFACE_ELEVATED}`
               : "5px solid white",
@@ -971,6 +1063,7 @@ function CardDesignFour({
           <div
             className="mx-auto mb-2 text-center"
             style={{
+              marginTop: nameTop,
               fontSize: 18,
               fontWeight: 700,
               color: nameColor,
@@ -981,12 +1074,19 @@ function CardDesignFour({
         ) : null}
 
         {/* 📋 DETAILS */}
-        <div className="mt-2 text-left">
+        <div
+          className="text-left"
+          style={{
+            marginTop: contentTop,
+            paddingLeft: `clamp(0px, 1.6vw, ${contentLeftPadding}px)`,
+            paddingRight: `clamp(0px, 1.6vw, ${contentRightPadding}px)`,
+          }}
+        >
           {displayRows.map(([key, value, tplLabel]) => (
             <div
               key={key}
               style={{
-                marginBottom: 6,
+                marginBottom: `clamp(4px, 1.2vw, ${contentGap}px)`,
                 fontSize: 14,
                 lineHeight: "20px",
               }}
@@ -1003,6 +1103,7 @@ function CardDesignFour({
                 style={{
                   color: valueColor,
                   fontWeight: 500,
+                  marginLeft: 4,
                 }}
               >
                 {value}
@@ -1023,11 +1124,217 @@ function CardDesignFour({
     </Card>
   );
 }
+
+function CardDesignFive({
+  card,
+  tenant,
+  formatFieldName,
+  theme,
+  templateFields,
+  hiddenFields,
+}) {
+  const displayRows = getDisplayRows(card, templateFields)
+    .filter(([key]) => !HIDDEN_DISPLAY_FIELDS.has(key))
+    .filter(([key]) => !hiddenFields?.has(key))
+    .map(([key, value, tplLabel]) => [key, toDisplayValue(value), tplLabel]);
+  const { name: displayName, title: displayTitle } = resolveNameAndTitle(
+    card,
+    templateFields,
+  );
+
+  const {
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    surfaceColor,
+    textColor,
+    nameTextColor,
+    valueTextColor,
+    fontFamily,
+    isDark,
+    hexToRgba,
+  } = theme;
+
+  const bodyTextColor = textColor || (isDark ? DARK_TEXT_PRIMARY : "#ffffff");
+  const nameColor = nameTextColor || bodyTextColor;
+  const valueColor = valueTextColor || bodyTextColor;
+  const mutedTextColor = isDark
+    ? DARK_TEXT_SECONDARY
+    : hexToRgba(bodyTextColor, 0.8);
+  const backgroundImage =
+    resolveImg(tenant?.logoUrl) || resolveImg(card.profileImageUrl);
+  const cardSurfaceColor = isDark ? DARK_SURFACE_BASE : surfaceColor;
+  const layout = theme.layout || {};
+  const avatarTop = layout.avatarTop ?? 22;
+  const avatarSize = layout.avatarSize ?? 116;
+  const nameTop = layout.nameTop ?? 14;
+  const contentTop = layout.contentTop ?? 12;
+  const contentGap = layout.contentGap ?? 8;
+  const baseSidePadding = layout.contentSidePadding ?? 6;
+  const contentLeftPadding = layout.contentLeftPadding ?? baseSidePadding;
+  const contentRightPadding = layout.contentRightPadding ?? baseSidePadding;
+
+  return (
+    <Card
+      style={{
+        width: "min(340px, 100%)",
+        height: 420,
+        borderRadius: 18,
+        overflow: "hidden",
+        position: "relative",
+        background: cardSurfaceColor,
+        fontFamily,
+        border: isDark ? `1px solid ${DARK_BORDER_SOFT}` : undefined,
+      }}
+      bodyStyle={{ padding: 0 }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: backgroundImage
+            ? `url(${backgroundImage})`
+            : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundColor: !backgroundImage
+            ? hexToRgba(primaryColor, 0.18)
+            : undefined,
+          zIndex: 1,
+        }}
+      />
+
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          height: "100%",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-start",
+          color: bodyTextColor,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 1.4,
+              textTransform: "uppercase",
+              color: mutedTextColor,
+            }}
+          >
+            {tenant?.name || "Your Brand"}
+          </div>
+
+          <div
+            style={{
+              width: avatarSize,
+              height: avatarSize,
+              borderRadius: "50%",
+              overflow: "hidden",
+              margin: `${avatarTop}px auto 0`,
+              border: `4px solid ${hexToRgba("#ffffff", 0.85)}`,
+              boxShadow: "0 10px 24px rgba(0,0,0,0.22)",
+              background: hexToRgba(primaryColor, 0.2),
+            }}
+          >
+            {card.profileImageUrl ? (
+              <img
+                src={resolveImg(card.profileImageUrl)}
+                alt="profile"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 36,
+                  fontWeight: 700,
+                  color: "#fff",
+                  background: hexToRgba(primaryColor, 0.45),
+                }}
+              >
+                {displayName?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: nameTop }}>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: nameColor,
+                lineHeight: 1.15,
+              }}
+            >
+              {displayName || "Your Name"}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, color: mutedTextColor }}>
+              {displayTitle || "Job Position"}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: `clamp(6px, 2.2vw, ${contentGap}px)`,
+            paddingTop: contentTop,
+            paddingLeft: `clamp(0px, 2vw, ${contentLeftPadding}px)`,
+            paddingRight: `clamp(0px, 2vw, ${contentRightPadding}px)`,
+          }}
+        >
+          {displayRows.map(([key, value, tplLabel]) => (
+            <div
+              key={key}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "baseline",
+                fontSize: 12,
+                lineHeight: "18px",
+              }}
+            >
+              <span
+                style={{ color: accentColor, fontWeight: 600, flex: "none" }}
+              >
+                {tplLabel || formatFieldName(key)}:
+              </span>
+              <span
+                style={{
+                  color: valueColor,
+                  fontWeight: 500,
+                  marginLeft: 6,
+                  textAlign: "right",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
 const CARD_DESIGNS = {
   one: CardDesignOne,
   two: CardDesignTwo,
   three: CardDesignThree,
   four: CardDesignFour,
+  five: CardDesignFive,
 };
 
 function SelectCard({
