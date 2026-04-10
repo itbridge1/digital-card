@@ -709,20 +709,42 @@ function CardView() {
     "section",
     "profileImageUrl",
     "_design",
+    "__templateId",
+    "photo",
   ];
   const displayRows = Object.entries(card.metadata || {}).filter(
     ([key]) => !INTERNAL_KEYS.includes(key),
   );
 
-  // All fields toggleable in the Fields menu
-  const allToggleableFields = [
-    ...displayRows.map(([key]) => ({
-      key,
-      label: formatFieldName(key),
-    })),
-    { key: "_field_tagId", label: "Tag ID" },
-    ...(card.businessUrl ? [{ key: "_field_businessUrl", label: "Business URL" }] : []),
-  ];
+  // All fields toggleable in the Fields menu.
+  // When templateFields is available, use them (correct labels + order).
+  // Fall back to raw metadata keys for non-template cards.
+  const allToggleableFields = (() => {
+    const tail = [
+      { key: "_field_tagId", label: "Tag ID" },
+      ...(card.businessUrl ? [{ key: "_field_businessUrl", label: "Business URL" }] : []),
+    ];
+
+    if (templateFields && templateFields.length > 0) {
+      const tplFields = [...templateFields]
+        .filter((f) => !INTERNAL_KEYS.includes(f.key))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map((f) => ({ key: f.key, label: f.label }));
+
+      // Also include any extra metadata keys not covered by the template
+      const tplKeySet = new Set(tplFields.map((f) => f.key));
+      const extraFields = displayRows
+        .filter(([key]) => !tplKeySet.has(key))
+        .map(([key]) => ({ key, label: formatFieldName(key) }));
+
+      return [...tplFields, ...extraFields, ...tail];
+    }
+
+    return [
+      ...displayRows.map(([key]) => ({ key, label: formatFieldName(key) })),
+      ...tail,
+    ];
+  })();
 
   const cardholderName = card.metadata?.name || "—";
   const cardholderTitle = card.metadata?.title || "";

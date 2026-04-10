@@ -197,6 +197,38 @@ const { Title, Text } = Typography;
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
+// Metadata keys that are covered by the hardcoded SCHOOL / HOSPITAL / BUSINESS form.
+// Any key NOT in this set is considered a custom / imported field.
+const STANDARD_META_KEYS = new Set([
+  // common
+  "name", "email", "phone", "address",
+  // school
+  "studentId", "grade", "section", "house", "guardianName", "guardianPhone",
+  // hospital
+  "employeeId", "department", "specialization", "licenseNumber", "emergencyContact",
+  // business
+  "company", "position", "linkedIn", "website",
+  // internal — never shown
+  "_design", "__templateId", "shortCode", "createdBy", "photo", "profileImageUrl",
+  "title", "custom",
+]);
+
+/**
+ * Build a virtual field list from a set of cards when no CardTemplate is present.
+ * Uses the union of all metadata keys across all cards, in the order they first appear.
+ */
+const inferFieldsFromCards = (cardList) => {
+  const seen = new Map(); // key → label
+  cardList.forEach((c) => {
+    Object.keys(c.metadata || {}).forEach((k) => {
+      if (!STANDARD_META_KEYS.has(k) && !seen.has(k)) {
+        seen.set(k, k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()).trim());
+      }
+    });
+  });
+  return [...seen.entries()].map(([key, label], idx) => ({ key, label, order: idx }));
+};
+
 const splitGradeSection = (gradeValue) => {
   const raw = String(gradeValue || "").trim();
   const match = raw.match(/^(.*?)(?:\((.*?)\))?$/);
@@ -318,6 +350,9 @@ function OrganizationDetail() {
   const [bulkDataCards, setBulkDataCards] = useState([]);
   const [bulkDataSaving, setBulkDataSaving] = useState(false);
 
+  // Template associated with the card currently being edited
+  const [editingCardTemplate, setEditingCardTemplate] = useState(null);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -338,6 +373,20 @@ function OrganizationDetail() {
 
   const openCreate = async () => {
     setEditingCard(null);
+
+    // Priority 1: use the org's default / first CardTemplate
+    let tpl = orgTemplates.find((t) => t.isDefault) || orgTemplates[0] || null;
+
+    // Priority 2: if no template exists, infer fields from already-imported cards
+    // so the Add form mirrors whatever columns were in the original XLS import.
+    if (!tpl) {
+      const inferred = inferFieldsFromCards(cards);
+      if (inferred.length > 0) {
+        tpl = { id: null, fields: inferred };
+      }
+    }
+
+    setEditingCardTemplate(tpl);
     setProfileUrl("");
     form.resetFields();
     setNfcTagsLoading(true);
@@ -356,39 +405,69 @@ function OrganizationDetail() {
     setEditingCard(card);
     setProfileUrl(card.profileImageUrl || "");
     const m = card.metadata || {};
-    // Split merged grade "One(A)" back to grade + section for the edit form
-    let editGrade = m.grade || "";
-    let editSection = "";
-    const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
-    if (sectionMatch) {
-      editGrade = sectionMatch[1];
-      editSection = sectionMatch[2];
+
+    // Priority 1: template the card was explicitly created from
+    const templateId = m.__templateId;
+    let tpl = templateId
+      ? orgTemplates.find((t) => t.id == templateId) || null
+      : null;
+
+    // Priority 2: org's default template (covers cards imported before template existed)
+    if (!tpl) {
+      tpl = orgTemplates.find((t) => t.isDefault) || orgTemplates[0] || null;
     }
-    form.setFieldsValue({
-      tagId: card.tagId,
-      name: m.name || "",
-      email: m.email || "",
-      phone: m.phone || "",
-      address: m.address || "",
-      // SCHOOL
-      studentId: m.studentId || "",
-      grade: editGrade,
-      section: editSection,
-      house: m.house || "",
-      guardianName: m.guardianName || "",
-      guardianPhone: m.guardianPhone || "",
-      // HOSPITAL
-      employeeId: m.employeeId || "",
-      department: m.department || "",
-      specialization: m.specialization || "",
-      licenseNumber: m.licenseNumber || "",
-      emergencyContact: m.emergencyContact || "",
-      // BUSINESS
-      company: m.company || "",
-      position: m.position || "",
-      linkedIn: m.linkedIn || "",
-      website: m.website || "",
-    });
+
+    // Priority 3: infer fields from this card's own metadata keys
+    if (!tpl) {
+      const inferred = inferFieldsFromCards([card]);
+      if (inferred.length > 0) {
+        tpl = { id: null, fields: inferred };
+      }
+    }
+
+    setEditingCardTemplate(tpl);
+
+    if (tpl && tpl.fields?.length > 0) {
+      // Dynamic / template-based form
+      const formValues = { tagId: card.tagId };
+      tpl.fields.forEach((f) => {
+        formValues[f.key] = m[f.key] ?? "";
+      });
+      // Also seed standard fields so they're available if the form shows them
+      formValues.name = m.name ?? "";
+      form.setFieldsValue(formValues);
+    } else {
+      // Pure hardcoded fallback (SCHOOL / HOSPITAL / BUSINESS)
+      let editGrade = m.grade || "";
+      let editSection = "";
+      const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
+      if (sectionMatch) {
+        editGrade = sectionMatch[1];
+        editSection = sectionMatch[2];
+      }
+      form.setFieldsValue({
+        tagId: card.tagId,
+        name: m.name || "",
+        email: m.email || "",
+        phone: m.phone || "",
+        address: m.address || "",
+        studentId: m.studentId || "",
+        grade: editGrade,
+        section: editSection,
+        house: m.house || "",
+        guardianName: m.guardianName || "",
+        guardianPhone: m.guardianPhone || "",
+        employeeId: m.employeeId || "",
+        department: m.department || "",
+        specialization: m.specialization || "",
+        licenseNumber: m.licenseNumber || "",
+        emergencyContact: m.emergencyContact || "",
+        company: m.company || "",
+        position: m.position || "",
+        linkedIn: m.linkedIn || "",
+        website: m.website || "",
+      });
+    }
     setModalOpen(true);
   };
 
@@ -453,42 +532,61 @@ function OrganizationDetail() {
       setSaving(true);
       const orgType = organization?.type;
 
-      const metadata = {
-        name: values.name,
-        email: values.email,
-        phone: values.phone,
-        address: values.address,
-      };
+      let metadata;
 
-      if (orgType === "SCHOOL") {
-        // Merge section into grade: "One(A)" or "One"
-        const rawGrade = (values.grade || "").trim();
-        const rawSection = (values.section || "").trim();
-        const mergedGrade =
-          rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
-        Object.assign(metadata, {
-          studentId: values.studentId,
-          grade: mergedGrade,
-          house: values.house,
-          guardianName: values.guardianName,
-        });
-        // drop email/phone/address from base metadata for SCHOOL
-        delete metadata.email;
-      } else if (orgType === "HOSPITAL") {
-        Object.assign(metadata, {
-          employeeId: values.employeeId,
-          department: values.department,
-          specialization: values.specialization,
-          licenseNumber: values.licenseNumber,
-          emergencyContact: values.emergencyContact,
+      if (editingCardTemplate && editingCardTemplate.fields?.length > 0) {
+        // Template / inferred-field path
+        // For edits: preserve existing metadata (keeps __templateId, _design, etc.)
+        // For creates with a real template: seed __templateId
+        // For creates with an inferred virtual template (id===null): no __templateId
+        metadata = editingCard
+          ? { ...(editingCard.metadata || {}) }
+          : editingCardTemplate.id
+            ? { __templateId: editingCardTemplate.id }
+            : {};
+        editingCardTemplate.fields.forEach((f) => {
+          if (values[f.key] !== undefined) {
+            metadata[f.key] = values[f.key];
+          }
         });
       } else {
-        Object.assign(metadata, {
-          company: values.company,
-          position: values.position,
-          linkedIn: values.linkedIn,
-          website: values.website,
-        });
+        metadata = {
+          name: values.name,
+          email: values.email,
+          phone: values.phone,
+          address: values.address,
+        };
+
+        if (orgType === "SCHOOL") {
+          // Merge section into grade: "One(A)" or "One"
+          const rawGrade = (values.grade || "").trim();
+          const rawSection = (values.section || "").trim();
+          const mergedGrade =
+            rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
+          Object.assign(metadata, {
+            studentId: values.studentId,
+            grade: mergedGrade,
+            house: values.house,
+            guardianName: values.guardianName,
+          });
+          // drop email/phone/address from base metadata for SCHOOL
+          delete metadata.email;
+        } else if (orgType === "HOSPITAL") {
+          Object.assign(metadata, {
+            employeeId: values.employeeId,
+            department: values.department,
+            specialization: values.specialization,
+            licenseNumber: values.licenseNumber,
+            emergencyContact: values.emergencyContact,
+          });
+        } else {
+          Object.assign(metadata, {
+            company: values.company,
+            position: values.position,
+            linkedIn: values.linkedIn,
+            website: values.website,
+          });
+        }
       }
 
       const payload = {
@@ -2064,7 +2162,7 @@ function OrganizationDetail() {
           </Form.Item>
 
           {/* Non-SCHOOL: Full Name shown here; SCHOOL has it inside its own block */}
-          {orgType !== "SCHOOL" && (
+          {orgType !== "SCHOOL" && !editingCardTemplate && (
             <Form.Item
               label="Full Name"
               name="name"
@@ -2074,8 +2172,21 @@ function OrganizationDetail() {
             </Form.Item>
           )}
 
+          {/* Template-based card fields (from XLS import) */}
+          {editingCardTemplate && editingCardTemplate.fields?.length > 0 && (
+            <>
+              {[...editingCardTemplate.fields]
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                .map((f) => (
+                  <Form.Item key={f.key} label={f.label} name={f.key}>
+                    <Input placeholder={f.label} />
+                  </Form.Item>
+                ))}
+            </>
+          )}
+
           {/* SCHOOL fields */}
-          {orgType === "SCHOOL" && (
+          {orgType === "SCHOOL" && !editingCardTemplate && (
             <>
               <Form.Item label="Roll No" name="studentId">
                 <Input placeholder="2" />
@@ -2125,7 +2236,7 @@ function OrganizationDetail() {
           )}
 
           {/* HOSPITAL fields */}
-          {orgType === "HOSPITAL" && (
+          {orgType === "HOSPITAL" && !editingCardTemplate && (
             <>
               <div
                 style={{
@@ -2196,7 +2307,7 @@ function OrganizationDetail() {
           )}
 
           {/* BUSINESS / default fields */}
-          {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && (
+          {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && !editingCardTemplate && (
             <>
               <div
                 style={{
