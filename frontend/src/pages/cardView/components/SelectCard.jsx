@@ -354,7 +354,9 @@ function CardDesignOne({
               <span style={{ color: labelColor }}>
                 {tplLabel || formatFieldName(key)}
               </span>
-              <strong style={{ color: valueColor, marginLeft: 6 }}>{value}</strong>
+              <strong style={{ color: valueColor, marginLeft: 6 }}>
+                {value}
+              </strong>
             </div>
           ))}
         </div>
@@ -621,7 +623,9 @@ function CardDesignTwo({
               <span style={{ color: labelColor }}>
                 {tplLabel || formatFieldName(key)}
               </span>
-              <strong style={{ color: valueColor, marginLeft: 6 }}>{value}</strong>
+              <strong style={{ color: valueColor, marginLeft: 6 }}>
+                {value}
+              </strong>
             </div>
           ))}
         </div>
@@ -787,7 +791,7 @@ function CardDesignThree({
           style={{
             width: avatarSize,
             height: avatarSize,
-            borderRadius: "50%",
+            borderRadius: 5,
             overflow: "hidden",
             border: `3px solid ${accentColor}`,
             background: isDark ? DARK_SURFACE_ELEVATED : "#fff",
@@ -832,7 +836,9 @@ function CardDesignThree({
         }}
       >
         {/* Name */}
-        <div style={{ textAlign: "center", marginBottom: 8, marginTop: nameTop }}>
+        <div
+          style={{ textAlign: "center", marginBottom: 8, marginTop: nameTop }}
+        >
           <div style={{ fontWeight: "bold", fontSize: 14, color: nameColor }}>
             {displayName || "Your Name"}
           </div>
