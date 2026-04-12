@@ -538,31 +538,6 @@ export default function TenantCardHolders() {
     }
   };
 
-  // ── delete ──────────────────────────────────────────────────────
-  const handleDeactivate = (cardId) => {
-    setDeleteTarget({ type: "single", id: cardId });
-    setDeleteModalOpen(true);
-  };
-
-  const executeSingleDelete = async () => {
-    setDeleteExecuting(true);
-    try {
-      await tenantPortalAPI.deactivateCard(deleteTarget.id);
-      message.success("Card holder deleted");
-      fetchData();
-    } catch (err) {
-      message.error(err?.response?.data?.error || "Failed to delete");
-    } finally {
-      setDeleteExecuting(false);
-      setDeleteModalOpen(false);
-      setDeleteTarget(null);
-    }
-  };
-
-  const handleDeleteConfirmed = () => {
-    executeSingleDelete();
-  };
-
   const handleExcelExport = () => {
     const exportData =
       selectedRowKeys.length > 0
@@ -785,189 +760,140 @@ export default function TenantCardHolders() {
 
   // ── filtered cards ───────────────────────────────────────────────
   const filtered = useMemo(() => {
-    let data = cards;
-    if (search) {
-      const q = search.toLowerCase();
-      data = data.filter((c) => {
-        const m = c.metadata || {};
-        return (
-          (c.tagId || "").toLowerCase().includes(q) ||
-          Object.values(m).some((v) => String(v).toLowerCase().includes(q))
-        );
-      });
-    }
-    if (filterHouse)
-      data = data.filter((c) => c.metadata?.house === filterHouse);
-    if (filterGrade)
-      data = data.filter((c) => c.metadata?.grade === filterGrade);
-    if (filterDept)
-      data = data.filter((c) => c.metadata?.department === filterDept);
-    if (filterStatus === "active") data = data.filter((c) => c.isActive);
-    if (filterStatus === "inactive") data = data.filter((c) => !c.isActive);
-    return data;
+    const q = search.trim().toLowerCase();
+
+    return cards.filter((card) => {
+      const metadata = card.metadata || {};
+      const searchable = [
+        card.tagId,
+        metadata.name,
+        metadata.email,
+        metadata.phone,
+        metadata.studentId,
+        metadata.grade,
+        metadata.section,
+        metadata.house,
+        metadata.department,
+        metadata.specialization,
+        metadata.company,
+        metadata.position,
+        metadata.linkedIn,
+        metadata.website,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (q && !searchable.includes(q)) return false;
+      if (filterStatus && String(card.isActive) !== (filterStatus === "active" ? "true" : "false")) return false;
+      if (filterHouse && metadata.house !== filterHouse) return false;
+      if (filterGrade && metadata.grade !== filterGrade) return false;
+      if (filterDept && metadata.department !== filterDept) return false;
+
+      return true;
+    });
   }, [cards, search, filterHouse, filterGrade, filterDept, filterStatus]);
 
-  useEffect(() => {
-    const maxPage = Math.max(
-      1,
-      Math.ceil(filtered.length / tablePagination.pageSize),
-    );
-    if (tablePagination.current > maxPage) {
-      setTablePagination((prev) => ({ ...prev, current: maxPage }));
-    }
-  }, [filtered.length, tablePagination.current, tablePagination.pageSize]);
-
-  useEffect(() => {
-    setTablePagination((prev) => ({ ...prev, current: 1 }));
-  }, [search, filterHouse, filterGrade, filterDept, filterStatus]);
-
   // ── build data columns ───────────────────────────────────────────
-  // Priority: 1) active template  2) discovered from card metadata  3) legacy
   const dataColumns = useMemo(() => {
-    // 1. Template-defined columns
-    if (activeTemplate && activeTemplate.fields?.length > 0) {
-      const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
-      const toTitleT = (k) =>
-        k
-          .replace(/_/g, " ")
-          .replace(/([a-z])([A-Z])/g, "$1 $2")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-      const tplCols = [...activeTemplate.fields]
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        .filter((f) => !INTERNAL_META_KEYS.has(f.key))
-        .map((f) => ({
-          title: f.label,
-          key: f.key,
-          ellipsis: true,
-          render: (_, r) =>
-            r.metadata?.[f.key] ? (
-              <span>{r.metadata[f.key]}</span>
-            ) : (
-              <Text type="secondary">—</Text>
-            ),
-          sorter: (a, b) =>
-            String(a.metadata?.[f.key] || "").localeCompare(
-              String(b.metadata?.[f.key] || ""),
-            ),
-        }));
-      // Append extra keys in card data not part of the template definition
-      const extraT = new Set();
-      cards.forEach((c) =>
-        Object.keys(c.metadata || {}).forEach((k) => {
-          if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
-        }),
-      );
-      return [
-        ...tplCols,
-        ...[...extraT].map((k) => ({
-          title: toTitleT(k),
-          key: k,
-          ellipsis: true,
-          render: (_, r) =>
-            r.metadata?.[k] ? (
-              <span>{r.metadata[k]}</span>
-            ) : (
-              <Text type="secondary">—</Text>
-            ),
-          sorter: (a, b) =>
-            String(a.metadata?.[k] || "").localeCompare(
-              String(b.metadata?.[k] || ""),
-            ),
-        })),
-      ];
-    }
-
-    // ── Helper: build a column def for any metadata key ──────────
-    const toTitle = (k) =>
-      k
+    const titleFromKey = (key) =>
+      key
         .replace(/_/g, " ")
         .replace(/([a-z])([A-Z])/g, "$1 $2")
         .replace(/\b\w/g, (c) => c.toUpperCase());
-    const metaCol = (k, label) => ({
-      title: label || toTitle(k),
-      key: k,
-      ellipsis: true,
-      render: (_, r) =>
-        r.metadata?.[k] ? (
-          <span>{r.metadata[k]}</span>
-        ) : (
-          <Text type="secondary">—</Text>
-        ),
-      sorter: (a, b) =>
-        String(a.metadata?.[k] || "").localeCompare(
-          String(b.metadata?.[k] || ""),
-        ),
+
+    const internalKeys = new Set([
+      "profileImageUrl",
+      "_design",
+      "__templateId",
+      "photo",
+    ]);
+
+    const columnMap = new Map();
+    const pushColumn = (key, label, order) => {
+      if (!key || internalKeys.has(key) || columnMap.has(key)) return;
+      columnMap.set(key, {
+        title: label || titleFromKey(key),
+        key,
+        order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+      });
+    };
+
+    const templateList = [...templates].filter((tpl) => tpl?.fields?.length > 0);
+    templateList.forEach((tpl) => {
+      [...tpl.fields]
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .forEach((field) => pushColumn(field.key, field.label, field.order));
     });
 
-    // ── Find extra keys not covered by standard cols ──────────────
-    const extraKeys = (() => {
-      const standardKeys = new Set([
-        "name",
-        "title",
-        "email",
-        "phone",
-        "address",
-        "studentId",
-        "grade",
-        "section",
-        "house",
-        "guardianName",
-        "guardianPhone",
-        "employeeId",
-        "department",
-        "specialization",
-        "licenseNumber",
-        "emergencyContact",
-        "company",
-        "position",
-        "linkedIn",
-        "website",
-        ...INTERNAL_META_KEYS,
-      ]);
-      const seen = new Set();
-      const out = [];
-      cards.forEach((c) => {
-        Object.keys(c.metadata || {}).forEach((k) => {
-          if (!standardKeys.has(k) && !seen.has(k)) {
-            seen.add(k);
-            out.push(k);
-          }
-        });
+    cards.forEach((card) => {
+      Object.entries(card.metadata || {}).forEach(([key]) => {
+        pushColumn(key, null, Number.MAX_SAFE_INTEGER);
       });
-      return out;
-    })();
+    });
 
-    // 3. Standard cols for this org type + custom keys at end
-    const orgType = org?.type;
-    let standard;
-    if (orgType === "SCHOOL") {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("studentId", "Roll No"),
-        metaCol("grade", "Class"),
-        metaCol("house", "House"),
-        metaCol("guardianName", "Guardian"),
-        metaCol("phone", "Contact"),
-      ];
-    } else if (orgType === "HOSPITAL") {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("employeeId", "Employee ID"),
-        metaCol("department", "Department"),
-        metaCol("specialization", "Specialization"),
-        metaCol("phone", "Phone"),
-      ];
-    } else {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("position", "Position"),
-        metaCol("company", "Company"),
-        metaCol("email", "Email"),
-        metaCol("phone", "Phone"),
+    return [...columnMap.values()]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map(({ order, ...column }) => ({
+        ...column,
+        ellipsis: true,
+        render: (_, record) =>
+          record.metadata?.[column.key] !== undefined &&
+          record.metadata?.[column.key] !== null &&
+          record.metadata?.[column.key] !== "" ? (
+            <span>{record.metadata[column.key]}</span>
+          ) : (
+            <Text type="secondary">—</Text>
+          ),
+        sorter: (a, b) =>
+          String(a.metadata?.[column.key] || "").localeCompare(
+            String(b.metadata?.[column.key] || ""),
+          ),
+      }));
+  }, [templates, cards]);
+
+  const formColumns = useMemo(() => {
+    if (dataColumns.length > 0) return dataColumns;
+
+    if (org?.type === "SCHOOL") {
+      return [
+        { key: "name", title: "Name" },
+        { key: "studentId", title: "Roll No" },
+        { key: "grade", title: "Class" },
+        { key: "section", title: "Section" },
+        { key: "house", title: "House" },
+        { key: "guardianName", title: "Guardian" },
+        { key: "phone", title: "Contact" },
+        { key: "address", title: "Address" },
+        { key: "email", title: "Email" },
       ];
     }
-    return [...standard, ...extraKeys.map((k) => metaCol(k))];
-  }, [activeTemplate, org?.type, cards]);
+
+    if (org?.type === "HOSPITAL") {
+      return [
+        { key: "name", title: "Name" },
+        { key: "employeeId", title: "Employee ID" },
+        { key: "department", title: "Department" },
+        { key: "specialization", title: "Specialization" },
+        { key: "licenseNumber", title: "License No" },
+        { key: "emergencyContact", title: "Emergency Contact" },
+        { key: "phone", title: "Phone" },
+        { key: "address", title: "Address" },
+        { key: "email", title: "Email" },
+      ];
+    }
+
+    return [
+      { key: "name", title: "Name" },
+      { key: "position", title: "Position" },
+      { key: "company", title: "Company" },
+      { key: "linkedIn", title: "LinkedIn" },
+      { key: "website", title: "Website" },
+      { key: "phone", title: "Phone" },
+      { key: "address", title: "Address" },
+      { key: "email", title: "Email" },
+    ];
+  }, [dataColumns, org?.type]);
 
   // ── table columns ────────────────────────────────────────────────
   const columns = [
@@ -1148,68 +1074,24 @@ export default function TenantCardHolders() {
     }),
   ];
 
-  // ── org-type-specific form fields ────────────────────────────────
-  const renderTypeFields = () => {
-    const orgType = org?.type;
-    if (orgType === "SCHOOL") {
-      return (
-        <>
-          <Form.Item label="Student ID" name="studentId">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Grade" name="grade">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Section" name="section">
-            <Input />
-          </Form.Item>
-          <Form.Item label="House" name="house">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Guardian Name" name="guardianName">
-            <Input />
-          </Form.Item>
-        </>
-      );
-    }
-    if (orgType === "HOSPITAL") {
-      return (
-        <>
-          <Form.Item label="Employee ID" name="employeeId">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Department" name="department">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Specialization" name="specialization">
-            <Input />
-          </Form.Item>
-          <Form.Item label="License No." name="licenseNumber">
-            <Input />
-          </Form.Item>
-          <Form.Item label="Emergency Contact" name="emergencyContact">
-            <Input />
-          </Form.Item>
-        </>
-      );
-    }
-    return (
-      <>
-        <Form.Item label="Company" name="company">
+  const renderTypeFields = () => (
+    <>
+      {formColumns.map((field) => (
+        <Form.Item
+          key={field.key}
+          label={field.title}
+          name={field.key}
+          rules={
+            field.key === "name"
+              ? [{ required: true, message: "Name is required" }]
+              : []
+          }
+        >
           <Input />
         </Form.Item>
-        <Form.Item label="Position" name="position">
-          <Input />
-        </Form.Item>
-        <Form.Item label="LinkedIn" name="linkedIn">
-          <Input />
-        </Form.Item>
-        <Form.Item label="Website" name="website">
-          <Input />
-        </Form.Item>
-      </>
-    );
-  };
+      ))}
+    </>
+  );
 
   if (loading) return <Spin style={{ display: "block", marginTop: 80 }} />;
 
