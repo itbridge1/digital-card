@@ -23,6 +23,8 @@ import {
   PlusOutlined,
   UserOutlined,
   ApartmentOutlined,
+  IdcardOutlined,
+  ThunderboltOutlined,
   DeleteOutlined,
   StopOutlined,
   CheckCircleOutlined,
@@ -40,11 +42,16 @@ function AdminDashboard() {
   const [managers, setManagers] = useState([]);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
   const [loadingManagers, setLoadingManagers] = useState(true);
+  const [loadingCardStats, setLoadingCardStats] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const [cardStats, setCardStats] = useState({
+    totalMembers: 0,
+    totalTaps: 0,
+  });
 
   // Search / filter state
   const [managerSearch, setManagerSearch] = useState("");
@@ -56,13 +63,35 @@ function AdminDashboard() {
 
   const fetchOrgs = async () => {
     setLoadingOrgs(true);
+    setLoadingCardStats(true);
     try {
       const res = await useraccessAPI.getOrganizations();
-      setOrgs(res.data.data || []);
+      const organizations = res.data.data || [];
+      setOrgs(organizations);
+
+      const cardResponses = await Promise.all(
+        organizations.map((org) =>
+          useraccessAPI
+            .getOrganizationCards(org.tenantId)
+            .then((cardsRes) => cardsRes.data.data || [])
+            .catch(() => []),
+        ),
+      );
+
+      const allCards = cardResponses.flat();
+      setCardStats({
+        totalMembers: allCards.length,
+        totalTaps: allCards.reduce(
+          (sum, card) => sum + (Number(card.tapCount) || 0),
+          0,
+        ),
+      });
     } catch {
       message.error("Failed to load organizations");
+      setCardStats({ totalMembers: 0, totalTaps: 0 });
     } finally {
       setLoadingOrgs(false);
+      setLoadingCardStats(false);
     }
   };
 
@@ -323,7 +352,7 @@ function AdminDashboard() {
       </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={8}>
           <Card className="nfc-stat-card nfc-stat-card-primary">
             <Statistic
               title={
@@ -343,7 +372,7 @@ function AdminDashboard() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={8}>
           <Card className="nfc-stat-card nfc-stat-card-success">
             <Statistic
               title={
@@ -363,7 +392,7 @@ function AdminDashboard() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={8}>
           <Card className="nfc-stat-card nfc-stat-card-info">
             <Statistic
               title={
@@ -376,6 +405,44 @@ function AdminDashboard() {
               value={activeManagers}
               prefix={
                 <UserOutlined style={{ color: "#0ea5e9", marginRight: 4 }} />
+              }
+              valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card className="nfc-stat-card nfc-stat-card-primary" loading={loadingCardStats}>
+            <Statistic
+              title={
+                <span
+                  style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}
+                >
+                  Total Members
+                </span>
+              }
+              value={cardStats.totalMembers}
+              prefix={
+                <IdcardOutlined style={{ color: "#5046e5", marginRight: 4 }} />
+              }
+              valueStyle={{ color: "#0f172a", fontWeight: 700 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card className="nfc-stat-card nfc-stat-card-info" loading={loadingCardStats}>
+            <Statistic
+              title={
+                <span
+                  style={{ color: "#64748b", fontSize: 13, fontWeight: 500 }}
+                >
+                  Total Card Taps
+                </span>
+              }
+              value={cardStats.totalTaps}
+              prefix={
+                <ThunderboltOutlined
+                  style={{ color: "#0ea5e9", marginRight: 4 }}
+                />
               }
               valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
             />

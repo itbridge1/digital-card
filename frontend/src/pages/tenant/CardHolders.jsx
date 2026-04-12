@@ -313,6 +313,29 @@ export default function TenantCardHolders() {
     setModalOpen(true);
   };
 
+  const handleDeactivate = (cardId) => {
+    setDeleteTarget(cardId);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+
+    setDeleteExecuting(true);
+    try {
+      await tenantPortalAPI.deactivateCard(deleteTarget);
+      message.success("Card holder deleted");
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
+      setSelectedRowKeys((prev) => prev.filter((id) => id !== deleteTarget));
+      fetchData();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to delete card holder");
+    } finally {
+      setDeleteExecuting(false);
+    }
+  };
+
   // ── edit modal ──────────────────────────────────────────────────
   const openEdit = (card) => {
     setEditingCard(card);
