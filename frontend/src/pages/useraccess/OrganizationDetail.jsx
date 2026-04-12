@@ -427,47 +427,20 @@ function OrganizationDetail() {
 
     setEditingCardTemplate(tpl);
 
-    if (tpl && tpl.fields?.length > 0) {
-      // Dynamic / template-based form
-      const formValues = { tagId: card.tagId };
-      tpl.fields.forEach((f) => {
-        formValues[f.key] = m[f.key] ?? "";
-      });
-      // Also seed standard fields so they're available if the form shows them
-      formValues.name = m.name ?? "";
-      form.setFieldsValue(formValues);
-    } else {
-      // Pure hardcoded fallback (SCHOOL / HOSPITAL / BUSINESS)
-      let editGrade = m.grade || "";
-      let editSection = "";
-      const sectionMatch = editGrade.match(/^(.+)\((.+)\)$/);
+    const formValues = { tagId: card.tagId };
+    formColumns.forEach((field) => {
+      formValues[field.key] = m[field.key] ?? "";
+    });
+
+    if (organization?.type === "SCHOOL" && !m.section && typeof m.grade === "string") {
+      const sectionMatch = m.grade.match(/^(.+)\((.+)\)$/);
       if (sectionMatch) {
-        editGrade = sectionMatch[1];
-        editSection = sectionMatch[2];
+        formValues.grade = sectionMatch[1];
+        formValues.section = sectionMatch[2];
       }
-      form.setFieldsValue({
-        tagId: card.tagId,
-        name: m.name || "",
-        email: m.email || "",
-        phone: m.phone || "",
-        address: m.address || "",
-        studentId: m.studentId || "",
-        grade: editGrade,
-        section: editSection,
-        house: m.house || "",
-        guardianName: m.guardianName || "",
-        guardianPhone: m.guardianPhone || "",
-        employeeId: m.employeeId || "",
-        department: m.department || "",
-        specialization: m.specialization || "",
-        licenseNumber: m.licenseNumber || "",
-        emergencyContact: m.emergencyContact || "",
-        company: m.company || "",
-        position: m.position || "",
-        linkedIn: m.linkedIn || "",
-        website: m.website || "",
-      });
     }
+
+    form.setFieldsValue(formValues);
     setModalOpen(true);
   };
 
@@ -530,64 +503,19 @@ function OrganizationDetail() {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      const orgType = organization?.type;
+      const metadata = editingCard ? { ...(editingCard.metadata || {}) } : {};
 
-      let metadata;
-
-      if (editingCardTemplate && editingCardTemplate.fields?.length > 0) {
-        // Template / inferred-field path
-        // For edits: preserve existing metadata (keeps __templateId, _design, etc.)
-        // For creates with a real template: seed __templateId
-        // For creates with an inferred virtual template (id===null): no __templateId
-        metadata = editingCard
-          ? { ...(editingCard.metadata || {}) }
-          : editingCardTemplate.id
-            ? { __templateId: editingCardTemplate.id }
-            : {};
-        editingCardTemplate.fields.forEach((f) => {
-          if (values[f.key] !== undefined) {
-            metadata[f.key] = values[f.key];
-          }
-        });
-      } else {
-        metadata = {
-          name: values.name,
-          email: values.email,
-          phone: values.phone,
-          address: values.address,
-        };
-
-        if (orgType === "SCHOOL") {
-          // Merge section into grade: "One(A)" or "One"
-          const rawGrade = (values.grade || "").trim();
-          const rawSection = (values.section || "").trim();
-          const mergedGrade =
-            rawGrade && rawSection ? `${rawGrade}(${rawSection})` : rawGrade;
-          Object.assign(metadata, {
-            studentId: values.studentId,
-            grade: mergedGrade,
-            house: values.house,
-            guardianName: values.guardianName,
-          });
-          // drop email/phone/address from base metadata for SCHOOL
-          delete metadata.email;
-        } else if (orgType === "HOSPITAL") {
-          Object.assign(metadata, {
-            employeeId: values.employeeId,
-            department: values.department,
-            specialization: values.specialization,
-            licenseNumber: values.licenseNumber,
-            emergencyContact: values.emergencyContact,
-          });
-        } else {
-          Object.assign(metadata, {
-            company: values.company,
-            position: values.position,
-            linkedIn: values.linkedIn,
-            website: values.website,
-          });
-        }
+      if (editingCardTemplate?.id) {
+        metadata.__templateId = editingCardTemplate.id;
+      } else if (editingCardTemplate && editingCardTemplate.id === null) {
+        delete metadata.__templateId;
       }
+
+      formColumns.forEach((field) => {
+        if (values[field.key] !== undefined) {
+          metadata[field.key] = values[field.key];
+        }
+      });
 
       const payload = {
         profileImageUrl: profileUrl || null,
@@ -1190,152 +1118,106 @@ function OrganizationDetail() {
   }, [cardSearch, cardStatusFilter, filterHouse, filterGrade, filterDept]);
 
   // ── Build table columns ───────────────────────────────────────────
-  // Priority: 1) active template fields  2) keys discovered from card metadata
-  // 3) legacy hardcoded columns per orgType
   const dataColumns = useMemo(() => {
-    // 1. Template-defined columns
-    if (activeTemplate && activeTemplate.fields?.length > 0) {
-      const tplKeys = new Set(activeTemplate.fields.map((f) => f.key));
-      const toTitleT = (k) =>
-        k
-          .replace(/_/g, " ")
-          .replace(/([a-z])([A-Z])/g, "$1 $2")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-      const tplCols = [...activeTemplate.fields]
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        .filter((f) => !INTERNAL_META_KEYS.has(f.key))
-        .map((f) => ({
-          title: f.label,
-          key: f.key,
-          ellipsis: true,
-          render: (_, r) =>
-            r.metadata?.[f.key] ? (
-              <span>{r.metadata[f.key]}</span>
-            ) : (
-              <Text type="secondary">—</Text>
-            ),
-          sorter: (a, b) =>
-            String(a.metadata?.[f.key] || "").localeCompare(
-              String(b.metadata?.[f.key] || ""),
-            ),
-        }));
-      // Append any extra keys in card data not part of the template definition
-      const extraT = new Set();
-      cards.forEach((c) =>
-        Object.keys(c.metadata || {}).forEach((k) => {
-          if (!tplKeys.has(k) && !INTERNAL_META_KEYS.has(k)) extraT.add(k);
-        }),
-      );
-      return [
-        ...tplCols,
-        ...[...extraT].map((k) => ({
-          title: toTitleT(k),
-          key: k,
-          ellipsis: true,
-          render: (_, r) =>
-            r.metadata?.[k] ? (
-              <span>{r.metadata[k]}</span>
-            ) : (
-              <Text type="secondary">—</Text>
-            ),
-          sorter: (a, b) =>
-            String(a.metadata?.[k] || "").localeCompare(
-              String(b.metadata?.[k] || ""),
-            ),
-        })),
-      ];
-    }
-
-    // ── Helper: build a column def for any metadata key ────────────
-    const toTitle = (k) =>
-      k
+    const titleFromKey = (key) =>
+      key
         .replace(/_/g, " ")
         .replace(/([a-z])([A-Z])/g, "$1 $2")
         .replace(/\b\w/g, (c) => c.toUpperCase());
-    const metaCol = (k, label) => ({
-      title: label || toTitle(k),
-      key: k,
-      ellipsis: true,
-      render: (_, r) =>
-        r.metadata?.[k] ? (
-          <span>{r.metadata[k]}</span>
-        ) : (
-          <Text type="secondary">—</Text>
-        ),
-      sorter: (a, b) =>
-        String(a.metadata?.[k] || "").localeCompare(
-          String(b.metadata?.[k] || ""),
-        ),
+
+    const internalKeys = new Set([
+      "profileImageUrl",
+      "_design",
+      "__templateId",
+      "photo",
+    ]);
+
+    const columnMap = new Map();
+    const pushColumn = (key, label, order) => {
+      if (!key || internalKeys.has(key) || columnMap.has(key)) return;
+      columnMap.set(key, {
+        title: label || titleFromKey(key),
+        key,
+        order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+      });
+    };
+
+    const templateList = [...orgTemplates].filter((tpl) => tpl?.fields?.length > 0);
+    templateList.forEach((tpl) => {
+      [...tpl.fields]
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .forEach((field) => pushColumn(field.key, field.label, field.order));
     });
 
-    // ── Find extra keys in card metadata not covered by standard cols ──
-    const extraKeys = (() => {
-      const standardKeys = new Set([
-        "name",
-        "title",
-        "email",
-        "phone",
-        "address",
-        "studentId",
-        "grade",
-        "section",
-        "house",
-        "guardianName",
-        "guardianPhone",
-        "employeeId",
-        "department",
-        "specialization",
-        "licenseNumber",
-        "emergencyContact",
-        "company",
-        "position",
-        "linkedIn",
-        "website",
-        ...INTERNAL_META_KEYS,
-      ]);
-      const seen = new Set();
-      const out = [];
-      cards.forEach((c) => {
-        Object.keys(c.metadata || {}).forEach((k) => {
-          if (!standardKeys.has(k) && !seen.has(k)) {
-            seen.add(k);
-            out.push(k);
-          }
-        });
+    cards.forEach((card) => {
+      Object.entries(card.metadata || {}).forEach(([key]) => {
+        pushColumn(key, null, Number.MAX_SAFE_INTEGER);
       });
-      return out;
-    })();
+    });
 
-    // 2. Standard columns + extra keys appended at end
-    let standard;
+    return [...columnMap.values()]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map(({ order, ...column }) => ({
+        ...column,
+        ellipsis: true,
+        render: (_, record) =>
+          record.metadata?.[column.key] !== undefined &&
+          record.metadata?.[column.key] !== null &&
+          record.metadata?.[column.key] !== "" ? (
+            <span>{record.metadata[column.key]}</span>
+          ) : (
+            <Text type="secondary">—</Text>
+          ),
+        sorter: (a, b) =>
+          String(a.metadata?.[column.key] || "").localeCompare(
+            String(b.metadata?.[column.key] || ""),
+          ),
+      }));
+  }, [orgTemplates, cards]);
+
+  const formColumns = useMemo(() => {
+    if (dataColumns.length > 0) return dataColumns;
+
+    const orgType = organization?.type;
     if (orgType === "SCHOOL") {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("studentId", "Roll No"),
-        metaCol("grade", "Class"),
-        metaCol("house", "House"),
-        metaCol("guardianName", "Guardian"),
-        metaCol("phone", "Contact"),
-      ];
-    } else if (orgType === "HOSPITAL") {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("employeeId", "Employee ID"),
-        metaCol("department", "Department"),
-        metaCol("specialization", "Specialization"),
-        metaCol("phone", "Phone"),
-      ];
-    } else {
-      standard = [
-        metaCol("name", "Name"),
-        metaCol("position", "Position"),
-        metaCol("company", "Company"),
-        metaCol("email", "Email"),
-        metaCol("phone", "Phone"),
+      return [
+        { key: "name", title: "Name" },
+        { key: "studentId", title: "Roll No" },
+        { key: "grade", title: "Class" },
+        { key: "section", title: "Section" },
+        { key: "house", title: "House" },
+        { key: "guardianName", title: "Guardian" },
+        { key: "phone", title: "Contact" },
+        { key: "address", title: "Address" },
+        { key: "email", title: "Email" },
       ];
     }
-    return [...standard, ...extraKeys.map((k) => metaCol(k))];
-  }, [activeTemplate, orgType, cards]);
+
+    if (orgType === "HOSPITAL") {
+      return [
+        { key: "name", title: "Name" },
+        { key: "employeeId", title: "Employee ID" },
+        { key: "department", title: "Department" },
+        { key: "specialization", title: "Specialization" },
+        { key: "licenseNumber", title: "License No" },
+        { key: "emergencyContact", title: "Emergency Contact" },
+        { key: "phone", title: "Phone" },
+        { key: "address", title: "Address" },
+        { key: "email", title: "Email" },
+      ];
+    }
+
+    return [
+      { key: "name", title: "Name" },
+      { key: "position", title: "Position" },
+      { key: "company", title: "Company" },
+      { key: "linkedIn", title: "LinkedIn" },
+      { key: "website", title: "Website" },
+      { key: "phone", title: "Phone" },
+      { key: "address", title: "Address" },
+      { key: "email", title: "Email" },
+    ];
+  }, [dataColumns, organization?.type]);
 
   const columns = [
     {
@@ -2161,218 +2043,16 @@ function OrganizationDetail() {
             </div>
           </Form.Item>
 
-          {/* Non-SCHOOL: Full Name shown here; SCHOOL has it inside its own block */}
-          {orgType !== "SCHOOL" && !editingCardTemplate && (
+          {formColumns.map((field) => (
             <Form.Item
-              label="Full Name"
-              name="name"
-              rules={[{ required: true, message: "Required" }]}
+              key={field.key}
+              label={field.title}
+              name={field.key}
+              rules={field.key === "name" ? [{ required: true, message: "Required" }] : []}
             >
-              <Input placeholder="Full name" />
+              <Input placeholder={field.title} />
             </Form.Item>
-          )}
-
-          {/* Template-based card fields (from XLS import) */}
-          {editingCardTemplate && editingCardTemplate.fields?.length > 0 && (
-            <>
-              {[...editingCardTemplate.fields]
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                .map((f) => (
-                  <Form.Item key={f.key} label={f.label} name={f.key}>
-                    <Input placeholder={f.label} />
-                  </Form.Item>
-                ))}
-            </>
-          )}
-
-          {/* SCHOOL fields */}
-          {orgType === "SCHOOL" && !editingCardTemplate && (
-            <>
-              <Form.Item label="Roll No" name="studentId">
-                <Input placeholder="2" />
-              </Form.Item>
-              <Form.Item
-                label="Full Name"
-                name="name"
-                rules={[{ required: true, message: "Required" }]}
-              >
-                <Input placeholder="Full name" />
-              </Form.Item>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Class"
-                  name="grade"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="One" />
-                </Form.Item>
-                <Form.Item
-                  label="Section (optional)"
-                  name="section"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="A" />
-                </Form.Item>
-              </div>
-              <Form.Item label="House" name="house" style={{ marginTop: 12 }}>
-                <Input placeholder="Blue" />
-              </Form.Item>
-              <Form.Item label="Guardian" name="guardianName">
-                <Input />
-              </Form.Item>
-              <Form.Item label="Address" name="address">
-                <Input placeholder="City / Address" />
-              </Form.Item>
-              <Form.Item label="Contact" name="phone">
-                <Input placeholder="9800000000" />
-              </Form.Item>
-            </>
-          )}
-
-          {/* HOSPITAL fields */}
-          {orgType === "HOSPITAL" && !editingCardTemplate && (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Employee ID"
-                  name="employeeId"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="Department"
-                  name="department"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="e.g. Cardiology" />
-                </Form.Item>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <Form.Item
-                  label="Specialization"
-                  name="specialization"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="License Number"
-                  name="licenseNumber"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input />
-                </Form.Item>
-              </div>
-              <Form.Item
-                label="Emergency Contact"
-                name="emergencyContact"
-                style={{ marginTop: 12 }}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item label="Address" name="address">
-                <Input placeholder="City / Address" />
-              </Form.Item>
-              <Form.Item
-                label="Email"
-                name="email"
-                rules={[{ type: "email", message: "Invalid email" }]}
-              >
-                <Input placeholder="email@org.com" />
-              </Form.Item>
-              <Form.Item label="Phone" name="phone">
-                <Input placeholder="+1 555 000 0000" />
-              </Form.Item>
-            </>
-          )}
-
-          {/* BUSINESS / default fields */}
-          {orgType !== "SCHOOL" && orgType !== "HOSPITAL" && !editingCardTemplate && (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <Form.Item
-                  label="Position / Title"
-                  name="position"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="e.g. Senior Developer" />
-                </Form.Item>
-                <Form.Item
-                  label="Company"
-                  name="company"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="Company name" />
-                </Form.Item>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <Form.Item
-                  label="LinkedIn"
-                  name="linkedIn"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="linkedin.com/in/..." />
-                </Form.Item>
-                <Form.Item
-                  label="Website"
-                  name="website"
-                  style={{ marginBottom: 0 }}
-                >
-                  <Input placeholder="https://..." />
-                </Form.Item>
-              </div>
-              <Form.Item
-                label="Address"
-                name="address"
-                style={{ marginTop: 12 }}
-              >
-                <Input placeholder="City / Address" />
-              </Form.Item>
-              <Form.Item
-                label="Email"
-                name="email"
-                rules={[{ type: "email", message: "Invalid email" }]}
-              >
-                <Input placeholder="email@org.com" />
-              </Form.Item>
-              <Form.Item label="Phone" name="phone">
-                <Input placeholder="+1 555 000 0000" />
-              </Form.Item>
-            </>
-          )}
+          ))}
         </Form>
       </Modal>
 
