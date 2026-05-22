@@ -9,7 +9,7 @@ const { Title, Text } = Typography;
 function Logo() {
   return (
     <div className="nfc-auth-logo-wrap">
-      <img
+      {/* <img
         src="/logo.png"
         alt="IT Bridge"
         className="nfc-auth-logo-img"
@@ -17,10 +17,19 @@ function Logo() {
           e.target.style.display = "none";
           e.target.nextSibling.style.display = "flex";
         }}
-      />
-      <div className="nfc-auth-logo-fallback" style={{ display: "none" }}>ITB</div>
-      <Title level={4} style={{ margin: 0, letterSpacing: "-0.03em", color: "#09090b" }}>IT Bridge NFC</Title>
-      <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>Digital Identity Platform</Text>
+      /> */}
+      <div className="nfc-auth-logo-fallback" style={{ display: "none" }}>
+        ITB
+      </div>
+      <Title
+        level={4}
+        style={{ margin: 0, letterSpacing: "-0.03em", color: "#09090b" }}
+      >
+        IT Bridge NFC
+      </Title>
+      <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
+        Digital Identity Platform
+      </Text>
     </div>
   );
 }
@@ -39,7 +48,10 @@ function ChangePassword() {
     }
     setLoading(true);
     try {
-      await tenantPortalAPI.changePassword(values.currentPassword, values.newPassword);
+      await tenantPortalAPI.changePassword(
+        values.currentPassword,
+        values.newPassword,
+      );
 
       const updated = { ...user, mustChangePassword: false };
       localStorage.setItem("user", JSON.stringify(updated));
@@ -47,7 +59,11 @@ function ChangePassword() {
       message.success("Password changed successfully");
       navigate("/tenant/dashboard");
     } catch (err) {
-      message.error(err.response?.data?.error || err.message || "Failed to change password");
+      if (err?.response?.status === 400) {
+        message.error("Password must contain at least 1 letter and 1 number");
+      } else {
+        message.error("Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -55,12 +71,19 @@ function ChangePassword() {
 
   return (
     <div className="nfc-auth-bg">
-      <Logo />
-
+      {/* <Logo /> */}
+      <h1 className="text-2xl py-10">TIRUPATI</h1>
       <div className="nfc-auth-card">
         <div style={{ padding: "32px 32px 28px" }}>
           <div style={{ marginBottom: 20 }}>
-            <Title level={5} style={{ margin: "0 0 4px", letterSpacing: "-0.02em", color: "#09090b" }}>
+            <Title
+              level={5}
+              style={{
+                margin: "0 0 4px",
+                letterSpacing: "-0.02em",
+                color: "#09090b",
+              }}
+            >
               Set your password
             </Title>
             <Text style={{ color: "#94a3b8", fontSize: 13 }}>
@@ -75,9 +98,21 @@ function ChangePassword() {
             style={{ marginBottom: 20, borderRadius: 8 }}
           />
 
-          <Form form={form} layout="vertical" onFinish={onFinish} autoComplete="off" requiredMark={false}>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={onFinish}
+            autoComplete="off"
+            requiredMark={false}
+          >
             <Form.Item
-              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Current / Temporary Password</span>}
+              label={
+                <span
+                  style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
+                >
+                  Current / Temporary Password
+                </span>
+              }
               name="currentPassword"
               rules={[{ required: true, message: "Required" }]}
             >
@@ -89,7 +124,13 @@ function ChangePassword() {
             </Form.Item>
 
             <Form.Item
-              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>New Password</span>}
+              label={
+                <span
+                  style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
+                >
+                  New Password
+                </span>
+              }
               name="newPassword"
               rules={[
                 { required: true, message: "Required" },
@@ -104,7 +145,13 @@ function ChangePassword() {
             </Form.Item>
 
             <Form.Item
-              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Confirm New Password</span>}
+              label={
+                <span
+                  style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
+                >
+                  Confirm New Password
+                </span>
+              }
               name="confirmPassword"
               rules={[{ required: true, message: "Required" }]}
               style={{ marginBottom: 24 }}
