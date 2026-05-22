@@ -1,15 +1,6 @@
 ﻿import { useState } from "react";
-import {
-  Form,
-  Input,
-  Button,
-  Typography,
-  message,
-} from "antd";
-import {
-  LockOutlined,
-  MailOutlined,
-} from "@ant-design/icons";
+import { Form, Input, Button, Typography, message } from "antd";
+import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { authAPI } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
@@ -18,7 +9,7 @@ const { Title, Text } = Typography;
 function Logo() {
   return (
     <div className="nfc-auth-logo-wrap">
-      <img
+      {/* <img
         src="/logo.png"
         alt="IT Bridge"
         className="nfc-auth-logo-img"
@@ -26,10 +17,19 @@ function Logo() {
           e.target.style.display = "none";
           e.target.nextSibling.style.display = "flex";
         }}
-      />
-      <div className="nfc-auth-logo-fallback" style={{ display: "none" }}>ITB</div>
-      <Title level={4} style={{ margin: 0, letterSpacing: "-0.03em", color: "#09090b" }}>IT Bridge NFC</Title>
-      <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>Digital Identity Platform</Text>
+      /> */}
+      <div className="nfc-auth-logo-fallback" style={{ display: "none" }}>
+        Tirupati
+      </div>
+      <Title
+        level={4}
+        style={{ margin: 0, letterSpacing: "-0.03em", color: "#09090b" }}
+      >
+        Tirupati
+      </Title>
+      <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
+        Digital Identity Platform
+      </Text>
     </div>
   );
 }
@@ -66,6 +66,7 @@ function Login() {
       else if (user.role === "tenant") navigate("/tenant/dashboard");
       else navigate("/");
     } catch (err) {
+      console.log("err", err);
       message.error(err.response?.data?.error || err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -74,12 +75,20 @@ function Login() {
 
   return (
     <div className="nfc-auth-bg">
-      <Logo />
+      {/* <Logo /> */}
+      <h1 className="text-2xl py-10">TIRUPATI</h1>
 
       <div className="nfc-auth-card">
         <div style={{ padding: "32px 32px 28px" }}>
           <div style={{ marginBottom: 24 }}>
-            <Title level={5} style={{ margin: "0 0 4px", letterSpacing: "-0.02em", color: "#09090b" }}>
+            <Title
+              level={5}
+              style={{
+                margin: "0 0 4px",
+                letterSpacing: "-0.02em",
+                color: "#09090b",
+              }}
+            >
               Sign in to your account
             </Title>
             <Text style={{ color: "#94a3b8", fontSize: 13 }}>
@@ -95,7 +104,13 @@ function Login() {
             requiredMark={false}
           >
             <Form.Item
-              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Email Address</span>}
+              label={
+                <span
+                  style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
+                >
+                  Email Address
+                </span>
+              }
               name="email"
               rules={[
                 { required: true, message: "Email is required" },
@@ -110,7 +125,13 @@ function Login() {
             </Form.Item>
 
             <Form.Item
-              label={<span style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}>Password</span>}
+              label={
+                <span
+                  style={{ fontSize: 13, fontWeight: 500, color: "#374151" }}
+                >
+                  Password
+                </span>
+              }
               name="password"
               rules={[{ required: true, message: "Password is required" }]}
               style={{ marginBottom: 24 }}

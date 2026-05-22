@@ -84,13 +84,28 @@ function AdminLayout() {
 
   const brandLogo = (
     <div className="nfc-sidebar-brand-logo">
-      <img
+      {/* <img
         src="/logo.png"
         alt="ITB"
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
-        onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-      />
-      <span style={{ display: "none", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 13, fontWeight: 700 }}>NF</span>
+        onError={(e) => {
+          e.target.style.display = "none";
+          e.target.nextSibling.style.display = "flex";
+        }}
+      /> */}
+      <span
+        style={{
+          display: "none",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          fontSize: 13,
+          fontWeight: 700,
+        }}
+      >
+        NF
+      </span>
     </div>
   );
 
@@ -113,17 +128,22 @@ function AdminLayout() {
         }}
         style={
           isMobile
-            ? { position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 1001, height: "100vh" }
+            ? {
+                position: "fixed",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                zIndex: 1001,
+                height: "100vh",
+              }
             : undefined
         }
       >
         {siderCollapsed ? (
-          <div className="nfc-sidebar-brand-collapsed">
-            {brandLogo}
-          </div>
+          <div className="nfc-sidebar-brand-collapsed">{brandLogo}</div>
         ) : (
           <div className="nfc-sidebar-brand">
-            {brandLogo}
+            {/* {brandLogo} */}
             <div>
               <div className="nfc-sidebar-brand-title">NFC Admin</div>
               {/* <div className="nfc-sidebar-brand-sub">IT Bridge Platform</div> */}
@@ -171,15 +191,35 @@ function AdminLayout() {
         >
           <Button
             type="text"
-            icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            icon={
+              siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+            }
             onClick={toggleSider}
-            style={{ fontSize: "15px", width: 40, height: 40, color: "#64748b" }}
+            style={{
+              fontSize: "15px",
+              width: 40,
+              height: 40,
+              color: "#64748b",
+            }}
           />
 
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                padding: "4px 8px",
+                borderRadius: 8,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#f1f5f9")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
             >
               <Avatar
                 size={30}
@@ -189,8 +229,19 @@ function AdminLayout() {
               </Avatar>
               {!isMobile && (
                 <div>
-                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>{user.name || "Admin"}</Text>
-                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1, marginTop: 2 }}>Administrator</div>
+                  <Text strong style={{ fontSize: 13, lineHeight: 1 }}>
+                    {user.name || "Admin"}
+                  </Text>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#94a3b8",
+                      lineHeight: 1,
+                      marginTop: 2,
+                    }}
+                  >
+                    Administrator
+                  </div>
                 </div>
               )}
             </div>
@@ -218,4 +269,3 @@ function AdminLayout() {
 }
 
 export default AdminLayout;
-

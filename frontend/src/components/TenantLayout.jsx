@@ -93,14 +93,21 @@ function TenantLayout() {
         }}
         style={
           isMobile
-            ? { position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 1001, height: "100vh" }
+            ? {
+                position: "fixed",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                zIndex: 1001,
+                height: "100vh",
+              }
             : undefined
         }
       >
         {siderCollapsed ? (
           <div className="nfc-sidebar-brand-collapsed">
             <div className="nfc-sidebar-brand-logo">
-              <img
+              {/* <img
                 src="/logo.png"
                 alt="ITB"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
@@ -108,7 +115,7 @@ function TenantLayout() {
                   e.target.style.display = "none";
                   e.target.nextSibling.style.display = "flex";
                 }}
-              />
+              /> */}
               <span
                 style={{
                   display: "none",
@@ -126,8 +133,8 @@ function TenantLayout() {
           </div>
         ) : (
           <div className="nfc-sidebar-brand">
-            <div className="nfc-sidebar-brand-logo">
-              <img
+            <div className="nfc-sidebar-brand-logos">
+              {/* <img
                 src="/logo.png"
                 alt="ITB"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
@@ -135,7 +142,7 @@ function TenantLayout() {
                   e.target.style.display = "none";
                   e.target.nextSibling.style.display = "flex";
                 }}
-              />
+              /> */}
               <span
                 style={{
                   display: "none",
@@ -195,7 +202,9 @@ function TenantLayout() {
         >
           <Button
             type="text"
-            icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            icon={
+              siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+            }
             onClick={toggleSider}
             style={{
               fontSize: "15px",

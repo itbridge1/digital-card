@@ -1159,7 +1159,7 @@ export default function TenantCardHolders() {
       >
         <Space wrap size={8} style={{ flex: 1, minWidth: isMobile ? "100%" : 340 }}>
           <Input
-            placeholder="Search by name, email, ID or tag…"
+            placeholder="Search by name, ID or tag…"
             prefix={<SearchOutlined />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
