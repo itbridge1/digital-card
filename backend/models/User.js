@@ -50,7 +50,34 @@ const User = sequelize.define('User', {
     allowNull: true,
     defaultValue: null,
     field: 'ui_settings',
-    comment: 'Per-user UI preferences (e.g. hidden table columns per org)'
+    comment: 'Per-user UI preferences (e.g. hidden table columns per org)',
+    get() {
+      const raw = this.getDataValue('uiSettings');
+      if (!raw) return {};
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch { return {}; }
+      }
+      // Guard against corrupted char-index objects ({"0":"{","1":"\"",...})
+      // These have only numeric string keys and no expected preference keys
+      if (typeof raw === 'object' && !Array.isArray(raw)) {
+        const keys = Object.keys(raw);
+        if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) return {};
+      }
+      return raw;
+    },
+    set(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        this.setDataValue('uiSettings', null);
+        return;
+      }
+      // Reject corrupted char-index objects
+      const keys = Object.keys(value);
+      if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+        this.setDataValue('uiSettings', null);
+        return;
+      }
+      this.setDataValue('uiSettings', value);
+    }
   }
 }, {
   tableName: 'users',

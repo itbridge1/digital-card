@@ -497,7 +497,12 @@ router.put("/ui-settings", protect, async (req, res) => {
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ success: false, error: "User not found" });
 
-    const existing = user.uiSettings || {};
+    let existing = user.uiSettings || {};
+    // Ensure existing is a plain object (guards against MariaDB returning JSON as string)
+    if (typeof existing === 'string') {
+      try { existing = JSON.parse(existing); } catch { existing = {}; }
+    }
+    if (typeof existing !== 'object' || Array.isArray(existing)) existing = {};
     // Shallow-merge top-level keys (e.g. hiddenCols) so other preference
     // groups are not overwritten by a partial update.
     const incoming = req.body || {};
