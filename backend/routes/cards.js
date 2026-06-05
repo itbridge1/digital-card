@@ -34,6 +34,26 @@ function normalizeRegistrationStatus(status) {
   return value;
 }
 
+/**
+ * Convert date cells (produced by cellDates:true) to dd/mm/yyyy strings
+ * so the full 4-digit year is always preserved regardless of the cell's
+ * number format code (e.g. built-in m/d/yy truncates to 2 digits).
+ */
+function normalizeDateCells(sheet) {
+  Object.keys(sheet).forEach(addr => {
+    if (addr[0] === '!') return;
+    const cell = sheet[addr];
+    if (cell.t === 'd' && cell.v instanceof Date) {
+      const d = cell.v;
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      cell.t = 's';
+      cell.v = `${dd}/${mm}/${d.getFullYear()}`;
+      cell.w = cell.v;
+    }
+  });
+}
+
 function buildBusinessUrl(tagId) {
   const base = (
     process.env.TAG_WRITE_BASE_URL ||
@@ -483,15 +503,15 @@ router.post(
       }
 
       // Parse workbook from buffer
-      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) {
         return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
       }
 
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
-        defval: "",
-      });
+      const sheet = workbook.Sheets[sheetName];
+      normalizeDateCells(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
 
       if (rows.length === 0) {
         return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
@@ -577,12 +597,8 @@ router.post(
           if (knownNorms.has(norm(h))) return; // already captured above
           const val = String(row[h] ?? "").trim();
           if (!val) return;
-          // Sanitise header into a safe metadata key
-          const key = h.trim()
-            .replace(/\s+/g, "_")
-            .replace(/[^a-zA-Z0-9_]/g, "")
-            .replace(/^_+|_+$/g, "")
-            .toLowerCase();
+          // Use the original header as the metadata key (preserves case and spaces)
+          const key = h.trim();
           if (key && !metadata[key]) metadata[key] = val;
         });
 
@@ -693,13 +709,15 @@ router.post(
       }
 
       // Parse the spreadsheet
-      const workbook = XLSX.read(excelEntry.getData(), { type: "buffer" });
+      const workbook = XLSX.read(excelEntry.getData(), { type: "buffer", cellDates: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) {
         return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
       }
 
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+      const sheet = workbook.Sheets[sheetName];
+      normalizeDateCells(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
       if (rows.length === 0) {
         return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
       }

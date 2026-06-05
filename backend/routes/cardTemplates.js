@@ -23,6 +23,25 @@ router.use(protect);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 /**
+ * Convert date cells (produced by cellDates:true) to dd/mm/yyyy strings
+ * so the full 4-digit year is always preserved regardless of the cell's
+ * number format code (e.g. built-in m/d/yy truncates to 2 digits).
+ */
+function normalizeDateCells(sheet) {
+  Object.keys(sheet).forEach(addr => {
+    if (addr[0] === '!') return;
+    const cell = sheet[addr];
+    if (cell.t === 'd' && cell.v instanceof Date) {
+      const d = cell.v;
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      cell.t = 's';
+      cell.v = `${dd}/${mm}/${d.getFullYear()}`;
+      cell.w = cell.v;
+    }
+  });
+}
+/**
  * Validate a single field definition coming from the request body.
  * Returns a normalised field object or throws a descriptive Error.
  */
@@ -234,11 +253,13 @@ router.post(
     try {
       if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) return res.status(400).json({ success: false, error: 'Spreadsheet has no sheets' });
 
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+      const sheet = workbook.Sheets[sheetName];
+      normalizeDateCells(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
       if (rows.length === 0) return res.status(400).json({ success: false, error: 'Spreadsheet is empty' });
 
       const columns = Object.keys(rows[0]);
@@ -307,11 +328,13 @@ router.post(
       }
 
       // Parse workbook
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) return res.status(400).json({ success: false, error: 'Spreadsheet has no sheets' });
 
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+      const sheet = workbook.Sheets[sheetName];
+      normalizeDateCells(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
       if (rows.length === 0) return res.status(400).json({ success: false, error: 'Spreadsheet is empty' });
 
       const created = [];
