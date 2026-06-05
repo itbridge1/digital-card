@@ -31,13 +31,19 @@ function normalizeDateCells(sheet) {
   Object.keys(sheet).forEach(addr => {
     if (addr[0] === '!') return;
     const cell = sheet[addr];
-    if (cell.t === 'd' && cell.v instanceof Date) {
-      const d = cell.v;
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      cell.t = 's';
-      cell.v = `${dd}/${mm}/${d.getFullYear()}`;
-      cell.w = cell.v;
+    // Only process numeric cells that have a date-type format string
+    // cell.z is populated by cellNF:true and contains the format string
+    if (cell.t === 'n' && cell.z && typeof cell.v === 'number') {
+      // Date formats contain y/m/d tokens; number formats contain 0/#/?
+      if (!/[ymd]/i.test(cell.z) || /[0#?]/.test(cell.z)) return;
+      try {
+        // Pure arithmetic — no JS Date, no timezone conversion
+        const formatted = XLSX.SSF.format('dd/mm/yyyy', cell.v);
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(formatted)) return;
+        cell.t = 's';
+        cell.v = formatted;
+        cell.w = formatted;
+      } catch { /* not a date cell, leave as-is */ }
     }
   });
 }
@@ -279,7 +285,7 @@ router.post(
     try {
       if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellNF: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) return res.status(400).json({ success: false, error: 'Spreadsheet has no sheets' });
 
@@ -354,7 +360,7 @@ router.post(
       }
 
       // Parse workbook
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellNF: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) return res.status(400).json({ success: false, error: 'Spreadsheet has no sheets' });
 
