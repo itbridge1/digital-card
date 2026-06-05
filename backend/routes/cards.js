@@ -794,6 +794,28 @@ router.post(
 
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
+        // ── Capture any custom columns not covered by the named fields above ──
+        const knownNormsZip = new Set([
+          "name","fullname","title","positiontitle","email","emailaddress",
+          "phone","phonenumber","mobile","contact","contactno","phoneno",
+          "address","fulladdress","rollno","roll","rollnumber","studentid",
+          "admissionno","class","grade","gradelevel","section","classsection",
+          "house","guardian","guardianname","parent","parentname",
+          "guardianphone","parentphone","guardiancontact","employeeid","empid",
+          "staffid","department","dept","specialization","speciality",
+          "licensenumber","licenseno","emergencycontact","company",
+          "organization","organisation","position","jobtitle","designation",
+          "linkedin","website","web","tagid","tag","businessurl","url",
+          "photo","image","photofile","profilephoto",
+        ]);
+        headers.forEach((h) => {
+          if (knownNormsZip.has(norm(h))) return;
+          const val = String(row[h] ?? "").trim();
+          if (!val) return;
+          const key = h.trim();
+          if (key && !metadata[key]) metadata[key] = val;
+        });
+
         const businessUrl = pick(row, "Business URL", "BusinessURL", "URL", "url") || undefined;
 
         try {
