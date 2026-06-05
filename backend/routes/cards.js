@@ -35,6 +35,32 @@ function normalizeRegistrationStatus(status) {
 }
 
 /**
+ * For rows without a tagId, try to find an existing card in the same tenant
+ * by matching on the best available unique identifier (studentId > employeeId > name).
+ * Returns the existing tagId if found, or null.
+ */
+async function findExistingCardTagId(tenantId, metadata) {
+  const { sequelize } = require('../config/database');
+  // Prefer a stable ID field — check common keys in order
+  const candidates = [
+    'studentId', 'employeeId', 'rollNo', 'admissionNo', 'staffId', 'name',
+  ];
+  for (const field of candidates) {
+    const value = metadata[field];
+    if (!value) continue;
+    const [rows] = await sequelize.query(
+      `SELECT tagId FROM cards
+       WHERE tenantId = :tenantId
+         AND JSON_UNQUOTE(JSON_EXTRACT(metadata, :path)) = :value
+       LIMIT 1`,
+      { replacements: { tenantId, path: `$.${field}`, value: String(value) } }
+    );
+    if (rows[0]?.tagId) return rows[0].tagId;
+  }
+  return null;
+}
+
+/**
  * Convert date cells (produced by cellDates:true) to dd/mm/yyyy strings
  * so the full 4-digit year is always preserved regardless of the cell's
  * number format code (e.g. built-in m/d/yy truncates to 2 digits).
@@ -546,8 +572,6 @@ router.post(
         const rowNum = i + 2; // 1-based, row 1 is header
 
         const rawTagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
-        // Tag ID is optional — auto-generate a PENDING placeholder when absent
-        const tagId = rawTagId || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
 
         const metadata = {
           name: pick(row, "Name", "Full Name", "fullname"),
@@ -577,6 +601,13 @@ router.post(
 
         // Remove empty metadata fields
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
+
+        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
+        let tagId = rawTagId;
+        if (!tagId) {
+          tagId = await findExistingCardTagId(targetTenantId, metadata)
+            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+        }
 
         // ── Capture any custom columns not covered by the named fields above ──
         // This allows arbitrary Excel headers (e.g. "Ronik", "Basnet", "S.N") to
@@ -751,7 +782,6 @@ router.post(
         const rowNum = i + 2;
 
         const rawTagId = pick(row, "Tag ID", "TagID", "tag_id", "tagid", "tag");
-        const tagId = rawTagId || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
 
         // Resolve profile photo from ZIP
         const photoFilename = pick(row, "Photo", "Image", "Photo File", "Profile Photo").toLowerCase();
@@ -793,6 +823,13 @@ router.post(
         };
 
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
+
+        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
+        let tagId = rawTagId;
+        if (!tagId) {
+          tagId = await findExistingCardTagId(targetTenantId, metadata)
+            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+        }
 
         // ── Capture any custom columns not covered by the named fields above ──
         const knownNormsZip = new Set([

@@ -5,7 +5,7 @@ const XLSX = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { protect, authorize } = require('../middleware/auth');
-const { CardTemplate, Tenant } = require('../models');
+const { CardTemplate, Tenant, Card } = require('../models');
 const { registerNfcCard } = require('../utils/nfcRegistration');
 
 // ── Multer (Excel only, memory storage) ──────────────────────────────────────
@@ -40,6 +40,32 @@ function normalizeDateCells(sheet) {
       cell.w = cell.v;
     }
   });
+}
+
+/**
+ * For rows without a tagId, look for an existing card in the same tenant
+ * by matching on the best available unique identifier in the metadata.
+ * Returns the existing tagId if found, or null.
+ */
+async function findExistingCardTagId(tenantId, metadata) {
+  const { sequelize } = require('../config/database');
+  // Prefer a stable ID field — check common keys in order
+  const candidates = [
+    'studentId', 'employeeId', 'rollNo', 'admissionNo', 'staffId', 'name',
+  ];
+  for (const field of candidates) {
+    const value = metadata[field];
+    if (!value) continue;
+    const [rows] = await sequelize.query(
+      `SELECT tagId FROM cards
+       WHERE tenantId = :tenantId
+         AND JSON_UNQUOTE(JSON_EXTRACT(metadata, :path)) = :value
+       LIMIT 1`,
+      { replacements: { tenantId, path: `$.${field}`, value: String(value) } }
+    );
+    if (rows[0]?.tagId) return rows[0].tagId;
+  }
+  return null;
 }
 /**
  * Validate a single field definition coming from the request body.
@@ -363,7 +389,12 @@ router.post(
         // Store templateId reference so the card knows which schema applies
         metadata.__templateId = template.id;
 
-        const tagId = rawTagId || `PENDING-${uuidv4().toUpperCase().replace(/-/g, '').slice(0, 12)}`;
+        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
+        let tagId = rawTagId;
+        if (!tagId) {
+          tagId = await findExistingCardTagId(tenantId, metadata)
+            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, '').slice(0, 12)}`;
+        }
 
         try {
           const { card } = await registerNfcCard({
