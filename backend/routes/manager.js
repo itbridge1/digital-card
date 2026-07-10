@@ -13,7 +13,7 @@ const { v4: uuidv4 } = require("uuid");
 
 const photoZipUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 150 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith(".zip")) cb(null, true);
     else cb(new Error("Only .zip files are allowed"));

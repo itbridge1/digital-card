@@ -5,12 +5,20 @@
  */
 
 const up = async (conn) => {
-  await conn.execute(`
-    ALTER TABLE tenants
-      ADD CONSTRAINT fk_tenants_createdBy
-        FOREIGN KEY (createdBy) REFERENCES users (id)
-        ON UPDATE CASCADE ON DELETE SET NULL
+  const [rows] = await conn.execute(`
+    SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'tenants'
+      AND CONSTRAINT_NAME = 'fk_tenants_createdBy'
   `);
+  if (rows.length === 0) {
+    await conn.execute(`
+      ALTER TABLE tenants
+        ADD CONSTRAINT fk_tenants_createdBy
+          FOREIGN KEY (createdBy) REFERENCES users (id)
+          ON UPDATE CASCADE ON DELETE SET NULL
+    `);
+  }
 };
 
 const down = async (conn) => {

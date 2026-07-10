@@ -98,6 +98,12 @@ export const cardAPI = {
     form.append("tenantId", tenantId);
     return api.post("/cards/import-zip", form);
   },
+  bulkUpdateQr: (tenantId, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("tenantId", tenantId);
+    return api.post("/cards/bulk-update-qr", form);
+  },
 };
 
 // Tenant API methods

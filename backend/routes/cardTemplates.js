@@ -395,12 +395,12 @@ router.post(
         // Store templateId reference so the card knows which schema applies
         metadata.__templateId = template.id;
 
-        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
-        let tagId = rawTagId;
-        if (!tagId) {
-          tagId = await findExistingCardTagId(tenantId, metadata)
-            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, '').slice(0, 12)}`;
-        }
+        // Resolve tagId: use Excel value or generate new PENDING.
+        // Do NOT call findExistingCardTagId during bulk import — it can match cards
+        // created earlier in the same batch (e.g. two students with the same name),
+        // causing those rows to silently update instead of creating new entries.
+        let tagId = rawTagId
+          || `PENDING-${uuidv4().toUpperCase().replace(/-/g, '').slice(0, 12)}`;
 
         try {
           const { card } = await registerNfcCard({

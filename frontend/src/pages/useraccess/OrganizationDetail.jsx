@@ -275,6 +275,10 @@ function OrganizationDetail() {
   const [photosZipFile, setPhotosZipFile] = useState(null);
   const [photosZipUploading, setPhotosZipUploading] = useState(false);
   const [photosZipResult, setPhotosZipResult] = useState(null);
+  const [qrUpdateModalOpen, setQrUpdateModalOpen] = useState(false);
+  const [qrUpdateFile, setQrUpdateFile] = useState(null);
+  const [qrUpdating, setQrUpdating] = useState(false);
+  const [qrUpdateResult, setQrUpdateResult] = useState(null);
 
   // Column visibility — initialised from localStorage cache, then synced from server
   const [hiddenColumns, setHiddenColumns] = useState(() => {
@@ -853,6 +857,29 @@ function OrganizationDetail() {
     setPhotosZipFile(null);
     setPhotosZipResult(null);
     setPhotosZipModalOpen(true);
+  };
+
+  const handleQrUpdateOpen = () => {
+    setQrUpdateFile(null);
+    setQrUpdateResult(null);
+    setQrUpdateModalOpen(true);
+  };
+
+  const handleQrUpdateConfirm = async () => {
+    if (!qrUpdateFile) {
+      message.warning("Please select a ZIP file first");
+      return;
+    }
+    setQrUpdating(true);
+    try {
+      const res = await cardAPI.bulkUpdateQr(tenantId, qrUpdateFile);
+      setQrUpdateResult(res.data);
+      fetchData();
+    } catch (err) {
+      message.error(err.response?.data?.error || "Bulk QR update failed");
+    } finally {
+      setQrUpdating(false);
+    }
   };
 
   const handlePhotosZipConfirm = async (skipUnmatched = false) => {
@@ -1529,6 +1556,9 @@ function OrganizationDetail() {
           <Button icon={<FileImageOutlined />} onClick={handlePhotosZipOpen}>
             Upload Photos ZIP
           </Button>
+          <Button icon={<FolderOpenOutlined />} onClick={handleQrUpdateOpen}>
+            Update QR ZIP
+          </Button>
           <Dropdown
             trigger={["click"]}
             dropdownRender={() => (
@@ -2175,7 +2205,7 @@ function OrganizationDetail() {
               </p>
               <p className="ant-upload-text">Click or drag ZIP file here</p>
               <p className="ant-upload-hint">
-                .zip containing Excel + photos — max 50 MB
+                .zip containing Excel + photos — max 150 MB
               </p>
             </Upload.Dragger>
           </div>
@@ -2325,7 +2355,7 @@ function OrganizationDetail() {
               </p>
               <p className="ant-upload-text">Click or drag photos ZIP here</p>
               <p className="ant-upload-hint">
-                .zip containing images only — max 100 MB
+                .zip containing images only — max 150 MB
               </p>
             </Upload.Dragger>
           </div>
@@ -2545,6 +2575,97 @@ function OrganizationDetail() {
             : "Permanently remove this card holder? This cannot be undone."
         }
       />
+
+      {/* Bulk QR Update ZIP modal */}
+      <Modal
+        title="Update QR Codes (ZIP)"
+        open={qrUpdateModalOpen}
+        onCancel={() => { if (!qrUpdating) setQrUpdateModalOpen(false); }}
+        width={isMobile ? "95%" : 560}
+        footer={
+          qrUpdateResult ? (
+            <Button type="primary" onClick={() => setQrUpdateModalOpen(false)}>
+              Close
+            </Button>
+          ) : (
+            <Space>
+              <Button onClick={() => setQrUpdateModalOpen(false)} disabled={qrUpdating}>
+                Cancel
+              </Button>
+              <Button type="primary" loading={qrUpdating} onClick={handleQrUpdateConfirm}>
+                Update QR
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {qrUpdateResult ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type={qrUpdateResult.summary.failed > 0 ? "warning" : "success"}
+              message={qrUpdateResult.message}
+              showIcon
+            />
+            <Descriptions size="small" bordered column={3}>
+              <Descriptions.Item label="Updated">{qrUpdateResult.summary.updated}</Descriptions.Item>
+              <Descriptions.Item label="Skipped">{qrUpdateResult.summary.skipped}</Descriptions.Item>
+              <Descriptions.Item label="Failed">{qrUpdateResult.summary.failed}</Descriptions.Item>
+            </Descriptions>
+            {qrUpdateResult.details.failed.length > 0 && (
+              <div style={{ fontSize: 12, color: "#cf1322" }}>
+                <strong>Failed rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {qrUpdateResult.details.failed.map((f, i) => (
+                    <li key={i}>Row {f.row}{f.qrFilename ? ` (${f.qrFilename})` : ""}: {f.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {qrUpdateResult.details.skipped.length > 0 && (
+              <div style={{ fontSize: 12, color: "#d46b08" }}>
+                <strong>Skipped rows:</strong>
+                <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                  {qrUpdateResult.details.skipped.map((s, i) => (
+                    <li key={i}>Row {s.row}{s.identifier ? ` (${s.identifier})` : ""}: {s.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="Bulk QR update via ZIP"
+              description={
+                <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                  Upload a ZIP containing:
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                    <li>One <strong>.xlsx / .xls / .csv</strong> spreadsheet</li>
+                    <li>QR code image files (<strong>.png / .jpg …</strong>) at the root level</li>
+                    <li>A <strong>QR</strong> column in the spreadsheet with the QR image filename (e.g. <code>_DSC0068.png</code>)</li>
+                    <li>A <strong>Roll No</strong> or <strong>Student Name</strong> column to match existing cards</li>
+                  </ul>
+                </div>
+              }
+            />
+            <Upload.Dragger
+              accept=".zip"
+              beforeUpload={(file) => { setQrUpdateFile(file); return false; }}
+              onRemove={() => setQrUpdateFile(null)}
+              maxCount={1}
+              fileList={qrUpdateFile ? [qrUpdateFile] : []}
+            >
+              <p className="ant-upload-drag-icon">
+                <FolderOpenOutlined />
+              </p>
+              <p className="ant-upload-text">Click or drag QR ZIP here</p>
+              <p className="ant-upload-hint">.zip containing Excel + QR images — max 50 MB</p>
+            </Upload.Dragger>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

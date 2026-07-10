@@ -608,12 +608,12 @@ router.post(
         // Remove empty metadata fields
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
-        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
-        let tagId = rawTagId;
-        if (!tagId) {
-          tagId = await findExistingCardTagId(targetTenantId, metadata)
-            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
-        }
+        // Resolve tagId: use Excel value or generate new PENDING.
+        // Do NOT call findExistingCardTagId during bulk import — it can match cards
+        // created earlier in the same batch (e.g. two students with the same name),
+        // causing those rows to silently update instead of creating new entries.
+        let tagId = rawTagId
+          || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
 
         // ── Capture any custom columns not covered by the named fields above ──
         // This allows arbitrary Excel headers (e.g. "Ronik", "Basnet", "S.N") to
@@ -675,10 +675,10 @@ router.post(
   },
 );
 
-// Multer config for ZIP imports (70 MB max, memory storage)
+// Multer config for ZIP imports (150 MB max, memory storage)
 const zipImportUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 70 * 1024 * 1024 },
+  limits: { fileSize: 150 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = file.originalname.split(".").pop().toLowerCase();
     if (ext === "zip") cb(null, true);
@@ -830,12 +830,12 @@ router.post(
 
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
-        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
-        let tagId = rawTagId;
-        if (!tagId) {
-          tagId = await findExistingCardTagId(targetTenantId, metadata)
-            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
-        }
+        // Resolve tagId: use Excel value or generate new PENDING.
+        // Do NOT call findExistingCardTagId during bulk import — it can match cards
+        // created earlier in the same batch (e.g. two students with the same name),
+        // causing those rows to silently update instead of creating new entries.
+        let tagId = rawTagId
+          || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
 
         // ── Capture any custom columns not covered by the named fields above ──
         const knownNormsZip = new Set([
@@ -1121,6 +1121,214 @@ router.delete("/:tagId", async (req, res) => {
     });
   }
 });
+
+// Multer config for QR bulk update ZIP (150 MB max, memory storage)
+const qrBulkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 150 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = file.originalname.split(".").pop().toLowerCase();
+    if (ext === "zip") cb(null, true);
+    else cb(new Error("Only .zip files are allowed"));
+  },
+});
+
+/**
+ * POST /api/cards/bulk-update-qr
+ * Update QR images for existing card holders in bulk.
+ * Accepts a ZIP containing:
+ *   - One Excel/CSV spreadsheet with a "QR" column (QR image filename)
+ *     plus an identifier column (Roll No / Name / etc.)
+ *   - The QR image files referenced in the "QR" column
+ * Matches each row to an existing card by Roll No / Student ID / Name
+ * and stores the QR image URL in metadata.qrImageUrl on the matched card.
+ */
+router.post(
+  "/bulk-update-qr",
+  authorize("admin", "manager"),
+  (req, res, next) => {
+    qrBulkUpload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ success: false, error: err.message });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+
+      const targetTenantId = String(req.body.tenantId || req.tenantId || "").trim().toUpperCase();
+      if (!targetTenantId) {
+        return res.status(400).json({ success: false, error: "tenantId is required" });
+      }
+
+      // Extract ZIP
+      let zip;
+      try {
+        zip = new AdmZip(req.file.buffer);
+      } catch {
+        return res.status(400).json({ success: false, error: "Invalid or corrupt ZIP file" });
+      }
+
+      const entries = zip.getEntries();
+      const EXCEL_EXT = /\.(xlsx|xls|csv)$/i;
+      const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
+
+      let excelEntry = null;
+      const imageMap = {}; // normalised filename -> AdmZip entry
+
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        const base = path.basename(entry.entryName);
+        if (base.startsWith(".") || entry.entryName.includes("__MACOSX")) continue;
+
+        if (!excelEntry && EXCEL_EXT.test(base)) {
+          excelEntry = entry;
+        } else if (IMAGE_EXT.test(base)) {
+          imageMap[base.toLowerCase()] = entry;
+        }
+      }
+
+      if (!excelEntry) {
+        return res.status(400).json({ success: false, error: "No Excel/CSV file found inside the ZIP" });
+      }
+
+      if (Object.keys(imageMap).length === 0) {
+        return res.status(400).json({ success: false, error: "No QR image files found inside the ZIP" });
+      }
+
+      // Parse spreadsheet
+      const workbook = XLSX.read(excelEntry.getData(), { type: "buffer", cellNF: true });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+      normalizeDateCells(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
+      if (rows.length === 0) {
+        return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
+      }
+
+      const headers = Object.keys(rows[0]);
+      const headerMap = {};
+      const normKey = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      headers.forEach((h) => { headerMap[normKey(h)] = h; });
+
+      const pick = (row, ...keys) => {
+        for (const k of keys) {
+          const real = headerMap[normKey(k)];
+          if (real !== undefined) {
+            const val = String(row[real] ?? "").trim();
+            if (val) return val;
+          }
+        }
+        return "";
+      };
+
+      // Fetch all cards for this tenant once
+      const allCards = await Card.findAll({ where: { tenantId: targetTenantId } });
+      if (allCards.length === 0) {
+        return res.status(404).json({ success: false, error: "No cards found for this tenant" });
+      }
+
+      // Build lookup indexes for fast matching
+      const cardByStudentId = new Map(); // rollNo / studentId -> card
+      const cardByName = new Map();      // lowercase name -> card
+
+      for (const card of allCards) {
+        const meta = card.metadata || {};
+        if (meta.studentId) cardByStudentId.set(String(meta.studentId).toLowerCase(), card);
+        if (meta.employeeId) cardByStudentId.set(String(meta.employeeId).toLowerCase(), card);
+        if (meta.name) cardByName.set(String(meta.name).toLowerCase(), card);
+      }
+
+      // Ensure QR output directory exists
+      const qrDir = path.join(__dirname, "..", "uploads", "qr", targetTenantId);
+      fs.mkdirSync(qrDir, { recursive: true });
+
+      const updated = [];
+      const skipped = [];
+      const failed = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2;
+
+        // Get QR image filename from "QR" column
+        const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
+        if (!qrFilename) {
+          skipped.push({ row: rowNum, reason: "No QR column value" });
+          continue;
+        }
+
+        if (!imageMap[qrFilename]) {
+          skipped.push({ row: rowNum, qrFilename, reason: "QR image not found in ZIP" });
+          continue;
+        }
+
+        // Find matching card: Roll No → Student ID / Employee ID → Name
+        const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Employee ID", "Roll no");
+        const name = pick(row, "Student Name", "Name", "Full Name");
+
+        let card = null;
+        if (rollNo) card = cardByStudentId.get(rollNo.toLowerCase()) || null;
+        if (!card && name) card = cardByName.get(name.toLowerCase()) || null;
+
+        if (!card) {
+          skipped.push({ row: rowNum, qrFilename, identifier: rollNo || name || "(none)", reason: "No matching card found" });
+          continue;
+        }
+
+        // Save QR image to disk
+        const safeName = path.basename(qrFilename).replace(/[^a-zA-Z0-9._-]/g, "_");
+        const destFilename = `${uuidv4()}_${safeName}`;
+        const destPath = path.join(qrDir, destFilename);
+
+        try {
+          const imgBuffer = imageMap[qrFilename].getData();
+          if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
+          fs.writeFileSync(destPath, imgBuffer);
+        } catch (writeErr) {
+          failed.push({ row: rowNum, qrFilename, reason: `Failed to save image: ${writeErr.message}` });
+          continue;
+        }
+
+        const qrImageUrl = `/uploads/qr/${targetTenantId}/${destFilename}`;
+
+        // Delete old QR image if one exists for this card
+        const oldQrUrl = (card.metadata || {}).qrImageUrl;
+        if (oldQrUrl) {
+          try {
+            const oldPath = path.join(__dirname, "..", oldQrUrl);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          } catch { /* ignore cleanup errors */ }
+        }
+
+        try {
+          await card.update({ metadata: { ...card.metadata, qrImageUrl } });
+          updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl });
+        } catch (dbErr) {
+          // Roll back the written file on DB failure
+          try { fs.unlinkSync(destPath); } catch {}
+          failed.push({ row: rowNum, qrFilename, reason: `DB update failed: ${dbErr.message}` });
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `QR update complete: ${updated.length} updated, ${skipped.length} skipped, ${failed.length} failed`,
+        summary: { updated: updated.length, skipped: skipped.length, failed: failed.length },
+        details: { updated, skipped, failed },
+      });
+    } catch (error) {
+      console.error("Error in bulk QR update:", error);
+      return res.status(500).json({ success: false, error: "Failed to bulk update QR codes" });
+    }
+  },
+);
 
 /**
  * GET /api/cards/:tagId/analytics
