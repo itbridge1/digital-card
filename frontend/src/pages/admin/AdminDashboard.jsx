@@ -18,6 +18,10 @@ import {
   Tooltip,
   Avatar,
   Grid,
+  Switch,
+  InputNumber,
+  Divider,
+  Spin,
 } from "antd";
 import {
   PlusOutlined,
@@ -29,8 +33,11 @@ import {
   StopOutlined,
   CheckCircleOutlined,
   SearchOutlined,
+  DatabaseOutlined,
+  SendOutlined,
+  SaveOutlined,
 } from "@ant-design/icons";
-import { useraccessAPI, authAPI, managerAPI } from "../../services/api";
+import { useraccessAPI, authAPI, managerAPI, adminAPI } from "../../services/api";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -58,6 +65,13 @@ function AdminDashboard() {
   const [managerRoleFilter, setManagerRoleFilter] = useState("");
   const [managerStatusFilter, setManagerStatusFilter] = useState("");
   const [orgSearch, setOrgSearch] = useState("");
+
+  // Backup settings state
+  const [backupSettings, setBackupSettings] = useState(null);
+  const [loadingBackup, setLoadingBackup] = useState(true);
+  const [savingBackup, setSavingBackup] = useState(false);
+  const [sendingNow, setSendingNow] = useState(false);
+  const [backupForm] = Form.useForm();
   const [orgTypeFilter, setOrgTypeFilter] = useState("");
   const [orgStatusFilter, setOrgStatusFilter] = useState("");
 
@@ -110,7 +124,59 @@ function AdminDashboard() {
   useEffect(() => {
     fetchOrgs();
     fetchManagers();
+    fetchBackupSettings();
   }, []);
+
+  const fetchBackupSettings = async () => {
+    setLoadingBackup(true);
+    try {
+      const res = await adminAPI.getBackupSettings();
+      const s = res.data.data;
+      setBackupSettings(s);
+      backupForm.setFieldsValue({
+        recipientEmail: s.recipientEmail,
+        intervalDays: s.intervalDays,
+        enabled: s.enabled,
+        subject: s.subject,
+        message: s.message,
+      });
+    } catch {
+      message.error("Failed to load backup settings");
+    } finally {
+      setLoadingBackup(false);
+    }
+  };
+
+  const handleSaveBackup = async () => {
+    try {
+      const values = await backupForm.validateFields();
+      setSavingBackup(true);
+      await adminAPI.updateBackupSettings(values);
+      message.success("Backup settings saved");
+      fetchBackupSettings();
+    } catch (err) {
+      if (err?.response?.data?.errors) {
+        message.error(err.response.data.errors[0]?.msg || "Validation failed");
+      } else if (err?.response?.data?.error) {
+        message.error(err.response.data.error);
+      }
+    } finally {
+      setSavingBackup(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    setSendingNow(true);
+    try {
+      const res = await adminAPI.sendBackupNow();
+      message.success(res.data.message || "Backup email sent!");
+      fetchBackupSettings();
+    } catch (err) {
+      message.error(err?.response?.data?.error || "Failed to send backup email");
+    } finally {
+      setSendingNow(false);
+    }
+  };
 
   const activeOrgs = orgs.filter((o) => o.isActive).length;
   const activeManagers = managers.filter(
@@ -544,6 +610,102 @@ function AdminDashboard() {
           size="small"
           scroll={{ x: 640 }}
         />
+      </Card>
+
+      {/* Database Backup Settings */}
+      <Card
+        title={
+          <Space>
+            <DatabaseOutlined style={{ color: "#5046e5" }} />
+            <span>Database Backup Settings</span>
+          </Space>
+        }
+        style={{ marginTop: 24 }}
+        extra={
+          <Space>
+            <Popconfirm
+              title="Send a database backup email right now?"
+              onConfirm={handleSendNow}
+              okText="Send"
+              cancelText="Cancel"
+            >
+              <Button
+                icon={<SendOutlined />}
+                loading={sendingNow}
+                disabled={loadingBackup}
+              >
+                Send Now
+              </Button>
+            </Popconfirm>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={savingBackup}
+              disabled={loadingBackup}
+              onClick={handleSaveBackup}
+            >
+              Save Settings
+            </Button>
+          </Space>
+        }
+      >
+        {loadingBackup ? (
+          <Spin />
+        ) : (
+          <>
+            {backupSettings?.lastSentAt && (
+              <Text type="secondary" style={{ display: "block", marginBottom: 16, fontSize: 12 }}>
+                Last backup sent: {new Date(backupSettings.lastSentAt).toLocaleString()}
+              </Text>
+            )}
+            <Form form={backupForm} layout="vertical">
+              <Row gutter={[16, 0]}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Recipient Email"
+                    name="recipientEmail"
+                    rules={[
+                      { required: true, message: "Required" },
+                      { type: "email", message: "Invalid email" },
+                    ]}
+                  >
+                    <Input placeholder="db.itbnepal@gmail.com" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item
+                    label="Send Every (days)"
+                    name="intervalDays"
+                    rules={[
+                      { required: true, message: "Required" },
+                      { type: "number", min: 1, max: 365, message: "1–365 days" },
+                    ]}
+                  >
+                    <InputNumber min={1} max={365} style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Enabled" name="enabled" valuePropName="checked">
+                    <Switch checkedChildren="On" unCheckedChildren="Off" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Divider style={{ margin: "4px 0 16px" }} />
+              <Row gutter={[16, 0]}>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Email Subject" name="subject">
+                    <Input placeholder="Database Backup" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Email Body" name="message">
+                    <Input.TextArea rows={3} placeholder="Please find the attached database backup." />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
+          </>
+        )}
       </Card>
 
       {/* Create manager modal */}

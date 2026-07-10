@@ -253,4 +253,11 @@ export const tenantPortalAPI = {
     api.post("/tenant/change-password", { currentPassword, newPassword }),
 };
 
+// Admin API — database backup scheduler settings
+export const adminAPI = {
+  getBackupSettings: () => api.get("/admin/backup-settings"),
+  updateBackupSettings: (data) => api.put("/admin/backup-settings", data),
+  sendBackupNow: () => api.post("/admin/backup-settings/send-now"),
+};
+
 export default api;

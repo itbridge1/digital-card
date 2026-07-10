@@ -8,8 +8,9 @@ const morgan = require("morgan");
 const path = require("path");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
-const { connectDB } = require("./config/database");
+const { connectDB, sequelize } = require("./config/database");
 const { initSocket } = require("./utils/socket");
+const { startBackupScheduler } = require("./utils/backupScheduler");
 
 // Crash early if critical secrets are missing
 if (!process.env.JWT_SECRET) {
@@ -99,6 +100,7 @@ app.use("/api/upload", require("./routes/upload"));
 app.use("/api/manager", require("./routes/manager"));
 app.use("/api/tenant", require("./routes/tenantPortal"));
 app.use("/api/public", require("./routes/public"));
+app.use("/api/admin", require("./routes/admin"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -157,6 +159,8 @@ const server = http.createServer(app);
 initSocket(server);
 
 server.listen(PORT, () => {
+  // Start the DB backup email scheduler after server is up
+  startBackupScheduler(sequelize);
   console.log(`
     ╔═══════════════════════════════════════════════╗
     ║  NFC Platform API Server Running              ║
