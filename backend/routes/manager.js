@@ -890,20 +890,58 @@ router.post(
       return res.status(404).json({ error: "No card holders found for this organization" });
     }
 
-    // Build a lookup key for each card (what filename it expects)
-    function cardLookupKey(card) {
-      const meta = card.metadata || {};
-      // Primary: metadata.photo stores the original filename from import
-      if (meta.photo) return meta.photo.toLowerCase();
-      // Fallback: derive from the stored profileImageUrl
-      if (card.profileImageUrl) {
-        const stored = path.basename(card.profileImageUrl);
-        // Format: {36-char-uuid}_{originalname}
-        if (stored.length > 37 && stored[36] === "_") {
-          return stored.slice(37).toLowerCase();
+    // Build a reverse lookup: image key (lowercase, with or without extension) → card.
+    // Matching priority per card:
+    //   1. meta.photo          – exact filename stored during Excel import
+    //   2. ID fields (stem)    – studentId, rollNo, admissionNo, employeeId, staffId
+    //                            matched against the image filename WITHOUT its extension
+    //   3. tagId (stem)        – non-PENDING NFC tag ID matched as stem
+    //   4. profileImageUrl     – basename with the leading {uuid}_ stripped
+    // The stem match lets photos named "001.jpg" link to a card with studentId "001".
+    function buildImageToCardMap(cardList) {
+      const map = new Map(); // lowercase key or stem → card (first match wins)
+      const ID_FIELDS = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
+
+      for (const card of cardList) {
+        const meta = card.metadata || {};
+        const candidates = [];
+
+        // 1. Exact photo filename from import
+        if (meta.photo) candidates.push(meta.photo.toLowerCase());
+
+        // 2. ID-based stems (e.g. "001" matches "001.jpg")
+        for (const field of ID_FIELDS) {
+          const val = meta[field];
+          if (val) candidates.push(String(val).trim().toLowerCase());
+        }
+
+        // 3. NFC tag ID stem (non-PENDING)
+        if (card.tagId && !card.tagId.toUpperCase().startsWith("PENDING-")) {
+          candidates.push(card.tagId.toLowerCase());
+        }
+
+        // 4. Basename from profileImageUrl with UUID prefix stripped
+        if (card.profileImageUrl) {
+          const stored = path.basename(card.profileImageUrl);
+          if (stored.length > 37 && stored[36] === "_") {
+            candidates.push(stored.slice(37).toLowerCase());
+          }
+        }
+
+        for (const key of candidates) {
+          if (key && !map.has(key)) map.set(key, card);
         }
       }
-      return null;
+      return map;
+    }
+
+    const imageToCardMap = buildImageToCardMap(cards);
+
+    // Helper: find the card for a given imageMap key (tries full filename then stem)
+    function findCardForImage(imageKey) {
+      if (imageToCardMap.has(imageKey)) return imageToCardMap.get(imageKey);
+      const stem = imageKey.replace(/\.[^.]+$/, "");
+      return imageToCardMap.get(stem) || null;
     }
 
     // --- Validation pass: every image in the ZIP must match a card ---
@@ -915,8 +953,7 @@ router.post(
 
     const unmatchedImages = [];
     for (const key of Object.keys(imageMap)) {
-      const matched = cards.some((c) => cardLookupKey(c) === key);
-      if (!matched) unmatchedImages.push(imageMap[key].originalName);
+      if (!findCardForImage(key)) unmatchedImages.push(imageMap[key].originalName);
     }
 
     if (unmatchedImages.length > 0 && !skipUnmatched) {
@@ -950,16 +987,20 @@ router.post(
     let skipped = 0;
     const writeErrors = [];
 
-    for (const card of cards) {
-      const key = cardLookupKey(card);
+    // Iterate over images (not cards) so the expanded matching is used in the write pass too.
+    // Track which cards have already been updated to avoid overwriting with a second image.
+    const updatedCardIds = new Set();
 
-      if (!key || !imageMap[key]) {
-        // Card has no photo reference or its image wasn't in this ZIP — skip
+    for (const [key, { entry, originalName }] of Object.entries(imageMap)) {
+      const card = findCardForImage(key);
+      if (!card) { skipped++; continue; }
+
+      if (updatedCardIds.has(card.id)) {
+        // Another image already linked to this card in this batch — skip duplicate
         skipped++;
         continue;
       }
 
-      const { entry, originalName } = imageMap[key];
       const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filename = `${uuidv4()}_${safeName}`;
       const destPath = path.join(profilesDir, filename);
@@ -979,9 +1020,9 @@ router.post(
         deleteProfileImage(card.profileImageUrl);
         const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
         await card.update({ profileImageUrl: newUrl });
+        updatedCardIds.add(card.id);
         linked++;
       } catch (dbErr) {
-        // Roll back the written file on DB failure
         try { fs.unlinkSync(destPath); } catch {}
         console.warn(`DB update failed for card ${card.id}:`, dbErr.message);
         writeErrors.push({ filename: originalName, reason: "Database update failed" });
