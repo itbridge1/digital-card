@@ -861,15 +861,22 @@ router.post(
     // Build a map: normalised filename (lowercase) → zip entry
     // Skip __MACOSX artefacts and hidden dot-files that end up in some ZIPs
     const imageMap = {};
-    for (const entry of zip.getEntries()) {
+    const allZipEntries = zip.getEntries();
+    console.log(`[upload-photos] ZIP has ${allZipEntries.length} total entries`);
+    for (const entry of allZipEntries) {
       if (entry.isDirectory) continue;
-      if (entry.entryName.startsWith("__MACOSX") || entry.entryName.startsWith(".")) continue;
+      // Catch __MACOSX in any path segment, not just at root
+      if (entry.entryName.includes("__MACOSX") || entry.entryName.startsWith(".")) continue;
       const entryName = path.basename(entry.entryName);
       if (!entryName || entryName.startsWith(".")) continue;
       const ext = entryName.split(".").pop().toLowerCase();
-      if (!IMAGE_EXTS.has(ext)) continue;
+      if (!IMAGE_EXTS.has(ext)) {
+        console.log(`[upload-photos] Skipped non-image entry: ${entry.entryName}`);
+        continue;
+      }
       imageMap[entryName.toLowerCase()] = { entry, originalName: entryName };
     }
+    console.log(`[upload-photos] imageMap keys (${Object.keys(imageMap).length}):`, Object.keys(imageMap).slice(0, 10));
 
     if (Object.keys(imageMap).length === 0) {
       return res
@@ -902,6 +909,21 @@ router.post(
       const map = new Map(); // lowercase key or stem → card (first match wins)
       const ID_FIELDS = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
 
+      // Helper: add a key to the map, also add its numeric-normalised form
+      // so "001" and "1" both match each other.
+      function addKey(key, card) {
+        if (!key) return;
+        const k = key.toLowerCase();
+        if (!map.has(k)) map.set(k, card);
+        // If the key is a pure integer string, also add the trimmed version
+        // (strips leading zeros) so "001" and "1" are equivalent.
+        const asInt = parseInt(k, 10);
+        if (!isNaN(asInt) && String(asInt) !== k) {
+          const intKey = String(asInt);
+          if (!map.has(intKey)) map.set(intKey, card);
+        }
+      }
+
       for (const card of cardList) {
         const meta = card.metadata || {};
         const candidates = [];
@@ -929,19 +951,33 @@ router.post(
         }
 
         for (const key of candidates) {
-          if (key && !map.has(key)) map.set(key, card);
+          addKey(key, card);
         }
       }
       return map;
     }
 
     const imageToCardMap = buildImageToCardMap(cards);
+    console.log(`[upload-photos] imageToCardMap keys (${imageToCardMap.size}):`, [...imageToCardMap.keys()].slice(0, 10));
+    // Log a sample of the first few cards' relevant metadata for debugging
+    cards.slice(0, 3).forEach(c => {
+      const m = c.metadata || {};
+      console.log(`[upload-photos] Sample card ${c.id}: tagId=${c.tagId}, studentId=${m.studentId}, rollNo=${m.rollNo}, photo=${m.photo}`);
+    });
 
-    // Helper: find the card for a given imageMap key (tries full filename then stem)
+    // Helper: find the card for a given imageMap key (tries full filename then stem,
+    // and also the integer-normalised form of the stem to handle leading zeros).
     function findCardForImage(imageKey) {
       if (imageToCardMap.has(imageKey)) return imageToCardMap.get(imageKey);
       const stem = imageKey.replace(/\.[^.]+$/, "");
-      return imageToCardMap.get(stem) || null;
+      if (imageToCardMap.has(stem)) return imageToCardMap.get(stem);
+      // Try integer-normalised stem (e.g. "001" → "1" and vice-versa)
+      const asInt = parseInt(stem, 10);
+      if (!isNaN(asInt)) {
+        const intStem = String(asInt);
+        if (imageToCardMap.has(intStem)) return imageToCardMap.get(intStem);
+      }
+      return null;
     }
 
     // --- Validation pass: every image in the ZIP must match a card ---
@@ -953,7 +989,13 @@ router.post(
 
     const unmatchedImages = [];
     for (const key of Object.keys(imageMap)) {
-      if (!findCardForImage(key)) unmatchedImages.push(imageMap[key].originalName);
+      const card = findCardForImage(key);
+      if (!card) {
+        unmatchedImages.push(imageMap[key].originalName);
+        console.log(`[upload-photos] No match for image: ${key}`);
+      } else {
+        console.log(`[upload-photos] Matched image ${key} → card ${card.id} (tagId=${card.tagId})`);
+      }
     }
 
     if (unmatchedImages.length > 0 && !skipUnmatched) {
@@ -1022,6 +1064,7 @@ router.post(
         await card.update({ profileImageUrl: newUrl });
         updatedCardIds.add(card.id);
         linked++;
+        console.log(`[upload-photos] Linked ${originalName} → card ${card.id} → ${newUrl}`);
       } catch (dbErr) {
         try { fs.unlinkSync(destPath); } catch {}
         console.warn(`DB update failed for card ${card.id}:`, dbErr.message);
