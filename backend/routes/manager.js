@@ -861,22 +861,15 @@ router.post(
     // Build a map: normalised filename (lowercase) → zip entry
     // Skip __MACOSX artefacts and hidden dot-files that end up in some ZIPs
     const imageMap = {};
-    const allZipEntries = zip.getEntries();
-    console.log(`[upload-photos] ZIP has ${allZipEntries.length} total entries`);
-    for (const entry of allZipEntries) {
+    for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
-      // Catch __MACOSX in any path segment, not just at root
-      if (entry.entryName.includes("__MACOSX") || entry.entryName.startsWith(".")) continue;
+      if (entry.entryName.startsWith("__MACOSX") || entry.entryName.startsWith(".")) continue;
       const entryName = path.basename(entry.entryName);
       if (!entryName || entryName.startsWith(".")) continue;
       const ext = entryName.split(".").pop().toLowerCase();
-      if (!IMAGE_EXTS.has(ext)) {
-        console.log(`[upload-photos] Skipped non-image entry: ${entry.entryName}`);
-        continue;
-      }
+      if (!IMAGE_EXTS.has(ext)) continue;
       imageMap[entryName.toLowerCase()] = { entry, originalName: entryName };
     }
-    console.log(`[upload-photos] imageMap keys (${Object.keys(imageMap).length}):`, Object.keys(imageMap).slice(0, 10));
 
     if (Object.keys(imageMap).length === 0) {
       return res
@@ -897,104 +890,101 @@ router.post(
       return res.status(404).json({ error: "No card holders found for this organization" });
     }
 
-    // Build a reverse lookup: image key (lowercase, with or without extension) → card.
-    // Matching priority per card:
-    //   1. meta.photo          – exact filename stored during Excel import
-    //   2. ID fields (stem)    – studentId, rollNo, admissionNo, employeeId, staffId
-    //                            matched against the image filename WITHOUT its extension
-    //   3. tagId (stem)        – non-PENDING NFC tag ID matched as stem
-    //   4. profileImageUrl     – basename with the leading {uuid}_ stripped
-    // The stem match lets photos named "001.jpg" link to a card with studentId "001".
-    function buildImageToCardMap(cardList) {
-      const map = new Map(); // lowercase key or stem → card (first match wins)
-      const ID_FIELDS = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
+    // ── Build lookup maps ──────────────────────────────────────────────────────
+    // qrMap  — matches by meta.qr ONLY (exact filename + stem, no ID fallback).
+    //          This avoids ambiguity with the photo map when stems overlap.
+    // photoMap — matches by meta.photo, ID fields, tagId, profileImageUrl stem.
+    //
+    // For each image in the ZIP we check qrMap FIRST (exact), then photoMap
+    // (exact), then try stems in the same priority order.  An image is saved
+    // as a QR image OR a profile photo — never both.  However a card CAN have
+    // BOTH updated in one batch (photo via one image, QR via another).
 
-      // Helper: add a key to the map, also add its numeric-normalised form
-      // so "001" and "1" both match each other.
-      function addKey(key, card) {
-        if (!key) return;
-        const k = key.toLowerCase();
-        if (!map.has(k)) map.set(k, card);
-        // If the key is a pure integer string, also add the trimmed version
-        // (strips leading zeros) so "001" and "1" are equivalent.
-        const asInt = parseInt(k, 10);
-        if (!isNaN(asInt) && String(asInt) !== k) {
-          const intKey = String(asInt);
-          if (!map.has(intKey)) map.set(intKey, card);
+    const ID_FIELDS_PH = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
+
+    // ── QR map (meta.qr exact + stem) ─────────────────────────────────────────
+    const qrLookup = new Map(); // lowercase key → card
+    for (const card of cards) {
+      const qr = (card.metadata || {}).qr;
+      if (!qr) continue;
+      const k = qr.toLowerCase();
+      if (!qrLookup.has(k)) qrLookup.set(k, card);
+      const stem = k.replace(/\.[^.]+$/, "");
+      if (stem && !qrLookup.has(stem)) qrLookup.set(stem, card);
+    }
+
+    // ── Photo map (meta.photo + ID fields + tagId + profileImageUrl stem) ──────
+    function buildPhotoMap(cardList) {
+      const map = new Map();
+      function addKey(k, card) {
+        if (!k) return;
+        const lk = String(k).toLowerCase();
+        if (!map.has(lk)) map.set(lk, card);
+        const asInt = parseInt(lk, 10);
+        if (!isNaN(asInt) && String(asInt) !== lk && !map.has(String(asInt))) {
+          map.set(String(asInt), card);
         }
       }
-
       for (const card of cardList) {
         const meta = card.metadata || {};
-        const candidates = [];
-
-        // 1. Exact photo filename from import
-        if (meta.photo) candidates.push(meta.photo.toLowerCase());
-
-        // 2. ID-based stems (e.g. "001" matches "001.jpg")
-        for (const field of ID_FIELDS) {
-          const val = meta[field];
-          if (val) candidates.push(String(val).trim().toLowerCase());
+        if (meta.photo) {
+          const pk = meta.photo.toLowerCase();
+          addKey(pk, card);
+          addKey(pk.replace(/\.[^.]+$/, ""), card);
         }
-
-        // 3. NFC tag ID stem (non-PENDING)
-        if (card.tagId && !card.tagId.toUpperCase().startsWith("PENDING-")) {
-          candidates.push(card.tagId.toLowerCase());
+        for (const f of ID_FIELDS_PH) {
+          if (meta[f]) addKey(String(meta[f]).trim(), card);
         }
-
-        // 4. Basename from profileImageUrl with UUID prefix stripped
+        if (card.tagId && !card.tagId.toUpperCase().startsWith("PENDING-")) addKey(card.tagId, card);
         if (card.profileImageUrl) {
           const stored = path.basename(card.profileImageUrl);
           if (stored.length > 37 && stored[36] === "_") {
-            candidates.push(stored.slice(37).toLowerCase());
+            const bn = stored.slice(37);
+            addKey(bn, card);
+            addKey(bn.replace(/\.[^.]+$/, ""), card);
           }
-        }
-
-        for (const key of candidates) {
-          addKey(key, card);
         }
       }
       return map;
     }
+    const photoLookup = buildPhotoMap(cards);
 
-    const imageToCardMap = buildImageToCardMap(cards);
-    console.log(`[upload-photos] imageToCardMap keys (${imageToCardMap.size}):`, [...imageToCardMap.keys()].slice(0, 10));
-    // Log a sample of the first few cards' relevant metadata for debugging
+    console.log(`[upload-photos] qrLookup: ${qrLookup.size} keys, photoLookup: ${photoLookup.size} keys`);
     cards.slice(0, 3).forEach(c => {
       const m = c.metadata || {};
-      console.log(`[upload-photos] Sample card ${c.id}: tagId=${c.tagId}, studentId=${m.studentId}, rollNo=${m.rollNo}, photo=${m.photo}`);
+      console.log(`[upload-photos] Card ${c.id}: photo=${m.photo}, qr=${m.qr}, studentId=${m.studentId}`);
     });
 
-    // Helper: find the card for a given imageMap key (tries full filename then stem,
-    // and also the integer-normalised form of the stem to handle leading zeros).
-    function findCardForImage(imageKey) {
-      if (imageToCardMap.has(imageKey)) return imageToCardMap.get(imageKey);
+    // ── Helper: classify each image as 'qr' | 'photo' | null ──────────────────
+    // Check QR exact → photo exact → QR stem → photo stem → int stem
+    function classifyImage(imageKey) {
+      if (qrLookup.has(imageKey)) return { type: "qr",   card: qrLookup.get(imageKey) };
+      if (photoLookup.has(imageKey)) return { type: "photo", card: photoLookup.get(imageKey) };
       const stem = imageKey.replace(/\.[^.]+$/, "");
-      if (imageToCardMap.has(stem)) return imageToCardMap.get(stem);
-      // Try integer-normalised stem (e.g. "001" → "1" and vice-versa)
+      if (qrLookup.has(stem))    return { type: "qr",   card: qrLookup.get(stem) };
+      if (photoLookup.has(stem)) return { type: "photo", card: photoLookup.get(stem) };
       const asInt = parseInt(stem, 10);
       if (!isNaN(asInt)) {
         const intStem = String(asInt);
-        if (imageToCardMap.has(intStem)) return imageToCardMap.get(intStem);
+        if (qrLookup.has(intStem))    return { type: "qr",   card: qrLookup.get(intStem) };
+        if (photoLookup.has(intStem)) return { type: "photo", card: photoLookup.get(intStem) };
       }
       return null;
     }
 
-    // --- Validation pass: every image in the ZIP must match a card ---
-    // If skipUnmatched=true is passed the client has acknowledged the warning
-    // and wants to proceed with only the matched images.
+    // ── Validation pass ────────────────────────────────────────────────────────
     const skipUnmatched = req.body.skipUnmatched === true ||
       req.body.skipUnmatched === "true" ||
       req.query.skipUnmatched === "true";
 
     const unmatchedImages = [];
     for (const key of Object.keys(imageMap)) {
-      const card = findCardForImage(key);
-      if (!card) {
+      const match = classifyImage(key);
+      if (!match) {
         unmatchedImages.push(imageMap[key].originalName);
         console.log(`[upload-photos] No match for image: ${key}`);
       } else {
-        console.log(`[upload-photos] Matched image ${key} → card ${card.id} (tagId=${card.tagId})`);
+        console.log(`[upload-photos] Matched ${key} → card ${match.card.id} as ${match.type}`);
       }
     }
 
@@ -1005,52 +995,89 @@ router.post(
       });
     }
 
-    // Remove unmatched entries so the write loop only sees matched images
     for (const name of unmatchedImages) {
       delete imageMap[name.toLowerCase()];
     }
 
-    // --- All images validated — write files and update DB ---
-    const profilesDir = path.join(
-      __dirname,
-      "..",
-      "uploads",
-      "profiles",
-      tenantId,
-    );
+    // ── Ensure output directories exist ───────────────────────────────────────
+    const profilesDir = path.join(__dirname, "..", "uploads", "profiles", tenantId);
+    const qrDir       = path.join(__dirname, "..", "uploads", "qr",       tenantId);
     try {
-      if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
+      fs.mkdirSync(profilesDir, { recursive: true });
+      fs.mkdirSync(qrDir,       { recursive: true });
     } catch (mkdirErr) {
-      console.error("Could not create profiles directory:", mkdirErr);
+      console.error("Could not create output directories:", mkdirErr);
       return res.status(500).json({ error: "Server storage error" });
     }
 
-    let linked = 0;
-    let skipped = 0;
+    let linkedPhotos = 0;
+    let linkedQr     = 0;
+    let skipped      = 0;
     const writeErrors = [];
-
-    // Iterate over images (not cards) so the expanded matching is used in the write pass too.
-    // Track which cards have already been updated to avoid overwriting with a second image.
-    const updatedCardIds = new Set();
+    const updatedPhotoIds = new Set(); // card IDs whose photo was updated this batch
+    const updatedQrIds    = new Set(); // card IDs whose QR was updated this batch
 
     for (const [key, { entry, originalName }] of Object.entries(imageMap)) {
-      const card = findCardForImage(key);
-      if (!card) { skipped++; continue; }
+      const match = classifyImage(key);
+      if (!match) { skipped++; continue; }
 
-      if (updatedCardIds.has(card.id)) {
-        // Another image already linked to this card in this batch — skip duplicate
-        skipped++;
-        continue;
-      }
+      const { type, card } = match;
+
+      // Skip if this card already had this type updated in this batch
+      if (type === "photo" && updatedPhotoIds.has(card.id)) { skipped++; continue; }
+      if (type === "qr"    && updatedQrIds.has(card.id))    { skipped++; continue; }
 
       const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filename = `${uuidv4()}_${safeName}`;
-      const destPath = path.join(profilesDir, filename);
+      const destDir  = type === "qr" ? qrDir : profilesDir;
+      const destPath = path.join(destDir, filename);
 
       let imgBuffer;
       try {
         imgBuffer = entry.getData();
         if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
+        fs.writeFileSync(destPath, imgBuffer);
+      } catch (writeErr) {
+        console.warn(`Failed to write ${type} for card ${card.id} (${originalName}):`, writeErr.message);
+        writeErrors.push({ filename: originalName, reason: writeErr.message });
+        continue;
+      }
+
+      try {
+        if (type === "photo") {
+          deleteProfileImage(card.profileImageUrl);
+          const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
+          await card.update({ profileImageUrl: newUrl });
+          updatedPhotoIds.add(card.id);
+          linkedPhotos++;
+          console.log(`[upload-photos] Photo linked: ${originalName} → card ${card.id}`);
+        } else {
+          // QR — remove old QR file and update metadata.qrImageUrl
+          const oldQr = (card.metadata || {}).qrImageUrl;
+          if (oldQr) {
+            try { const p = path.join(__dirname, "..", oldQr); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+          }
+          const newUrl = `/uploads/qr/${tenantId}/${filename}`;
+          await card.update({ metadata: { ...card.metadata, qrImageUrl: newUrl } });
+          updatedQrIds.add(card.id);
+          linkedQr++;
+          console.log(`[upload-photos] QR linked: ${originalName} → card ${card.id}`);
+        }
+      } catch (dbErr) {
+        try { fs.unlinkSync(destPath); } catch {}
+        console.warn(`DB update failed for card ${card.id}:`, dbErr.message);
+        writeErrors.push({ filename: originalName, reason: "Database update failed" });
+      }
+    }
+
+    const linked = linkedPhotos + linkedQr;
+    const status = writeErrors.length > 0 ? 207 : 200;
+    return res.status(status).json({
+      message: `Upload complete: ${linkedPhotos} photos linked, ${linkedQr} QR codes linked, ${skipped} skipped${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
+      summary: { linkedPhotos, linkedQr, linked, skipped, skippedImages: unmatchedImages.length, failed: writeErrors.length },
+      ...(unmatchedImages.length > 0 && { skippedImages: unmatchedImages }),
+      ...(writeErrors.length > 0 && { errors: writeErrors }),
+    });
         fs.writeFileSync(destPath, imgBuffer);
       } catch (writeErr) {
         console.warn(`Failed to write image for card ${card.id} (${originalName}):`, writeErr.message);

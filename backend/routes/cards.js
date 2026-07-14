@@ -608,12 +608,12 @@ router.post(
         // Remove empty metadata fields
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
-        // Resolve tagId: use Excel value or generate new PENDING.
-        // Do NOT call findExistingCardTagId during bulk import — it can match cards
-        // created earlier in the same batch (e.g. two students with the same name),
-        // causing those rows to silently update instead of creating new entries.
-        let tagId = rawTagId
-          || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+        // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
+        let tagId = rawTagId;
+        if (!tagId) {
+          tagId = await findExistingCardTagId(targetTenantId, metadata)
+            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+        }
 
         // ── Capture any custom columns not covered by the named fields above ──
         // This allows arbitrary Excel headers (e.g. "Ronik", "Basnet", "S.N") to
@@ -759,9 +759,11 @@ router.post(
         return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
       }
 
-      // Ensure output directory exists
+      // Ensure output directories exist
       const profilesDir = path.join(__dirname, "..", "uploads", "profiles", targetTenantId.toUpperCase());
+      const qrDirBase   = path.join(__dirname, "..", "uploads", "qr",       targetTenantId.toUpperCase());
       fs.mkdirSync(profilesDir, { recursive: true });
+      fs.mkdirSync(qrDirBase,   { recursive: true });
 
       const norm = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       const headers = Object.keys(rows[0]);
@@ -779,9 +781,32 @@ router.post(
         return "";
       };
 
+      // ── Pre-load all existing cards for upsert matching ──────────────────────
+      // Match priority: tagId → studentId/rollNo/employeeId → photo filename.
+      // Cards loaded here are the "before" snapshot; cards created in this batch
+      // are NOT in the map, preventing within-batch false matches.
+      const existingCards = await Card.findAll({ where: { tenantId: targetTenantId } });
+      const preByTagId   = new Map(); // uppercase tagId → card
+      const preByIdField = new Map(); // "field:lowercase_value" → card
+      const preByPhoto   = new Map(); // lowercase photo filename → card
+      const ID_UPSERT    = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
+
+      for (const c of existingCards) {
+        preByTagId.set(c.tagId, c);
+        const m = c.metadata || {};
+        for (const f of ID_UPSERT) {
+          if (m[f]) preByIdField.set(`${f}:${String(m[f]).toLowerCase()}`, c);
+        }
+        if (m.photo) preByPhoto.set(m.photo.toLowerCase(), c);
+      }
+
+      // Track tagIds already touched in this batch to avoid duplicate row→card matches
+      const batchTouched = new Set();
+
       const created = [];
+      const updated = [];
       const skipped = [];
-      const failed = [];
+      const failed  = [];
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -800,6 +825,17 @@ router.post(
           profileImageUrl = `/uploads/profiles/${targetTenantId.toUpperCase()}/${destFilename}`;
         }
 
+        // Resolve QR image from ZIP ("QR" / "QR Code" / "QR Image" column)
+        const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
+        let qrImageUrl = null;
+        if (qrFilename && imageMap[qrFilename]) {
+          const qrEntry = imageMap[qrFilename];
+          const destFilename = `${uuidv4()}_${path.basename(qrFilename)}`;
+          const destPath = path.join(qrDirBase, destFilename);
+          fs.writeFileSync(destPath, qrEntry.getData());
+          qrImageUrl = `/uploads/qr/${targetTenantId.toUpperCase()}/${destFilename}`;
+        }
+
         const metadata = {
           name: pick(row, "Name", "Full Name", "fullname"),
           title: pick(row, "Title", "Position Title"),
@@ -808,6 +844,8 @@ router.post(
           address: pick(row, "Address", "Full Address"),
           // Store original photo filename so QR exports can use it as the image name
           photo: pick(row, "Photo", "Image", "Photo File", "Profile Photo"),
+          // Store original QR filename (e.g. _DSC0068.png) — same pattern as photo
+          qr: pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File"),
           // SCHOOL
           studentId: pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Admission No"),
           grade: pick(row, "Class", "Grade", "Grade Level"),
@@ -830,12 +868,43 @@ router.post(
 
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
-        // Resolve tagId: use Excel value or generate new PENDING.
-        // Do NOT call findExistingCardTagId during bulk import — it can match cards
-        // created earlier in the same batch (e.g. two students with the same name),
-        // causing those rows to silently update instead of creating new entries.
-        let tagId = rawTagId
-          || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+        // ── Resolve tagId with upsert logic ──────────────────────────────────
+        // If the row has a tagId, use it directly (registerNfcCard handles upsert).
+        // Otherwise find a pre-existing card to update; fall back to a new PENDING.
+        let tagId;
+        let isUpdate = false;
+
+        if (rawTagId) {
+          tagId = rawTagId.toUpperCase();
+          if (preByTagId.has(tagId) && !batchTouched.has(tagId)) {
+            isUpdate = true;
+          }
+        } else {
+          // Try to find a pre-existing card by ID fields, then photo
+          let matchedCard = null;
+          for (const f of ID_UPSERT) {
+            const val = metadata[f];
+            if (val) {
+              const candidate = preByIdField.get(`${f}:${String(val).toLowerCase()}`);
+              if (candidate && !batchTouched.has(candidate.tagId)) {
+                matchedCard = candidate;
+                break;
+              }
+            }
+          }
+          if (!matchedCard && metadata.photo) {
+            const candidate = preByPhoto.get(metadata.photo.toLowerCase());
+            if (candidate && !batchTouched.has(candidate.tagId)) matchedCard = candidate;
+          }
+
+          if (matchedCard) {
+            tagId    = matchedCard.tagId;
+            isUpdate = true;
+          } else {
+            tagId = `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+          }
+        }
+        batchTouched.add(tagId);
 
         // ── Capture any custom columns not covered by the named fields above ──
         const knownNormsZip = new Set([
@@ -850,6 +919,7 @@ router.post(
           "organization","organisation","position","jobtitle","designation",
           "linkedin","website","web","tagid","tag","businessurl","url",
           "photo","image","photofile","profilephoto",
+          "qr","qrcode","qrimage","qrfile",  // QR columns — handled separately above
         ]);
         headers.forEach((h) => {
           if (knownNormsZip.has(norm(h))) return;
@@ -874,13 +944,33 @@ router.post(
           });
 
           if (profileImageUrl) {
+            // Remove old profile photo file when updating
+            if (isUpdate) deleteProfileImage(card.profileImageUrl);
             await card.update({ profileImageUrl });
           }
+          if (qrImageUrl) {
+            // Remove old QR file when updating
+            if (isUpdate) {
+              const oldQr = (card.metadata || {}).qrImageUrl;
+              if (oldQr) { try { const p = path.join(__dirname, "..", oldQr); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {} }
+            }
+            await card.update({ metadata: { ...card.metadata, qrImageUrl } });
+          }
 
-          created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId, hasPhoto: !!profileImageUrl });
+          if (isUpdate) {
+            updated.push({ row: rowNum, tagId: card.tagId, hasPhoto: !!profileImageUrl, hasQr: !!qrImageUrl });
+          } else {
+            created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId, hasPhoto: !!profileImageUrl, hasQr: !!qrImageUrl });
+          }
         } catch (err) {
-          // Clean up the written profile image — the card record was not created
+          // Clean up any written files — the card record was not created
           if (profileImageUrl) deleteProfileImage(profileImageUrl);
+          if (qrImageUrl) {
+            try {
+              const qrPath = path.join(__dirname, "..", qrImageUrl);
+              if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
+            } catch { /* non-fatal */ }
+          }
 
           if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
             skipped.push({ row: rowNum, tagId, reason: "Tag ID already registered" });
@@ -892,9 +982,9 @@ router.post(
 
       return res.status(201).json({
         success: true,
-        message: `Import complete: ${created.length} created, ${skipped.length} skipped, ${failed.length} failed`,
-        summary: { created: created.length, skipped: skipped.length, failed: failed.length },
-        details: { created, skipped, failed },
+        message: `Import complete: ${created.length} created, ${updated.length} updated, ${skipped.length} skipped, ${failed.length} failed`,
+        summary: { created: created.length, updated: updated.length, skipped: skipped.length, failed: failed.length },
+        details: { created, updated, skipped, failed },
       });
     } catch (error) {
       console.error("Error importing ZIP:", error);
@@ -1137,11 +1227,17 @@ const qrBulkUpload = multer({
  * POST /api/cards/bulk-update-qr
  * Update QR images for existing card holders in bulk.
  * Accepts a ZIP containing:
- *   - One Excel/CSV spreadsheet with a "QR" column (QR image filename)
- *     plus an identifier column (Roll No / Name / etc.)
- *   - The QR image files referenced in the "QR" column
- * Matches each row to an existing card by Roll No / Student ID / Name
- * and stores the QR image URL in metadata.qrImageUrl on the matched card.
+ *
+ * Two modes depending on what is inside the ZIP:
+ *
+ * A) Images only — upload the exported QR codes ZIP directly.
+ *    Each image filename (without extension) is matched against the card's
+ *    studentId, rollNo, admissionNo, employeeId, staffId, tagId, or photo
+ *    field using the same multi-key + numeric-normalisation logic used by
+ *    the upload-photos endpoint.
+ *
+ * B) Excel + images — include a spreadsheet with a "QR" column (image filename)
+ *    and a Roll No / Student Name column for explicit matching.
  */
 router.post(
   "/bulk-update-qr",
@@ -1171,18 +1267,16 @@ router.post(
         return res.status(400).json({ success: false, error: "Invalid or corrupt ZIP file" });
       }
 
-      const entries = zip.getEntries();
       const EXCEL_EXT = /\.(xlsx|xls|csv)$/i;
       const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)$/i;
 
       let excelEntry = null;
-      const imageMap = {}; // normalised filename -> AdmZip entry
+      const imageMap = {}; // lowercase filename → AdmZip entry
 
-      for (const entry of entries) {
+      for (const entry of zip.getEntries()) {
         if (entry.isDirectory) continue;
         const base = path.basename(entry.entryName);
         if (base.startsWith(".") || entry.entryName.includes("__MACOSX")) continue;
-
         if (!excelEntry && EXCEL_EXT.test(base)) {
           excelEntry = entry;
         } else if (IMAGE_EXT.test(base)) {
@@ -1190,130 +1284,182 @@ router.post(
         }
       }
 
-      if (!excelEntry) {
-        return res.status(400).json({ success: false, error: "No Excel/CSV file found inside the ZIP" });
-      }
+      console.log(`[bulk-update-qr] ZIP: ${Object.keys(imageMap).length} images, excel=${!!excelEntry}`);
 
       if (Object.keys(imageMap).length === 0) {
         return res.status(400).json({ success: false, error: "No QR image files found inside the ZIP" });
       }
 
-      // Parse spreadsheet
-      const workbook = XLSX.read(excelEntry.getData(), { type: "buffer", cellNF: true });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) {
-        return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
-      }
-
-      const sheet = workbook.Sheets[sheetName];
-      normalizeDateCells(sheet);
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
-      if (rows.length === 0) {
-        return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
-      }
-
-      const headers = Object.keys(rows[0]);
-      const headerMap = {};
-      const normKey = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      headers.forEach((h) => { headerMap[normKey(h)] = h; });
-
-      const pick = (row, ...keys) => {
-        for (const k of keys) {
-          const real = headerMap[normKey(k)];
-          if (real !== undefined) {
-            const val = String(row[real] ?? "").trim();
-            if (val) return val;
-          }
-        }
-        return "";
-      };
-
-      // Fetch all cards for this tenant once
+      // Fetch all cards for this tenant
       const allCards = await Card.findAll({ where: { tenantId: targetTenantId } });
       if (allCards.length === 0) {
         return res.status(404).json({ success: false, error: "No cards found for this tenant" });
       }
 
-      // Build lookup indexes for fast matching
-      const cardByStudentId = new Map(); // rollNo / studentId -> card
-      const cardByName = new Map();      // lowercase name -> card
-
-      for (const card of allCards) {
-        const meta = card.metadata || {};
-        if (meta.studentId) cardByStudentId.set(String(meta.studentId).toLowerCase(), card);
-        if (meta.employeeId) cardByStudentId.set(String(meta.employeeId).toLowerCase(), card);
-        if (meta.name) cardByName.set(String(meta.name).toLowerCase(), card);
-      }
-
-      // Ensure QR output directory exists
+      // QR images go into uploads/qr/{tenantId}/
       const qrDir = path.join(__dirname, "..", "uploads", "qr", targetTenantId);
       fs.mkdirSync(qrDir, { recursive: true });
 
       const updated = [];
       const skipped = [];
-      const failed = [];
+      const failed  = [];
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowNum = i + 2;
-
-        // Get QR image filename from "QR" column
-        const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
-        if (!qrFilename) {
-          skipped.push({ row: rowNum, reason: "No QR column value" });
-          continue;
-        }
-
-        if (!imageMap[qrFilename]) {
-          skipped.push({ row: rowNum, qrFilename, reason: "QR image not found in ZIP" });
-          continue;
-        }
-
-        // Find matching card: Roll No → Student ID / Employee ID → Name
-        const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Employee ID", "Roll no");
-        const name = pick(row, "Student Name", "Name", "Full Name");
-
-        let card = null;
-        if (rollNo) card = cardByStudentId.get(rollNo.toLowerCase()) || null;
-        if (!card && name) card = cardByName.get(name.toLowerCase()) || null;
-
-        if (!card) {
-          skipped.push({ row: rowNum, qrFilename, identifier: rollNo || name || "(none)", reason: "No matching card found" });
-          continue;
-        }
-
-        // Save QR image to disk
-        const safeName = path.basename(qrFilename).replace(/[^a-zA-Z0-9._-]/g, "_");
+      // ─── Helper: write image to disk and update card.metadata.qrImageUrl ───
+      async function saveQrForCard(card, imgEntry, originalName) {
+        const safeName    = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, "_");
         const destFilename = `${uuidv4()}_${safeName}`;
-        const destPath = path.join(qrDir, destFilename);
+        const destPath    = path.join(qrDir, destFilename);
 
-        try {
-          const imgBuffer = imageMap[qrFilename].getData();
-          if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
-          fs.writeFileSync(destPath, imgBuffer);
-        } catch (writeErr) {
-          failed.push({ row: rowNum, qrFilename, reason: `Failed to save image: ${writeErr.message}` });
-          continue;
-        }
+        const imgBuffer = imgEntry.getData();
+        if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
+        fs.writeFileSync(destPath, imgBuffer);
+        console.log(`[bulk-update-qr] Wrote: ${destPath}`);
 
         const qrImageUrl = `/uploads/qr/${targetTenantId}/${destFilename}`;
 
-        // Delete old QR image if one exists for this card
-        const oldQrUrl = (card.metadata || {}).qrImageUrl;
-        if (oldQrUrl) {
+        // Remove old QR file
+        const oldUrl = (card.metadata || {}).qrImageUrl;
+        if (oldUrl) {
           try {
-            const oldPath = path.join(__dirname, "..", oldQrUrl);
+            const oldPath = path.join(__dirname, "..", oldUrl);
             if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-          } catch { /* ignore cleanup errors */ }
+          } catch { /* non-fatal */ }
         }
 
-        try {
-          await card.update({ metadata: { ...card.metadata, qrImageUrl } });
-          updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl });
-        } catch (dbErr) {
-          // Roll back the written file on DB failure
-          try { fs.unlinkSync(destPath); } catch {}
-          failed.push({ row: rowNum, qrFilename, reason: `DB update failed: ${dbErr.message}` });
+        await card.update({ metadata: { ...card.metadata, qrImageUrl } });
+        return qrImageUrl;
+      }
+
+      // ─── Helper: build multi-key card lookup (same logic as upload-photos) ──
+      const ID_FIELDS = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
+
+      function buildKeyToCard(cardList) {
+        const map = new Map();
+        function add(key, card) {
+          if (!key) return;
+          const k = String(key).toLowerCase();
+          if (!map.has(k)) map.set(k, card);
+          const asInt = parseInt(k, 10);
+          if (!isNaN(asInt) && String(asInt) !== k && !map.has(String(asInt))) {
+            map.set(String(asInt), card);
+          }
+        }
+        for (const card of cardList) {
+          const meta = card.metadata || {};
+          if (meta.photo) {
+            const pk = meta.photo.toLowerCase();
+            add(pk, card);                          // full: "_dsc0042.jpg"
+            add(pk.replace(/\.[^.]+$/, ""), card); // stem: "_dsc0042"
+          }
+          for (const f of ID_FIELDS) { if (meta[f]) add(String(meta[f]).trim(), card); }
+          if (card.tagId && !card.tagId.startsWith("PENDING-")) add(card.tagId, card);
+          if (card.profileImageUrl) {
+            const stored = path.basename(card.profileImageUrl);
+            if (stored.length > 37 && stored[36] === "_") {
+              const bn = stored.slice(37);
+              add(bn, card);                          // full: "_dsc0042.jpg"
+              add(bn.replace(/\.[^.]+$/, ""), card); // stem: "_dsc0042"
+            }
+          }
+        }
+        return map;
+      }
+
+      function findCard(keyToCard, imageKey) {
+        if (keyToCard.has(imageKey)) return keyToCard.get(imageKey);
+        const stem = imageKey.replace(/\.[^.]+$/, "");
+        if (keyToCard.has(stem)) return keyToCard.get(stem);
+        const asInt = parseInt(stem, 10);
+        if (!isNaN(asInt) && keyToCard.has(String(asInt))) return keyToCard.get(String(asInt));
+        return null;
+      }
+
+      // ─── Mode A: Excel present ────────────────────────────────────────────
+      if (excelEntry) {
+        const workbook = XLSX.read(excelEntry.getData(), { type: "buffer", cellNF: true });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) return res.status(400).json({ success: false, error: "Spreadsheet has no sheets" });
+        const sheet = workbook.Sheets[sheetName];
+        normalizeDateCells(sheet);
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
+        if (rows.length === 0) return res.status(400).json({ success: false, error: "Spreadsheet is empty" });
+
+        const headers   = Object.keys(rows[0]);
+        const headerMap = {};
+        const normKey   = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        headers.forEach((h) => { headerMap[normKey(h)] = h; });
+        const pick = (row, ...keys) => {
+          for (const k of keys) {
+            const real = headerMap[normKey(k)];
+            if (real !== undefined) {
+              const val = String(row[real] ?? "").trim();
+              if (val) return val;
+            }
+          }
+          return "";
+        };
+
+        const keyToCard = buildKeyToCard(allCards);
+
+        for (let i = 0; i < rows.length; i++) {
+          const row    = rows[i];
+          const rowNum = i + 2;
+
+          const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
+          if (!qrFilename) { skipped.push({ row: rowNum, reason: "No QR column value" }); continue; }
+          if (!imageMap[qrFilename]) { skipped.push({ row: rowNum, qrFilename, reason: "QR image not found in ZIP" }); continue; }
+
+          const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID",
+            "Admission No", "Employee ID", "EmployeeID", "Staff ID");
+          const name  = pick(row, "Student Name", "Name", "Full Name");
+          const photo = pick(row, "Photo", "Photo File");
+
+          let card = null;
+          if (rollNo) card = findCard(keyToCard, rollNo);
+          if (!card && photo) card = keyToCard.get(photo.toLowerCase()) || null;
+          if (!card && name) card = keyToCard.get(name.toLowerCase()) || null;
+
+          if (!card) {
+            skipped.push({ row: rowNum, qrFilename, identifier: rollNo || name || "(none)", reason: "No matching card found" });
+            console.log(`[bulk-update-qr] No match row ${rowNum}: rollNo=${rollNo}, name=${name}`);
+            continue;
+          }
+
+          try {
+            const url = await saveQrForCard(card, imageMap[qrFilename], qrFilename);
+            updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl: url });
+          } catch (err) {
+            failed.push({ row: rowNum, qrFilename, reason: err.message });
+          }
+        }
+
+      // ─── Mode B: images only — match by filename stem ────────────────────
+      } else {
+        const keyToCard     = buildKeyToCard(allCards);
+        const updatedCardIds = new Set();
+
+        console.log(`[bulk-update-qr] Mode B — keyToCard size: ${keyToCard.size}`);
+        console.log(`[bulk-update-qr] Sample keys:`, [...keyToCard.keys()].slice(0, 8));
+
+        for (const [imgKey, imgEntry] of Object.entries(imageMap)) {
+          const card = findCard(keyToCard, imgKey);
+          if (!card) {
+            skipped.push({ qrFilename: imgKey, reason: "No matching card found" });
+            console.log(`[bulk-update-qr] No match for image: ${imgKey}`);
+            continue;
+          }
+          if (updatedCardIds.has(card.id)) {
+            skipped.push({ qrFilename: imgKey, reason: "Card already updated in this batch" });
+            continue;
+          }
+          try {
+            const url = await saveQrForCard(card, imgEntry, imgKey);
+            updatedCardIds.add(card.id);
+            updated.push({ tagId: card.tagId, qrImageUrl: url });
+            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey}`);
+          } catch (err) {
+            failed.push({ qrFilename: imgKey, reason: err.message });
+          }
         }
       }
 
@@ -1325,7 +1471,7 @@ router.post(
       });
     } catch (error) {
       console.error("Error in bulk QR update:", error);
-      return res.status(500).json({ success: false, error: "Failed to bulk update QR codes" });
+      return res.status(500).json({ success: false, error: error.message || "Failed to bulk update QR codes" });
     }
   },
 );

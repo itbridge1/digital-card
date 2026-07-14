@@ -2125,9 +2125,12 @@ function OrganizationDetail() {
               message={zipImportResult.message}
               showIcon
             />
-            <Descriptions size="small" bordered column={3}>
+            <Descriptions size="small" bordered column={4}>
               <Descriptions.Item label="Created">
                 {zipImportResult.summary.created}
+              </Descriptions.Item>
+              <Descriptions.Item label="Updated">
+                {zipImportResult.summary.updated ?? 0}
               </Descriptions.Item>
               <Descriptions.Item label="Skipped">
                 {zipImportResult.summary.skipped}
@@ -2320,24 +2323,23 @@ function OrganizationDetail() {
               message="Photos-only ZIP upload"
               description={
                 <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                  Upload a ZIP containing only profile photos. Each image is
-                  matched to a card holder using the following rules (in order):
-                  <ol style={{ marginTop: 4, paddingLeft: 16 }}>
+                  Upload a ZIP containing only profile photos. Each image will
+                  be matched to an existing card holder by its filename:
+                  <ul style={{ marginTop: 4, paddingLeft: 16 }}>
                     <li>
-                      Filename matches the <strong>Photo</strong> column from
-                      the original import (e.g. <code>_DSC0036.jpg</code>)
+                      The image filename must match the{" "}
+                      <strong>Photo</strong> column value used during import
+                      (e.g. <code>_DSC0036.jpg</code>)
                     </li>
                     <li>
-                      Filename <em>without extension</em> matches the card's{" "}
-                      <strong>Roll No / Student ID / Employee ID</strong>{" "}
-                      (e.g. <code>001.jpg</code> ↔ Roll No 001)
+                      Existing profile photos for matched cards will be
+                      replaced
                     </li>
                     <li>
-                      Filename stem matches the card's <strong>NFC Tag ID</strong>
+                      Cards with no matching image in the ZIP are left
+                      unchanged
                     </li>
-                  </ol>
-                  Existing profile photos for matched cards will be replaced.
-                  Cards with no matching image are left unchanged.
+                  </ul>
                 </div>
               }
             />

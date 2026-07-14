@@ -593,8 +593,9 @@ function Dashboard({ onLogout }) {
               message={zipImportResult.message}
               showIcon
             />
-            <Descriptions size="small" bordered column={3}>
+            <Descriptions size="small" bordered column={4}>
               <Descriptions.Item label="Created">{zipImportResult.summary.created}</Descriptions.Item>
+              <Descriptions.Item label="Updated">{zipImportResult.summary.updated ?? 0}</Descriptions.Item>
               <Descriptions.Item label="Skipped">{zipImportResult.summary.skipped}</Descriptions.Item>
               <Descriptions.Item label="Failed">{zipImportResult.summary.failed}</Descriptions.Item>
             </Descriptions>

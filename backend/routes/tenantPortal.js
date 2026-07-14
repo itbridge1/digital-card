@@ -10,13 +10,19 @@ const path = require("path");
 const crypto = require("crypto");
 
 // Helper – silently remove a stored profile image file
+// Helper – delete a stored profile image file from disk
 function deleteProfileImage(profileImageUrl) {
   if (!profileImageUrl) return;
   try {
     const filePath = path.join(__dirname, "..", profileImageUrl);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`[deleteProfileImage] Deleted: ${filePath}`);
+    } else {
+      console.warn(`[deleteProfileImage] File not found (already deleted?): ${filePath}`);
+    }
   } catch (e) {
-    console.warn("Could not delete profile image:", e.message);
+    console.error(`[deleteProfileImage] Failed to delete "${profileImageUrl}": ${e.message}`);
   }
 }
 
