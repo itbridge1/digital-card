@@ -585,6 +585,10 @@ router.post(
           email: pick(row, "Email", "E-mail", "Email Address"),
           phone: pick(row, "Phone", "Phone Number", "Mobile", "Contact", "Contact No", "Phone No"),
           address: pick(row, "Address", "Full Address"),
+          // Store original photo/QR filenames so a later "Upload Photos ZIP" can
+          // match uploaded images back to this card (same keys as import-zip)
+          photo: pick(row, "Photo", "Image", "Photo File", "Profile Photo"),
+          qr: pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File"),
           // SCHOOL
           studentId: pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID", "Admission No"),
           grade: pick(row, "Class", "Grade", "Grade Level"),
@@ -629,6 +633,8 @@ router.post(
           "licensenumber","licenseno","emergencycontact","company",
           "organization","organisation","position","jobtitle","designation",
           "linkedin","website","web","tagid","tag","businessurl","url",
+          "photo","image","photofile","profilephoto",
+          "qr","qrcode","qrimage","qrfile",
         ]);
         headers.forEach((h) => {
           if (knownNorms.has(norm(h))) return; // already captured above
@@ -1333,6 +1339,19 @@ router.post(
       // ─── Helper: build multi-key card lookup (same logic as upload-photos) ──
       const ID_FIELDS = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
 
+      // Excel imports can store the photo filename under a differently-cased
+      // or worded key ("Photo", "Photo File", etc.) — look it up by normalised
+      // key name instead of assuming a fixed casing.
+      const metaValNorm = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      function metaVal(meta, ...names) {
+        if (!meta) return "";
+        const wanted = new Set(names.map(metaValNorm));
+        for (const key of Object.keys(meta)) {
+          if (wanted.has(metaValNorm(key)) && meta[key]) return String(meta[key]);
+        }
+        return "";
+      }
+
       function buildKeyToCard(cardList) {
         const map = new Map();
         function add(key, card) {
@@ -1346,8 +1365,9 @@ router.post(
         }
         for (const card of cardList) {
           const meta = card.metadata || {};
-          if (meta.photo) {
-            const pk = meta.photo.toLowerCase();
+          const photo = metaVal(meta, "photo", "image", "photofile", "profilephoto");
+          if (photo) {
+            const pk = photo.toLowerCase();
             add(pk, card);                          // full: "_dsc0042.jpg"
             add(pk.replace(/\.[^.]+$/, ""), card); // stem: "_dsc0042"
           }

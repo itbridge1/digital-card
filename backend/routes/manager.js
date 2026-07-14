@@ -902,10 +902,25 @@ router.post(
 
     const ID_FIELDS_PH = ["studentId", "rollNo", "admissionNo", "employeeId", "staffId"];
 
+    // Excel imports (and hand-entered metadata) can end up with the photo/QR
+    // filename stored under a differently-cased or worded key — e.g. "Photo",
+    // "QR", "Photo File" — depending on how the sheet header was captured.
+    // Look the value up by normalised key name instead of a fixed casing so
+    // matching keeps working regardless of how the column got imported.
+    const metaNormKey = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    function metaVal(meta, ...names) {
+      if (!meta) return "";
+      const wanted = new Set(names.map(metaNormKey));
+      for (const key of Object.keys(meta)) {
+        if (wanted.has(metaNormKey(key)) && meta[key]) return String(meta[key]);
+      }
+      return "";
+    }
+
     // ── QR map (meta.qr exact + stem) ─────────────────────────────────────────
     const qrLookup = new Map(); // lowercase key → card
     for (const card of cards) {
-      const qr = (card.metadata || {}).qr;
+      const qr = metaVal(card.metadata, "qr", "qrcode", "qrimage", "qrfile");
       if (!qr) continue;
       const k = qr.toLowerCase();
       if (!qrLookup.has(k)) qrLookup.set(k, card);
@@ -927,8 +942,9 @@ router.post(
       }
       for (const card of cardList) {
         const meta = card.metadata || {};
-        if (meta.photo) {
-          const pk = meta.photo.toLowerCase();
+        const photo = metaVal(meta, "photo", "image", "photofile", "profilephoto");
+        if (photo) {
+          const pk = photo.toLowerCase();
           addKey(pk, card);
           addKey(pk.replace(/\.[^.]+$/, ""), card);
         }
@@ -952,7 +968,7 @@ router.post(
     console.log(`[upload-photos] qrLookup: ${qrLookup.size} keys, photoLookup: ${photoLookup.size} keys`);
     cards.slice(0, 3).forEach(c => {
       const m = c.metadata || {};
-      console.log(`[upload-photos] Card ${c.id}: photo=${m.photo}, qr=${m.qr}, studentId=${m.studentId}`);
+      console.log(`[upload-photos] Card ${c.id}: photo=${metaVal(m, "photo", "image", "photofile", "profilephoto")}, qr=${metaVal(m, "qr", "qrcode", "qrimage", "qrfile")}, studentId=${m.studentId}`);
     });
 
     // ── Helper: classify each image as 'qr' | 'photo' | null ──────────────────
