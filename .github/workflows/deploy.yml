@@ -1,0 +1,140 @@
+name: Deploy Backend App
+
+on:
+  push:
+    branches:
+      - Deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Secrets
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::error::SSH_HOST secret is missing! Please go to your GitHub repository settings (itbridge1/personal-nfc) -> Secrets and variables -> Actions, and add SSH_HOST."
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_USERNAME }}" ]; then
+            echo "::error::SSH_USERNAME secret is missing! Please add SSH_USERNAME to your GitHub repository secrets."
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::SSH_PRIVATE_KEY secret is missing! Please add SSH_PRIVATE_KEY to your GitHub repository secrets."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup SSH
+        run: |
+          # Setup SSH directory and known_hosts
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          # Add SSH private key with proper formatting
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Verify key format
+          head -1 ~/.ssh/id_rsa | grep -q "BEGIN" || (echo "Invalid SSH key format" && exit 1)
+
+          # Start SSH agent and add key
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa 2>/dev/null || {
+            echo "Failed to add SSH key with ssh-add, trying alternative method..."
+            export SSH_AUTH_SOCK=""
+          }
+
+      - name: Deploy and Setup Application on Server
+        run: |
+          ssh -T -A -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+            echo "=== STARTING DEPLOYMENT ==="
+            
+            # Check target directory
+            echo "Checking target directory..."
+            cd /home/onlinesh/domains/qpf.quickprofy.com || { echo "Error: Directory /home/onlinesh/domains/qpf.quickprofy.com not found"; exit 1; }
+            echo "Current remote directory: $(pwd)"
+            
+            # Ensure public_html directory exists
+            if [ ! -d "public_html" ]; then
+              echo "Creating public_html root directory..."
+              mkdir -p public_html
+            fi
+            
+            # Clone to a temporary directory
+            echo "Cloning repository..."
+            rm -rf nfc_temp
+            git clone git@github.com:itbridge1/personal-nfc.git nfc_temp || {
+              echo "⚠️ SSH clone failed, trying HTTPS fallback..."
+              git clone https://github.com/itbridge1/personal-nfc.git nfc_temp || {
+                echo "❌ Error: Git clone failed completely"
+                exit 1
+              }
+            }
+            
+            # Verify cloned folder
+            if [ ! -d "nfc_temp/backend" ]; then
+              echo "❌ Error: Cloned repository does not contain a backend folder!"
+              rm -rf nfc_temp
+              exit 1
+            fi
+            
+            # Backup existing backend .env if present
+            if [ -f "public_html/.env" ]; then
+              echo "Backing up existing backend .env..."
+              cp public_html/.env .env_backend_temp
+            fi
+            
+            # Replace public_html folder with the fresh clone's backend folder
+            echo "Replacing public_html folder..."
+            rm -rf public_html
+            mv nfc_temp/backend public_html
+            
+            # Clean up temp clone
+            rm -rf nfc_temp
+            
+            # Restore .env to the new public_html folder
+            if [ -f ".env_backend_temp" ]; then
+              echo "Restoring backed up .env..."
+              mv .env_backend_temp public_html/.env
+            elif [ -f ".env" ]; then
+              echo "Copying .env from parent directory..."
+              cp .env public_html/.env
+            else
+              echo "⚠️ Warning: No .env file found in backend or parent directory"
+            fi
+            
+            # Activate nodevenv, install dependencies and restart backend
+            if [ -f "/home/onlinesh/nodevenv/domains/qpf.quickprofy.com/public_html/22/bin/activate" ]; then
+              echo "Activating Node virtual environment..."
+              source /home/onlinesh/nodevenv/domains/qpf.quickprofy.com/public_html/22/bin/activate
+            elif [ -f "/home/onlinesh/nodevenv/domains/qpf.quickprofy.com/public_html/backend/22/bin/activate" ]; then
+              echo "Activating Node virtual environment (fallback)..."
+              source /home/onlinesh/nodevenv/domains/qpf.quickprofy.com/public_html/backend/22/bin/activate
+            else
+              echo "⚠️ Warning: Node virtual environment activation script not found"
+            fi
+            
+            echo "Entering backend folder..."
+            cd /home/onlinesh/domains/qpf.quickprofy.com/public_html || { echo "❌ Error: Could not cd to public_html"; exit 1; }
+            
+            echo "Installing dependencies..."
+            npm install || { echo "❌ Error: npm install failed"; exit 1; }
+            
+            echo "Restarting backend..."
+            pm2 restart index.js || pm2 restart server.js || pm2 restart personal-nfc-backend || pm2 start index.js --name personal-nfc-backend || pm2 start server.js --name personal-nfc-backend || echo "⚠️ Warning: pm2 restart/start failed, continuing..."
+            
+            mkdir -p tmp
+            touch tmp/restart.txt
+            echo "=== DEPLOYMENT COMPLETED SUCCESSFULLY ==="
+          EOF

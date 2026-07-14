@@ -1,0 +1,57 @@
+name: Discord Notifications
+
+on:
+  push:
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Discord Notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          AUTHOR: ${{ github.actor }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d "{
+            \"embeds\": [{
+              \"title\": \"🚀 New Push\",
+              \"color\": 5814783,
+              \"fields\": [
+                {
+                  \"name\": \"Repository\",
+                  \"value\": \"$REPO\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Branch\",
+                  \"value\": \"$BRANCH\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Author\",
+                  \"value\": \"$AUTHOR\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Commit Message\",
+                  \"value\": \"$COMMIT_MSG\",
+                  \"inline\": false
+                },
+                {
+                  \"name\": \"Commit\",
+                  \"value\": \"[$COMMIT_SHA]($COMMIT_URL)\",
+                  \"inline\": false
+                }
+              ],
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+            }]
+          }" \
+          "$DISCORD_WEBHOOK"
