@@ -1078,34 +1078,6 @@ router.post(
       ...(unmatchedImages.length > 0 && { skippedImages: unmatchedImages }),
       ...(writeErrors.length > 0 && { errors: writeErrors }),
     });
-        fs.writeFileSync(destPath, imgBuffer);
-      } catch (writeErr) {
-        console.warn(`Failed to write image for card ${card.id} (${originalName}):`, writeErr.message);
-        writeErrors.push({ filename: originalName, reason: writeErr.message });
-        continue;
-      }
-
-      try {
-        deleteProfileImage(card.profileImageUrl);
-        const newUrl = `/uploads/profiles/${tenantId}/${filename}`;
-        await card.update({ profileImageUrl: newUrl });
-        updatedCardIds.add(card.id);
-        linked++;
-        console.log(`[upload-photos] Linked ${originalName} → card ${card.id} → ${newUrl}`);
-      } catch (dbErr) {
-        try { fs.unlinkSync(destPath); } catch {}
-        console.warn(`DB update failed for card ${card.id}:`, dbErr.message);
-        writeErrors.push({ filename: originalName, reason: "Database update failed" });
-      }
-    }
-
-    const status = writeErrors.length > 0 ? 207 : 200;
-    return res.status(status).json({
-      message: `Photos uploaded: ${linked} linked, ${skipped} cards had no matching image in this ZIP${unmatchedImages.length > 0 ? `, ${unmatchedImages.length} image(s) skipped (no matching card)` : ""}${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
-      summary: { linked, skipped, skippedImages: unmatchedImages.length, failed: writeErrors.length },
-      ...(unmatchedImages.length > 0 && { skippedImages: unmatchedImages }),
-      ...(writeErrors.length > 0 && { errors: writeErrors }),
-    });
   },
 );
 
