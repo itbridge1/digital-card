@@ -35,32 +35,6 @@ function normalizeRegistrationStatus(status) {
 }
 
 /**
- * For rows without a tagId, try to find an existing card in the same tenant
- * by matching on the best available unique identifier (studentId > employeeId > name).
- * Returns the existing tagId if found, or null.
- */
-async function findExistingCardTagId(tenantId, metadata) {
-  const { sequelize } = require('../config/database');
-  // Prefer a stable ID field — check common keys in order
-  const candidates = [
-    'studentId', 'employeeId', 'rollNo', 'admissionNo', 'staffId', 'name',
-  ];
-  for (const field of candidates) {
-    const value = metadata[field];
-    if (!value) continue;
-    const [rows] = await sequelize.query(
-      `SELECT tagId FROM cards
-       WHERE tenantId = :tenantId
-         AND JSON_UNQUOTE(JSON_EXTRACT(metadata, :path)) = :value
-       LIMIT 1`,
-      { replacements: { tenantId, path: `$.${field}`, value: String(value) } }
-    );
-    if (rows[0]?.tagId) return rows[0].tagId;
-  }
-  return null;
-}
-
-/**
  * Convert date cells (produced by cellDates:true) to dd/mm/yyyy strings
  * so the full 4-digit year is always preserved regardless of the cell's
  * number format code (e.g. built-in m/d/yy truncates to 2 digits).
@@ -569,6 +543,57 @@ router.post(
         return "";
       };
 
+      // ── Pre-load existing cards for this tenant as a stable "before" snapshot ──
+      // Rows without a Tag ID are matched to an existing card by identifier so
+      // re-importing an updated sheet updates the same card instead of duplicating it.
+      // Roll No / Student ID are only unique WITHIN a class (e.g. roll "1" exists in
+      // every class), so those fields are matched together with grade/class — matching
+      // on the bare roll number alone would collide across classes and silently
+      // overwrite an unrelated student's card. Employee/Admission/Staff IDs are
+      // treated as globally unique and matched alone, as before.
+      const existingCards = await Card.findAll({ where: { tenantId: targetTenantId } });
+      const preByComposite = new Map(); // "field:grade:value" or "field::value" -> card
+      const preByName = new Map();      // lowercase name -> card (weak last-resort fallback)
+      const CLASS_SCOPED_FIELDS = ["studentId", "rollNo"];
+      const GLOBAL_ID_FIELDS = ["employeeId", "admissionNo", "staffId"];
+
+      for (const c of existingCards) {
+        const m = c.metadata || {};
+        const gradeKey = String(m.grade || "").trim().toLowerCase();
+        for (const f of CLASS_SCOPED_FIELDS) {
+          if (m[f]) preByComposite.set(`${f}:${gradeKey}:${String(m[f]).trim().toLowerCase()}`, c);
+        }
+        for (const f of GLOBAL_ID_FIELDS) {
+          if (m[f]) preByComposite.set(`${f}::${String(m[f]).trim().toLowerCase()}`, c);
+        }
+        if (m.name) preByName.set(String(m.name).trim().toLowerCase(), c);
+      }
+
+      // Tag IDs already assigned to a row in this batch — prevents a later row
+      // from matching (and overwriting) a card that this same import already touched.
+      const batchTouched = new Set();
+
+      function findMatchInBatch(metadata) {
+        const gradeKey = String(metadata.grade || "").trim().toLowerCase();
+        for (const f of CLASS_SCOPED_FIELDS) {
+          const val = metadata[f];
+          if (!val) continue;
+          const card = preByComposite.get(`${f}:${gradeKey}:${String(val).trim().toLowerCase()}`);
+          if (card && !batchTouched.has(card.tagId)) return card;
+        }
+        for (const f of GLOBAL_ID_FIELDS) {
+          const val = metadata[f];
+          if (!val) continue;
+          const card = preByComposite.get(`${f}::${String(val).trim().toLowerCase()}`);
+          if (card && !batchTouched.has(card.tagId)) return card;
+        }
+        if (metadata.name) {
+          const card = preByName.get(String(metadata.name).trim().toLowerCase());
+          if (card && !batchTouched.has(card.tagId)) return card;
+        }
+        return null;
+      }
+
       const created = [];
       const skipped = [];
       const failed = [];
@@ -613,11 +638,14 @@ router.post(
         Object.keys(metadata).forEach((k) => { if (!metadata[k]) delete metadata[k]; });
 
         // Resolve tagId: use Excel value → find existing card by identifier → generate new PENDING
-        let tagId = rawTagId;
+        let tagId = rawTagId ? rawTagId.toUpperCase() : "";
         if (!tagId) {
-          tagId = await findExistingCardTagId(targetTenantId, metadata)
-            || `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
+          const matchedCard = findMatchInBatch(metadata);
+          tagId = matchedCard
+            ? matchedCard.tagId
+            : `PENDING-${uuidv4().toUpperCase().replace(/-/g, "").slice(0, 12)}`;
         }
+        batchTouched.add(tagId);
 
         // ── Capture any custom columns not covered by the named fields above ──
         // This allows arbitrary Excel headers (e.g. "Ronik", "Basnet", "S.N") to
