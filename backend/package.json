@@ -14,7 +14,8 @@
     "migrate:undo": "node migrate.js --undo",
     "seed": "node seed.js",
     "fix-ui-settings": "node fix-ui-settings.js",
-    "setup": "node create-db.js && node migrate.js && node seed.js"
+    "setup": "node create-db.js && node migrate.js && node seed.js",
+    "recover-qr-tagids": "node scripts/recover-qr-tagids.js"
   },
   "keywords": [
     "nfc",
