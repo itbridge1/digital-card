@@ -1378,13 +1378,13 @@ router.post(
         fs.writeFileSync(destPath, imgBuffer);
         console.log(`[bulk-update-qr] Wrote: ${destPath}`);
 
-        // Served path of the physical QR image
+        // Served path of the physical QR image as a fallback
         const qrImageUrl = `/uploads/qr/${targetTenantId}/${destFilename}`;
 
-        // Remove old QR image file from disk if it was previously stored
+        // Remove old QR image file from disk if it was previously stored (only if it was a local path)
         const oldMeta = card.metadata || {};
         const oldQrUrl = oldMeta.qrImageUrl;
-        if (oldQrUrl) {
+        if (oldQrUrl && typeof oldQrUrl === "string" && oldQrUrl.startsWith("/uploads/")) {
           try {
             const oldPath = path.join(__dirname, "..", oldQrUrl);
             if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -1411,10 +1411,13 @@ router.post(
           console.warn("[bulk-update-qr] Failed to decode QR code image: ", decErr.message);
         }
 
-        // Determine the clean publicUrl path (e.g. '/views/1SFW') from the decoded QR link
+        // Determine the clean publicUrl path (e.g. '/views/PENDING-BE3DF3480178') from the decoded QR link
         let publicUrlPath = "";
         if (decodedUrl) {
-          if (decodedUrl.includes("/")) {
+          const viewsMatch = decodedUrl.match(/\/views\/(.+)$/);
+          if (viewsMatch && viewsMatch[1]) {
+            publicUrlPath = `/views/${viewsMatch[1]}`;
+          } else if (decodedUrl.includes("/")) {
             const parts = decodedUrl.split("/");
             const lastPart = parts[parts.length - 1]; // e.g. "PENDING-9AC041DAFB66" or "1SFW"
             if (lastPart) {
@@ -1433,16 +1436,17 @@ router.post(
 
         const updatedMeta = {
           ...oldMeta,
-          qrImageUrl,
+          qrImageUrl: decodedUrl || qrImageUrl,
         };
 
-        // Update the card: metadata.qrImageUrl holds the image path, card.publicUrl holds /views/{shortCode}
+        // Update the card: metadata.qrImageUrl holds the full scanned URL, card.publicUrl holds /views/{shortCode}, and businessUrl holds the full scanned URL
         await card.update({
           metadata: updatedMeta,
           publicUrl: publicUrlPath,
+          businessUrl: decodedUrl || card.businessUrl || publicUrlPath
         });
 
-        return qrImageUrl;
+        return decodedUrl || qrImageUrl;
       }
 
       // ─── Helper: build multi-key card lookup (same logic as upload-photos) ──
