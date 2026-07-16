@@ -1411,28 +1411,28 @@ router.post(
           console.warn("[bulk-update-qr] Failed to decode QR code image: ", decErr.message);
         }
 
-        // Determine the clean publicUrl path (e.g. '/views/PENDING-BE3DF3480178') from the decoded QR link
-        // The decoded URL may use /view/ (singular) or /views/ (plural) — we always store as /views/
+        // Extract the path from the decoded QR link for publicUrl (e.g. '/view/PENDING-14D0CBD66B2C')
+        // businessUrl gets the full decoded URL (e.g. 'https://card.tirupatibanepa.com.np/view/PENDING-14D0CBD66B2C')
         let publicUrlPath = "";
         if (decodedUrl) {
           const viewMatch = decodedUrl.match(/\/views?\/(.+)$/);
           if (viewMatch && viewMatch[1]) {
-            publicUrlPath = `/views/${viewMatch[1]}`;
+            publicUrlPath = `/view/${viewMatch[1]}`;
           } else if (decodedUrl.includes("/")) {
             const parts = decodedUrl.split("/");
             const lastPart = parts[parts.length - 1];
             if (lastPart) {
-              publicUrlPath = `/views/${lastPart}`;
+              publicUrlPath = `/view/${lastPart}`;
             }
           } else {
-            publicUrlPath = `/views/${decodedUrl}`;
+            publicUrlPath = `/view/${decodedUrl}`;
           }
         }
 
         // If decoding failed or QR returned empty, fallback to metadata or tagId
         if (!publicUrlPath) {
           const fallbackCode = oldMeta.shortCode || card.tagId;
-          publicUrlPath = `/views/${fallbackCode}`;
+          publicUrlPath = `/view/${fallbackCode}`;
         }
 
         const updatedMeta = {
@@ -1440,7 +1440,7 @@ router.post(
           qrImageUrl: decodedUrl || qrImageUrl,
         };
 
-        // Update the card: metadata.qrImageUrl holds the full scanned URL, card.publicUrl holds /views/{shortCode}, and businessUrl holds the full scanned URL
+        // Update the card: publicUrl = /view/{id}, businessUrl = full scanned URL, metadata.qrImageUrl = full scanned URL
         await card.update({
           metadata: updatedMeta,
           publicUrl: publicUrlPath,
