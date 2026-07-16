@@ -1614,9 +1614,18 @@ router.post(
           const rowNum = i + 2;
 
           // The QR column in the Excel holds the image filename (e.g. _DSC0133.png)
-          const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
-          if (!qrFilename) { skipped.push({ row: rowNum, reason: "No QR column value" }); continue; }
-          if (!imageMap[qrFilename]) { skipped.push({ row: rowNum, qrFilename, reason: "QR image not found in ZIP" }); continue; }
+          const rawQrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File");
+          const qrFilename = rawQrFilename.toLowerCase();
+          if (!qrFilename) {
+            skipped.push({ row: rowNum, qrFilename: "", reason: "No QR column value" });
+            continue;
+          }
+          if (!imageMap[qrFilename]) {
+            skipped.push({ row: rowNum, qrFilename: rawQrFilename, reason: "QR image not found in ZIP" });
+            continue;
+          }
+
+          const originalName = path.basename(imageMap[qrFilename].entryName);
 
           // ── Match card: primary by metadata.qr == qrFilename, then by roll/photo/name ──
           let card = findCard(keyToCard, qrFilename); // matches via metadata.qr in buildKeyToCard
@@ -1635,16 +1644,16 @@ router.post(
             const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID",
               "Admission No", "Employee ID", "EmployeeID", "Staff ID");
             const name = pick(row, "Student Name", "Name", "Full Name");
-            skipped.push({ row: rowNum, qrFilename, identifier: rollNo || name || "(none)", reason: "No matching card found" });
-            console.log(`[bulk-update-qr] No match row ${rowNum}: qrFilename=${qrFilename}`);
+            skipped.push({ row: rowNum, qrFilename: originalName, identifier: rollNo || name || "(none)", reason: "No matching card found" });
+            console.log(`[bulk-update-qr] No match row ${rowNum}: qrFilename=${originalName}`);
             continue;
           }
 
           try {
-            const result = await saveQrForCard(card, imageMap[qrFilename], qrFilename);
+            const result = await saveQrForCard(card, imageMap[qrFilename], originalName);
             updated.push({ row: rowNum, tagId: card.tagId, publicUrl: result.publicUrl, qrImageUrl: result.qrImageUrl, businessUrl: result.businessUrl });
           } catch (err) {
-            failed.push({ row: rowNum, qrFilename, reason: err.message });
+            failed.push({ row: rowNum, qrFilename: originalName, reason: err.message });
           }
         }
 
@@ -1658,24 +1667,25 @@ router.post(
         console.log(`[bulk-update-qr] Images in ZIP:`, Object.keys(imageMap).slice(0, 8));
 
         for (const [imgKey, imgEntry] of Object.entries(imageMap)) {
+          const originalName = path.basename(imgEntry.entryName);
           // Primary match: metadata.qr filename (exact or stem) — handled by buildKeyToCard
           const card = findCard(keyToCard, imgKey);
           if (!card) {
-            skipped.push({ qrFilename: imgKey, reason: "No matching card found (no card has metadata.qr matching this filename)" });
-            console.log(`[bulk-update-qr] No match for image: ${imgKey}`);
+            skipped.push({ qrFilename: originalName, reason: "No matching card found (no card has metadata.qr matching this filename)" });
+            console.log(`[bulk-update-qr] No match for image: ${originalName}`);
             continue;
           }
           if (updatedCardIds.has(card.id)) {
-            skipped.push({ qrFilename: imgKey, reason: "Card already updated in this batch" });
+            skipped.push({ qrFilename: originalName, reason: "Card already updated in this batch" });
             continue;
           }
           try {
-            const result = await saveQrForCard(card, imgEntry, imgKey);
+            const result = await saveQrForCard(card, imgEntry, originalName);
             updatedCardIds.add(card.id);
             updated.push({ tagId: card.tagId, publicUrl: result.publicUrl, qrImageUrl: result.qrImageUrl, businessUrl: result.businessUrl });
-            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey} → publicUrl=${result.publicUrl}, businessUrl=${result.businessUrl}`);
+            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${originalName} → publicUrl=${result.publicUrl}, businessUrl=${result.businessUrl}`);
           } catch (err) {
-            failed.push({ qrFilename: imgKey, reason: err.message });
+            failed.push({ qrFilename: originalName, reason: err.message });
           }
         }
       }
