@@ -11,6 +11,8 @@ const { v4: uuidv4 } = require("uuid");
 const AdmZip = require("adm-zip");
 const fs = require("fs");
 const path = require("path");
+const Jimp = require("jimp");
+const QrCodeReader = require("qrcode-reader");
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -675,6 +677,24 @@ router.post(
 
         const businessUrl = pick(row, "Business URL", "BusinessURL", "URL", "url") || undefined;
 
+        // Extract publicUrl from QR image path/URL if present in the spreadsheet
+        let publicUrlOverride = undefined;
+        if (metadata.qr) {
+          // If the QR field contains a URL (e.g., http://localhost:3000/view/1SFW or t/1SFW etc.)
+          const cleanQr = String(metadata.qr).trim();
+          if (cleanQr.includes("/")) {
+            // Get everything after the last slash as the publicUrl path/shortCode
+            const parts = cleanQr.split("/");
+            const lastPart = parts[parts.length - 1];
+            if (lastPart) {
+              publicUrlOverride = lastPart;
+            }
+          } else {
+            // Or if it's already just the shortcode
+            publicUrlOverride = cleanQr;
+          }
+        }
+
         try {
           const { card, cardRegister } = await registerNfcCard({
             tagId,
@@ -686,6 +706,12 @@ router.post(
             actorRole: req.user.role,
             actorTenantId: req.user.tenantId,
           });
+
+          if (publicUrlOverride) {
+            // Override/update the card's publicUrl to be the parsed value
+            await card.update({ publicUrl: publicUrlOverride });
+          }
+
           created.push({ row: rowNum, tagId: card.tagId, pending: !rawTagId });
         } catch (err) {
           if (err.statusCode === 409 || /already registered/i.test(err.message || "")) {
@@ -1338,29 +1364,84 @@ router.post(
       const skipped = [];
       const failed  = [];
 
-      // ─── Helper: write image to disk and update card.metadata.qrImageUrl ───
+      // ─── Helper: write image to disk, scan the QR to decode its link, and set publicUrl ───
+      // We read the uploaded QR code image, use Jimp and qrcode-reader to extract the URL encoded in it,
+      // parse out the path/shortCode (excluding the domain), and save it prepended with /views/ (e.g. '/views/1SFW')
+      // into card.publicUrl.
       async function saveQrForCard(card, imgEntry, originalName) {
-        const safeName    = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, "_");
+        const safeName     = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, "_");
         const destFilename = `${uuidv4()}_${safeName}`;
-        const destPath    = path.join(qrDir, destFilename);
+        const destPath     = path.join(qrDir, destFilename);
 
         const imgBuffer = imgEntry.getData();
         if (!imgBuffer || imgBuffer.length === 0) throw new Error("Empty image data");
         fs.writeFileSync(destPath, imgBuffer);
         console.log(`[bulk-update-qr] Wrote: ${destPath}`);
 
+        // Served path of the physical QR image
         const qrImageUrl = `/uploads/qr/${targetTenantId}/${destFilename}`;
 
-        // Remove old QR file
-        const oldUrl = (card.metadata || {}).qrImageUrl;
-        if (oldUrl) {
+        // Remove old QR image file from disk if it was previously stored
+        const oldMeta = card.metadata || {};
+        const oldQrUrl = oldMeta.qrImageUrl;
+        if (oldQrUrl) {
           try {
-            const oldPath = path.join(__dirname, "..", oldUrl);
+            const oldPath = path.join(__dirname, "..", oldQrUrl);
             if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
           } catch { /* non-fatal */ }
         }
 
-        await card.update({ metadata: { ...card.metadata, qrImageUrl } });
+        // Decode the QR code image to find the stored URL
+        let decodedUrl = "";
+        try {
+          const image = await Jimp.read(destPath);
+          const qrDecoder = new QrCodeReader();
+          const decoded = await new Promise((resolve, reject) => {
+            qrDecoder.callback = (err, val) => {
+              if (err) resolve(null);
+              else resolve(val.result);
+            };
+            qrDecoder.decode(image.bitmap);
+          });
+          if (decoded) {
+            decodedUrl = decoded;
+            console.log(`[bulk-update-qr] Decoded QR: ${decodedUrl}`);
+          }
+        } catch (decErr) {
+          console.warn("[bulk-update-qr] Failed to decode QR code image: ", decErr.message);
+        }
+
+        // Determine the clean publicUrl path (e.g. '/views/1SFW') from the decoded QR link
+        let publicUrlPath = "";
+        if (decodedUrl) {
+          if (decodedUrl.includes("/")) {
+            const parts = decodedUrl.split("/");
+            const lastPart = parts[parts.length - 1]; // e.g. "PENDING-9AC041DAFB66" or "1SFW"
+            if (lastPart) {
+              publicUrlPath = `/views/${lastPart}`;
+            }
+          } else {
+            publicUrlPath = `/views/${decodedUrl}`;
+          }
+        }
+
+        // If decoding failed or QR returned empty, fallback to metadata or tagId
+        if (!publicUrlPath) {
+          const fallbackCode = oldMeta.shortCode || card.tagId;
+          publicUrlPath = `/views/${fallbackCode}`;
+        }
+
+        const updatedMeta = {
+          ...oldMeta,
+          qrImageUrl,
+        };
+
+        // Update the card: metadata.qrImageUrl holds the image path, card.publicUrl holds /views/{shortCode}
+        await card.update({
+          metadata: updatedMeta,
+          publicUrl: publicUrlPath,
+        });
+
         return qrImageUrl;
       }
 
@@ -1393,16 +1474,32 @@ router.post(
         }
         for (const card of cardList) {
           const meta = card.metadata || {};
+
+          // ── PRIMARY: match by metadata.qr (the QR image filename stored at import) ──
+          // e.g. "_DSC0133.png" stored in meta.qr should match image "_DSC0133.png"
+          const qrFilename = metaVal(meta, "qr", "qrcode", "qrimage", "qrfile");
+          if (qrFilename) {
+            const qk = qrFilename.toLowerCase();
+            add(qk, card);                          // full: "_dsc0133.png"
+            add(qk.replace(/\.[^.]+$/, ""), card); // stem: "_dsc0133"
+          }
+
+          // ── SECONDARY: match by metadata.photo filename ──
           const photo = metaVal(meta, "photo", "image", "photofile", "profilephoto");
           if (photo) {
             const pk = photo.toLowerCase();
             add(pk, card);                          // full: "_dsc0042.jpg"
             add(pk.replace(/\.[^.]+$/, ""), card); // stem: "_dsc0042"
           }
+
+          // ── TERTIARY: match by ID fields (studentId, rollNo, etc.) ──
           for (const f of ID_FIELDS) { if (meta[f]) add(String(meta[f]).trim(), card); }
+
+          // ── FALLBACK: match by tagId or profileImageUrl original filename ──
           if (card.tagId && !card.tagId.startsWith("PENDING-")) add(card.tagId, card);
           if (card.profileImageUrl) {
             const stored = path.basename(card.profileImageUrl);
+            // Strip the uuid prefix (36 chars + underscore) added at upload time
             if (stored.length > 37 && stored[36] === "_") {
               const bn = stored.slice(37);
               add(bn, card);                          // full: "_dsc0042.jpg"
@@ -1453,29 +1550,36 @@ router.post(
           const row    = rows[i];
           const rowNum = i + 2;
 
+          // The QR column in the Excel holds the image filename (e.g. _DSC0133.png)
           const qrFilename = pick(row, "QR", "QR Code", "QR Image", "QRCode", "QR File").toLowerCase();
           if (!qrFilename) { skipped.push({ row: rowNum, reason: "No QR column value" }); continue; }
           if (!imageMap[qrFilename]) { skipped.push({ row: rowNum, qrFilename, reason: "QR image not found in ZIP" }); continue; }
 
-          const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID",
-            "Admission No", "Employee ID", "EmployeeID", "Staff ID");
-          const name  = pick(row, "Student Name", "Name", "Full Name");
-          const photo = pick(row, "Photo", "Photo File");
-
-          let card = null;
-          if (rollNo) card = findCard(keyToCard, rollNo);
-          if (!card && photo) card = keyToCard.get(photo.toLowerCase()) || null;
-          if (!card && name) card = keyToCard.get(name.toLowerCase()) || null;
+          // ── Match card: primary by metadata.qr == qrFilename, then by roll/photo/name ──
+          let card = findCard(keyToCard, qrFilename); // matches via metadata.qr in buildKeyToCard
 
           if (!card) {
+            const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID",
+              "Admission No", "Employee ID", "EmployeeID", "Staff ID");
+            const name  = pick(row, "Student Name", "Name", "Full Name");
+            const photo = pick(row, "Photo", "Photo File");
+            if (rollNo) card = findCard(keyToCard, rollNo);
+            if (!card && photo) card = keyToCard.get(photo.toLowerCase()) || null;
+            if (!card && name) card = keyToCard.get(name.toLowerCase()) || null;
+          }
+
+          if (!card) {
+            const rollNo = pick(row, "Roll No", "Roll", "Roll Number", "Student ID", "StudentID",
+              "Admission No", "Employee ID", "EmployeeID", "Staff ID");
+            const name = pick(row, "Student Name", "Name", "Full Name");
             skipped.push({ row: rowNum, qrFilename, identifier: rollNo || name || "(none)", reason: "No matching card found" });
-            console.log(`[bulk-update-qr] No match row ${rowNum}: rollNo=${rollNo}, name=${name}`);
+            console.log(`[bulk-update-qr] No match row ${rowNum}: qrFilename=${qrFilename}`);
             continue;
           }
 
           try {
             const url = await saveQrForCard(card, imageMap[qrFilename], qrFilename);
-            updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl: url });
+            updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl: url, publicUrl: url });
           } catch (err) {
             failed.push({ row: rowNum, qrFilename, reason: err.message });
           }
@@ -1486,13 +1590,15 @@ router.post(
         const keyToCard     = buildKeyToCard(allCards);
         const updatedCardIds = new Set();
 
-        console.log(`[bulk-update-qr] Mode B — keyToCard size: ${keyToCard.size}`);
+        console.log(`[bulk-update-qr] Mode B (images-only) — keyToCard size: ${keyToCard.size}`);
         console.log(`[bulk-update-qr] Sample keys:`, [...keyToCard.keys()].slice(0, 8));
+        console.log(`[bulk-update-qr] Images in ZIP:`, Object.keys(imageMap).slice(0, 8));
 
         for (const [imgKey, imgEntry] of Object.entries(imageMap)) {
+          // Primary match: metadata.qr filename (exact or stem) — handled by buildKeyToCard
           const card = findCard(keyToCard, imgKey);
           if (!card) {
-            skipped.push({ qrFilename: imgKey, reason: "No matching card found" });
+            skipped.push({ qrFilename: imgKey, reason: "No matching card found (no card has metadata.qr matching this filename)" });
             console.log(`[bulk-update-qr] No match for image: ${imgKey}`);
             continue;
           }
@@ -1503,8 +1609,8 @@ router.post(
           try {
             const url = await saveQrForCard(card, imgEntry, imgKey);
             updatedCardIds.add(card.id);
-            updated.push({ tagId: card.tagId, qrImageUrl: url });
-            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey}`);
+            updated.push({ tagId: card.tagId, qrImageUrl: url, publicUrl: url });
+            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey} → publicUrl=${url}`);
           } catch (err) {
             failed.push({ qrFilename: imgKey, reason: err.message });
           }
