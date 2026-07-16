@@ -1414,17 +1414,21 @@ router.post(
         // Extract the path from the decoded QR link for publicUrl (e.g. '/view/PENDING-14D0CBD66B2C')
         // businessUrl gets the full decoded URL (e.g. 'https://card.tirupatibanepa.com.np/view/PENDING-14D0CBD66B2C')
         let publicUrlPath = "";
+        let extractedTagId = "";
         if (decodedUrl) {
           const viewMatch = decodedUrl.match(/\/views?\/(.+)$/);
           if (viewMatch && viewMatch[1]) {
+            extractedTagId = viewMatch[1].toUpperCase();
             publicUrlPath = `/view/${viewMatch[1]}`;
           } else if (decodedUrl.includes("/")) {
             const parts = decodedUrl.split("/");
             const lastPart = parts[parts.length - 1];
             if (lastPart) {
+              extractedTagId = lastPart.toUpperCase();
               publicUrlPath = `/view/${lastPart}`;
             }
           } else {
+            extractedTagId = decodedUrl.toUpperCase();
             publicUrlPath = `/view/${decodedUrl}`;
           }
         }
@@ -1440,12 +1444,66 @@ router.post(
           qrImageUrl: decodedUrl ? publicUrlPath : qrImageUrl,
         };
 
-        // Update the card: publicUrl = /view/{id}, businessUrl = full scanned URL, metadata.qrImageUrl = /view/{id}
+        const oldTagId = card.tagId;
+        const newTagId = extractedTagId || oldTagId;
+
+        // Update the card: publicUrl = /view/{id}, businessUrl = full scanned URL, metadata.qrImageUrl = /view/{id}, tagId = new tagId
         await card.update({
           metadata: updatedMeta,
           publicUrl: publicUrlPath,
-          businessUrl: decodedUrl || card.businessUrl || publicUrlPath
+          businessUrl: decodedUrl || card.businessUrl || publicUrlPath,
+          tagId: newTagId,
         });
+
+        // Sync with CardRegister if tagId has changed or redirectUrl needs updating
+        if (extractedTagId && extractedTagId !== oldTagId) {
+          try {
+            // Find existing registration by cardId or old tagId
+            let registration = await CardRegister.findOne({
+              where: {
+                [Op.or]: [
+                  { cardId: card.id },
+                  { tagId: oldTagId }
+                ]
+              }
+            });
+            if (registration) {
+              await registration.update({
+                tagId: extractedTagId,
+                redirectUrl: publicUrlPath,
+              });
+            } else {
+              // Create a registration if it doesn't exist
+              await CardRegister.create({
+                tagId: extractedTagId,
+                status: "registered",
+                url: extractedTagId.slice(-8), // slug from end of ID
+                redirectUrl: publicUrlPath,
+                tenantId: card.tenantId,
+                cardId: card.id,
+              });
+            }
+          } catch (regErr) {
+            console.error("[bulk-update-qr] Failed to update CardRegister:", regErr.message);
+          }
+        } else {
+          // If tagId didn't change, just update the redirectUrl in CardRegister if it exists
+          try {
+            await CardRegister.update(
+              { redirectUrl: publicUrlPath },
+              {
+                where: {
+                  [Op.or]: [
+                    { cardId: card.id },
+                    { tagId: oldTagId }
+                  ]
+                }
+              }
+            );
+          } catch (regErr) {
+            console.error("[bulk-update-qr] Failed to update CardRegister redirectUrl:", regErr.message);
+          }
+        }
 
         return { publicUrl: publicUrlPath, qrImageUrl: decodedUrl ? publicUrlPath : qrImageUrl, businessUrl: decodedUrl || publicUrlPath };
       }
