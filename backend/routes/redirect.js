@@ -244,4 +244,53 @@ router.get("/cardData/:identifier", async (req, res) => {
   }
 });
 
+/**
+ * Auto-redirect from /view/:identifier or /views/:identifier to the frontend publicUrl of the card
+ */
+router.get("/view/:identifier", async (req, res) => {
+  try {
+    const identifier = String(req.params.identifier || "").trim();
+    if (!identifier) {
+      return res.redirect("/");
+    }
+
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+
+    // Check if there is an active card for this identifier (tagId or publicUrl match)
+    const card = await Card.findOne({
+      where: {
+        [Op.or]: [
+          { tagId: identifier.toUpperCase(), isActive: true },
+          { publicUrl: { [Op.like]: `%${identifier}` }, isActive: true }
+        ]
+      }
+    });
+
+    if (card) {
+      // Record tap non-blocking
+      card.recordTap().catch((err) => console.error("Failed to record tap:", err));
+
+      // Redirect to the frontend URL for this card
+      return res.redirect(`${frontendBase}/view/${card.tagId}`);
+    }
+
+    // Fallback redirect directly using the identifier
+    return res.redirect(`${frontendBase}/view/${identifier}`);
+  } catch (error) {
+    console.error("View redirect error:", error);
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    return res.redirect(`${frontendBase}/view/${req.params.identifier}`);
+  }
+});
+
+router.get("/views/:identifier", async (req, res) => {
+  try {
+    const identifier = String(req.params.identifier || "").trim();
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    return res.redirect(`${frontendBase}/view/${identifier}`);
+  } catch (error) {
+    return res.redirect("/");
+  }
+});
+
 module.exports = router;

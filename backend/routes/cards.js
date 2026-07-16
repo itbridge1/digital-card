@@ -1437,17 +1437,17 @@ router.post(
 
         const updatedMeta = {
           ...oldMeta,
-          qrImageUrl: decodedUrl || qrImageUrl,
+          qrImageUrl: decodedUrl ? publicUrlPath : qrImageUrl,
         };
 
-        // Update the card: publicUrl = /view/{id}, businessUrl = full scanned URL, metadata.qrImageUrl = full scanned URL
+        // Update the card: publicUrl = /view/{id}, businessUrl = full scanned URL, metadata.qrImageUrl = /view/{id}
         await card.update({
           metadata: updatedMeta,
           publicUrl: publicUrlPath,
           businessUrl: decodedUrl || card.businessUrl || publicUrlPath
         });
 
-        return { publicUrl: publicUrlPath, qrImageUrl: decodedUrl || qrImageUrl, businessUrl: decodedUrl || publicUrlPath };
+        return { publicUrl: publicUrlPath, qrImageUrl: decodedUrl ? publicUrlPath : qrImageUrl, businessUrl: decodedUrl || publicUrlPath };
       }
 
       // ─── Helper: build multi-key card lookup (same logic as upload-photos) ──
