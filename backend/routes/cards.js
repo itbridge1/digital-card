@@ -1412,14 +1412,15 @@ router.post(
         }
 
         // Determine the clean publicUrl path (e.g. '/views/PENDING-BE3DF3480178') from the decoded QR link
+        // The decoded URL may use /view/ (singular) or /views/ (plural) — we always store as /views/
         let publicUrlPath = "";
         if (decodedUrl) {
-          const viewsMatch = decodedUrl.match(/\/views\/(.+)$/);
-          if (viewsMatch && viewsMatch[1]) {
-            publicUrlPath = `/views/${viewsMatch[1]}`;
+          const viewMatch = decodedUrl.match(/\/views?\/(.+)$/);
+          if (viewMatch && viewMatch[1]) {
+            publicUrlPath = `/views/${viewMatch[1]}`;
           } else if (decodedUrl.includes("/")) {
             const parts = decodedUrl.split("/");
-            const lastPart = parts[parts.length - 1]; // e.g. "PENDING-9AC041DAFB66" or "1SFW"
+            const lastPart = parts[parts.length - 1];
             if (lastPart) {
               publicUrlPath = `/views/${lastPart}`;
             }
@@ -1446,7 +1447,7 @@ router.post(
           businessUrl: decodedUrl || card.businessUrl || publicUrlPath
         });
 
-        return decodedUrl || qrImageUrl;
+        return { publicUrl: publicUrlPath, qrImageUrl: decodedUrl || qrImageUrl, businessUrl: decodedUrl || publicUrlPath };
       }
 
       // ─── Helper: build multi-key card lookup (same logic as upload-photos) ──
@@ -1582,8 +1583,8 @@ router.post(
           }
 
           try {
-            const url = await saveQrForCard(card, imageMap[qrFilename], qrFilename);
-            updated.push({ row: rowNum, tagId: card.tagId, qrImageUrl: url, publicUrl: url });
+            const result = await saveQrForCard(card, imageMap[qrFilename], qrFilename);
+            updated.push({ row: rowNum, tagId: card.tagId, publicUrl: result.publicUrl, qrImageUrl: result.qrImageUrl, businessUrl: result.businessUrl });
           } catch (err) {
             failed.push({ row: rowNum, qrFilename, reason: err.message });
           }
@@ -1611,10 +1612,10 @@ router.post(
             continue;
           }
           try {
-            const url = await saveQrForCard(card, imgEntry, imgKey);
+            const result = await saveQrForCard(card, imgEntry, imgKey);
             updatedCardIds.add(card.id);
-            updated.push({ tagId: card.tagId, qrImageUrl: url, publicUrl: url });
-            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey} → publicUrl=${url}`);
+            updated.push({ tagId: card.tagId, publicUrl: result.publicUrl, qrImageUrl: result.qrImageUrl, businessUrl: result.businessUrl });
+            console.log(`[bulk-update-qr] Updated card ${card.tagId} ← ${imgKey} → publicUrl=${result.publicUrl}, businessUrl=${result.businessUrl}`);
           } catch (err) {
             failed.push({ qrFilename: imgKey, reason: err.message });
           }
