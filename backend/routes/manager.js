@@ -10,6 +10,8 @@ const path = require("path");
 const AdmZip = require("adm-zip");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
+const { PNG } = require("pngjs");
+const jsQR = require("jsqr");
 
 const photoZipUpload = multer({
   storage: multer.memoryStorage(),
@@ -29,6 +31,70 @@ function deleteProfileImage(profileImageUrl) {
   } catch (e) {
     console.warn("Could not delete profile image:", e.message);
   }
+}
+
+// ── QR self-healing helpers ──────────────────────────────────────────────
+// A printed QR sticker's destination is fixed forever. If a card's tagId
+// later changes (e.g. it was deleted and re-created by a re-import), the
+// already-printed sticker becomes stale. Whenever a QR image is (re-)uploaded
+// here, decode what it actually says and treat that as ground truth — if it
+// names a different tagId than the card currently has, re-key the card to
+// match instead of leaving the physical sticker permanently broken.
+
+// Returns the decoded string, or null if this isn't a decodable PNG QR code
+// (wrong format, corrupt file, no QR pattern found).
+function decodeQrPngBuffer(buffer) {
+  try {
+    const png = PNG.sync.read(buffer);
+    const result = jsQR(new Uint8ClampedArray(png.data), png.width, png.height);
+    return result ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// Pulls the tagId out of a decoded QR payload, e.g.
+// "https://card.example.com/view/PENDING-ABC123" -> "PENDING-ABC123"
+function extractTagIdFromQrPayload(text) {
+  try {
+    const parsed = new URL(text);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const last = parts.pop();
+    return last ? last.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+// If the QR image's decoded tagId differs from the card's current tagId,
+// re-key the card (and its CardRegister row) to match what's actually
+// printed. Best-effort: any failure or collision just leaves the card as-is.
+async function reconcileTagIdFromQr(card, decodedTagId) {
+  if (!decodedTagId || decodedTagId === card.tagId) return null;
+
+  const conflict = await Card.findOne({ where: { tagId: decodedTagId } });
+  if (conflict && conflict.id !== card.id) {
+    console.warn(`[upload-photos] QR decode wants to re-key card ${card.id} to ${decodedTagId}, but that tagId already belongs to card ${conflict.id} — skipping`);
+    return null;
+  }
+
+  const oldTagId = card.tagId;
+  const replaceTagId = (url) => (url ? url.replace(new RegExp(oldTagId, "i"), decodedTagId) : url);
+
+  await card.update({
+    tagId: decodedTagId,
+    businessUrl: replaceTagId(card.businessUrl),
+    publicUrl: replaceTagId(card.publicUrl),
+  });
+
+  try {
+    await CardRegister.update({ tagId: decodedTagId }, { where: { cardId: card.id } });
+  } catch (err) {
+    console.warn(`[upload-photos] Re-keyed card ${card.id} tagId but failed to sync card_registers:`, err.message);
+  }
+
+  console.log(`[upload-photos] Re-keyed card ${card.id}: ${oldTagId} → ${decodedTagId} (matches printed QR)`);
+  return { from: oldTagId, to: decodedTagId };
 }
 
 /** Generates a human-readable one-time password */
@@ -1032,6 +1098,7 @@ router.post(
     const writeErrors = [];
     const updatedPhotoIds = new Set(); // card IDs whose photo was updated this batch
     const updatedQrIds    = new Set(); // card IDs whose QR was updated this batch
+    const reKeyed = []; // cards whose tagId was corrected to match their printed QR
 
     for (const [key, { entry, originalName }] of Object.entries(imageMap)) {
       const match = classifyImage(key);
@@ -1068,7 +1135,18 @@ router.post(
           linkedPhotos++;
           console.log(`[upload-photos] Photo linked: ${originalName} → card ${card.id}`);
         } else {
-          // QR — remove old QR file and update metadata.qrImageUrl
+          // QR — decode what's actually printed and re-key the card's tagId
+          // to match if it's drifted (e.g. re-import regenerated it), so an
+          // already-printed physical sticker keeps working with no reprint.
+          const decoded = decodeQrPngBuffer(imgBuffer);
+          const decodedTagId = decoded ? extractTagIdFromQrPayload(decoded) : null;
+          if (decoded && !decodedTagId) {
+            console.warn(`[upload-photos] Could not extract a tagId from decoded QR for ${originalName}: ${decoded}`);
+          }
+          const reKeyResult = decodedTagId ? await reconcileTagIdFromQr(card, decodedTagId) : null;
+          if (reKeyResult) reKeyed.push({ cardId: card.id, filename: originalName, ...reKeyResult });
+
+          // Remove old QR file and update metadata.qrImageUrl
           const oldQr = (card.metadata || {}).qrImageUrl;
           if (oldQr) {
             try { const p = path.join(__dirname, "..", oldQr); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
@@ -1089,10 +1167,11 @@ router.post(
     const linked = linkedPhotos + linkedQr;
     const status = writeErrors.length > 0 ? 207 : 200;
     return res.status(status).json({
-      message: `Upload complete: ${linkedPhotos} photos linked, ${linkedQr} QR codes linked, ${skipped} skipped${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}`,
-      summary: { linkedPhotos, linkedQr, linked, skipped, skippedImages: unmatchedImages.length, failed: writeErrors.length },
+      message: `Upload complete: ${linkedPhotos} photos linked, ${linkedQr} QR codes linked, ${skipped} skipped${writeErrors.length > 0 ? `, ${writeErrors.length} failed` : ""}${reKeyed.length > 0 ? `, ${reKeyed.length} tagId(s) corrected to match printed QR` : ""}`,
+      summary: { linkedPhotos, linkedQr, linked, skipped, skippedImages: unmatchedImages.length, failed: writeErrors.length, reKeyed: reKeyed.length },
       ...(unmatchedImages.length > 0 && { skippedImages: unmatchedImages }),
       ...(writeErrors.length > 0 && { errors: writeErrors }),
+      ...(reKeyed.length > 0 && { reKeyed }),
     });
   },
 );
